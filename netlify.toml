@@ -1,0 +1,26 @@
+[build]
+  command   = "npm run build:netlify"
+  publish   = "dist/public"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION      = "20"
+  ALLOW_REMOTE      = "true"
+  LOCAL_ONLY_MODE   = "false"
+  SEED_DEMO_DATA    = "true"
+
+# Proxy all /api/* requests to the serverless function
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback — all other routes serve the React app
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["pg-native"]

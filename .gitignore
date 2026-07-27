@@ -1,0 +1,25 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Sensitive credential files
+.auth_spreadsheet_id
+.spreadsheet_id
+
+# Replit-specific
+.replit
+.local/
+.cache/
+.upm/
+
+# Logs
+*.log
+npm-debug.log*
