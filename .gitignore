@@ -23,3 +23,5 @@ vite.config.ts.*
 # Logs
 *.log
 npm-debug.log*
+# Local Netlify folder
+.netlify
