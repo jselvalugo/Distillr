@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
@@ -14,6 +15,7 @@ import type { Staff } from "@shared/schema";
 const emptyForm = { name: "", role: "", status: "Active", phone: "" };
 
 export default function StaffPage() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -55,7 +57,7 @@ export default function StaffPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-44"
             />
-            <Button onClick={() => setOpen(true)}>+ Add Member</Button>
+            <Button onClick={() => navigate("/staff/new")}>+ Add Member</Button>
           </>
         }
       />

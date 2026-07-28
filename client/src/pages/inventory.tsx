@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
@@ -15,6 +16,7 @@ import type { InventoryItem, InventoryLot } from "@shared/schema";
 type Tab = "items" | "lots";
 
 export default function Inventory() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("items");
   const [openItem, setOpenItem] = useState(false);
@@ -93,9 +95,9 @@ export default function Inventory() {
               className="w-44"
             />
             {tab === "items" ? (
-              <Button onClick={() => setOpenItem(true)}>+ Add Item</Button>
+              <Button onClick={() => navigate("/inventory/items/new")}>+ Add Item</Button>
             ) : (
-              <Button onClick={() => setOpenLot(true)}>+ Add Lot</Button>
+              <Button onClick={() => navigate("/inventory/lots/new")}>+ Add Lot</Button>
             )}
           </>
         }

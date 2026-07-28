@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
@@ -24,6 +25,7 @@ const emptyForm = {
 };
 
 export default function Properties() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -70,7 +72,7 @@ export default function Properties() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-48"
             />
-            <Button onClick={() => setOpen(true)}>+ Add Facility</Button>
+            <Button onClick={() => navigate("/properties/new")}>+ Add Facility</Button>
           </>
         }
       />

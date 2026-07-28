@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
@@ -27,6 +28,7 @@ const emptyForm = {
 };
 
 export default function Barrels() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -75,7 +77,7 @@ export default function Barrels() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-52"
             />
-            <Button onClick={() => setOpen(true)}>+ Add Barrel</Button>
+            <Button onClick={() => navigate("/barrels/new")}>+ Add Barrel</Button>
           </>
         }
       />

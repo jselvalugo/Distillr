@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
@@ -22,6 +23,7 @@ const emptyForm = {
 };
 
 export default function SalesOrders() {
+  const [, navigate] = useLocation();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -71,7 +73,7 @@ export default function SalesOrders() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-48"
             />
-            <Button onClick={() => setOpen(true)}>+ New Order</Button>
+            <Button onClick={() => navigate("/sales-orders/new")}>+ New Order</Button>
           </>
         }
       />
