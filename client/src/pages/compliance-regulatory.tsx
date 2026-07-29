@@ -110,16 +110,7 @@ const PERMIT_TYPES = [
   "Other",
 ];
 
-const CLASS_TYPES = [
-  "Whiskey",
-  "Bourbon",
-  "Rum",
-  "Vodka",
-  "Gin",
-  "Brandy",
-  "Tequila",
-  "Other",
-];
+const CLASS_TYPES = ["Rum"];
 
 const COLA_STATUSES = ["pending", "approved", "rejected", "expired", "revoked"];
 const LABEL_STATUSES = ["draft", "approved", "in_use", "retired"];
@@ -169,7 +160,7 @@ const emptyPermit = {
 const emptyCola = {
   productName: "",
   brandName: "",
-  classType: "Whiskey",
+  classType: "Rum",
   formulaNumber: "",
   colaNumber: "",
   status: "pending",
@@ -186,7 +177,7 @@ const emptyLabel = {
   colaId: "",
   netContents: "",
   alcoholContent: "",
-  classType: "Whiskey",
+  classType: "Rum",
   status: "draft",
   approvedAt: "",
   notes: "",

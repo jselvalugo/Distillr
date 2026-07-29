@@ -18,8 +18,8 @@ export default function UserForm() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    role: "staff",
-    status: "Active",
+    role: "distiller",
+    status: "active",
     password: "",
   });
 
@@ -105,9 +105,11 @@ export default function UserForm() {
           <p className="font-medium text-[#0a0a0a]">Access levels</p>
           <ul className="space-y-1 mt-1">
             <li><strong>Admin</strong> — full access including settings and user management</li>
-            <li><strong>Manager</strong> — read/write all modules, no settings</li>
-            <li><strong>Staff</strong> — read/write production and barrels only</li>
-            <li><strong>Read-only</strong> — view all, no edits</li>
+            <li><strong>Distiller</strong> — production, barrels, batches</li>
+            <li><strong>Cellar</strong> — barrels and aging operations</li>
+            <li><strong>Compliance</strong> — TTB reports and regulatory</li>
+            <li><strong>Inventory</strong> — inventory and bottling</li>
+            <li><strong>Sales</strong> — orders and labels</li>
           </ul>
         </InfoCard>
       }
@@ -123,15 +125,17 @@ export default function UserForm() {
           <Field label="Role">
             <Select value={form.role} onChange={set("role")}>
               <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="staff">Staff</option>
-              <option value="readonly">Read-only</option>
+              <option value="distiller">Distiller</option>
+              <option value="cellar">Cellar</option>
+              <option value="compliance">Compliance</option>
+              <option value="inventory">Inventory</option>
+              <option value="sales">Sales</option>
             </Select>
           </Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>
-              <option>Active</option>
-              <option>Inactive</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </Select>
           </Field>
           {!isEdit && (

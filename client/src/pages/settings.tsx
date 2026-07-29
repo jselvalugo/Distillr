@@ -5,7 +5,7 @@ import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../hooks/use-auth";
-import { apiRequest } from "../lib/queryClient";
+import { apiRequest, getCsrfToken } from "../lib/queryClient";
 
 type PlatformConfig = {
   organizationName: string;
@@ -20,24 +20,28 @@ type PlatformConfig = {
 const EXPORT_TABLES = [
   { key: "batches", label: "Production Batches", desc: "Core batch workflow records" },
   { key: "barrels", label: "Barrels", desc: "Barrel tracking and aging" },
+  { key: "barrel_events", label: "Barrel Events", desc: "Gauge readings, temperature & dump records" },
   { key: "production_records", label: "Production Records", desc: "Mash & distillation logs" },
   { key: "inventory_records", label: "Inventory Records", desc: "Bottling & inventory" },
   { key: "inventory_items", label: "Inventory Items", desc: "Item catalog" },
   { key: "inventory_lots", label: "Inventory Lots", desc: "Stock lots" },
+  { key: "inventory_movements", label: "Inventory Movements", desc: "Stock movement audit trail" },
   { key: "compliance", label: "Compliance", desc: "Compliance records" },
   { key: "clients", label: "Clients", desc: "Trading partners" },
   { key: "properties", label: "Properties", desc: "Facilities" },
   { key: "sales_orders", label: "Sales Orders", desc: "Orders" },
   { key: "staff", label: "Staff", desc: "Team members" },
   { key: "ttb_reports", label: "TTB Reports", desc: "Regulatory reports" },
-  { key: "audit_logs", label: "Audit Log", desc: "System audit trail" },
+  { key: "audit_logs", label: "Audit Log", desc: "System audit trail (read-only)" },
   { key: "permits", label: "Permits", desc: "Bond & permit records" },
   { key: "cola_registrations", label: "COLA Registrations", desc: "Label approvals" },
   { key: "label_records", label: "Label Records", desc: "Finished goods labels" },
   { key: "state_excise_returns", label: "FL Excise Returns", desc: "State excise filings" },
+  { key: "equipment", label: "Distillery Equipment", desc: "Floor plan equipment & still configuration" },
+  { key: "calculator_presets", label: "Calculator Presets", desc: "Saved calculator configurations" },
 ];
 
-type Tab = "branding" | "export" | "import" | "platform";
+type Tab = "branding" | "export" | "import" | "platform" | "danger";
 
 function downloadCSV(tableKey: string) {
   const a = document.createElement("a");
@@ -347,6 +351,159 @@ type ImportRowResult = {
   errors: string[];
 };
 
+type ExciseRecord = {
+  month: string; productName: string; abv: number;
+  distCases: number; retailCases: number; totalCases: number;
+  proofGallons: number; exciseTax: number;
+};
+
+const EXCISE_MONTH_MAP: Record<string, string> = {
+  January:"01", February:"02", March:"03", April:"04", May:"05", June:"06",
+  July:"07", August:"08", September:"09", October:"10", November:"11", December:"12",
+};
+
+async function parseExciseExcel(file: File): Promise<ExciseRecord[]> {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const records: ExciseRecord[] = [];
+  for (const ws of wb.worksheets) {
+    const sheetName = ws.name.trim();
+    if (sheetName === "Sheet1") continue;
+    const parts = sheetName.split(" ");
+    if (parts.length !== 2) continue;
+    const monthNum = EXCISE_MONTH_MAP[parts[0]];
+    if (!monthNum) continue;
+    const month = `${parts[1]}-${monthNum}`;
+    ws.eachRow((row, rowNum) => {
+      if (rowNum === 1) return;
+      const rawName = String(row.getCell(1).value ?? "").trim();
+      if (!rawName || rawName.toLowerCase().startsWith("total")) return;
+      const distCases = Number(row.getCell(2).value ?? 0) || 0;
+      const retailCases = Number(row.getCell(3).value ?? 0) || 0;
+      const totalCases = Number(row.getCell(4).value ?? 0) || 0;
+      const abv = Number(row.getCell(5).value ?? 0) || 0;
+      const proofGallons = Number(row.getCell(6).value ?? 0) || 0;
+      const exciseTax = Number(row.getCell(7).value ?? 0) || 0;
+      if (totalCases === 0) return;
+      records.push({ month, productName: rawName, abv, distCases, retailCases, totalCases, proofGallons, exciseTax });
+    });
+  }
+  return records;
+}
+
+function ExciseImportCard() {
+  const exciseRef = useRef<HTMLInputElement>(null);
+  const [exciseFile, setExciseFile] = useState<File | null>(null);
+  const [excisePreview, setExcisePreview] = useState<ExciseRecord[] | null>(null);
+  const [exciseImporting, setExciseImporting] = useState(false);
+  const [exciseResult, setExciseResult] = useState<{ inserted: number; updated: number; skipped: number } | null>(null);
+
+  async function handleExciseFile(f: File) {
+    if (!f.name.endsWith(".xlsx")) { toast.error("Please upload an .xlsx file"); return; }
+    setExciseFile(f);
+    setExciseResult(null);
+    try {
+      const records = await parseExciseExcel(f);
+      setExcisePreview(records);
+    } catch (e: any) {
+      toast.error("Failed to parse file: " + e.message);
+    }
+  }
+
+  async function runExciseImport() {
+    if (!excisePreview) return;
+    setExciseImporting(true);
+    try {
+      const csrfToken2 = await getCsrfToken();
+      const res = await fetch("/api/admin/import-excise-product-data", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(csrfToken2 ? { "x-csrf-token": csrfToken2 } : {}) },
+        body: JSON.stringify({ records: excisePreview }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Import failed");
+      setExciseResult(json);
+      toast.success(`Excise import complete — ${json.inserted} inserted, ${json.updated} updated`);
+    } catch (e: any) {
+      toast.error(e.message || "Import failed");
+    } finally {
+      setExciseImporting(false);
+    }
+  }
+
+  const byMonth: Record<string, number> = {};
+  for (const r of excisePreview ?? []) {
+    byMonth[r.month] = (byMonth[r.month] ?? 0) + 1;
+  }
+
+  return (
+    <div className="border border-[#e5e5e5] rounded-xl bg-white overflow-hidden mb-6">
+      <div className="px-5 py-4 border-b border-[#e5e5e5] bg-[#f7f7f7]">
+        <p className="text-sm font-semibold text-[#0a0a0a]">Excise Tax Excel Import</p>
+        <p className="text-xs text-[#737373] mt-0.5">
+          Upload your monthly excise tax Excel file. Each sheet is a month — products with zero cases are skipped automatically.
+        </p>
+      </div>
+      <div className="p-5 space-y-4">
+        {!exciseResult ? (
+          <>
+            <div
+              className="border-2 border-dashed border-[#e5e5e5] rounded-lg p-8 text-center cursor-pointer hover:border-[#0a0a0a]/30 transition-colors"
+              onClick={() => exciseRef.current?.click()}
+            >
+              <input
+                ref={exciseRef} type="file" accept=".xlsx" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleExciseFile(f); }}
+              />
+              {exciseFile ? (
+                <div>
+                  <p className="text-sm font-medium text-[#0a0a0a]">{exciseFile.name}</p>
+                  <p className="text-xs text-[#737373] mt-0.5">{Object.keys(byMonth).length} months detected, {excisePreview?.length ?? 0} product rows — click to change</p>
+                </div>
+              ) : (
+                <p className="text-sm text-[#737373]">Drop Excise Tax.xlsx here or click to browse</p>
+              )}
+            </div>
+            {excisePreview && excisePreview.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#737373] uppercase tracking-wider">Preview — months detected</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(byMonth).sort(([a],[b]) => a.localeCompare(b)).map(([month, count]) => (
+                    <span key={month} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f0f0f0] text-[11px] font-medium text-[#0a0a0a]">
+                      {new Date(month + "-02").toLocaleString("en-US",{month:"short",year:"numeric"})}
+                      <span className="text-[#737373]">·{count}</span>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 pt-1">
+                  <Button onClick={runExciseImport} disabled={exciseImporting}>
+                    {exciseImporting ? "Importing…" : `Import ${excisePreview.length} Records`}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setExciseFile(null); setExcisePreview(null); }}>Clear</Button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-6 text-center">
+              <div><p className="text-2xl font-bold text-[#22c55e]">{exciseResult.inserted}</p><p className="text-xs text-[#737373]">Inserted</p></div>
+              <div><p className="text-2xl font-bold text-[#3b82f6]">{exciseResult.updated}</p><p className="text-xs text-[#737373]">Updated</p></div>
+              <div><p className="text-2xl font-bold text-[#a3a3a3]">{exciseResult.skipped}</p><p className="text-xs text-[#737373]">Skipped</p></div>
+            </div>
+            <p className="text-xs text-[#737373]">Data is now visible in Reports → Excise Tax Return for each imported month.</p>
+            <Button variant="outline" size="sm" onClick={() => { setExciseFile(null); setExcisePreview(null); setExciseResult(null); }}>
+              Import Another File
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ImportTab() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -374,11 +531,13 @@ function ImportTab() {
     if (!file) return;
     setImporting(true);
     try {
+      const csrfToken = await getCsrfToken();
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/import", {
         method: "POST",
         credentials: "include",
+        headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
         body: formData,
       });
       const json = await res.json();
@@ -396,6 +555,7 @@ function ImportTab() {
 
   return (
     <div className="p-6 space-y-5">
+      <ExciseImportCard />
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-[#0a0a0a]">Import Data from Excel</h3>
@@ -504,6 +664,63 @@ function ImportTab() {
   );
 }
 
+function DangerTab() {
+  const qc = useQueryClient();
+  const [confirm, setConfirm] = useState("");
+  const [done, setDone] = useState(false);
+
+  const resetMut = useMutation({
+    mutationFn: () => apiRequest("/api/admin/reset-all-data", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries();
+      setConfirm("");
+      setDone(true);
+      toast.success("All operational data has been cleared.");
+    },
+    onError: (e: any) => toast.error(e.message ?? "Reset failed"),
+  });
+
+  const PHRASE = "delete all data";
+
+  return (
+    <div className="p-6 max-w-lg space-y-6">
+      <div>
+        <p className="text-sm font-semibold text-[#0a0a0a] mb-1">Reset All Operational Data</p>
+        <p className="text-xs text-[#737373]">
+          Permanently deletes all batches, barrels, barrel events, inventory, sales orders, trading partners, compliance records, staff, permits, and reports.
+          Your account, platform settings, and branding are preserved.
+        </p>
+      </div>
+
+      {done ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 font-medium">
+          Done — the system has been cleared. You can start fresh.
+        </div>
+      ) : (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-4">
+          <p className="text-xs text-red-700 font-semibold uppercase tracking-wide">This cannot be undone.</p>
+          <p className="text-xs text-red-600">
+            Type <span className="font-mono font-bold">{PHRASE}</span> to confirm:
+          </p>
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder={PHRASE}
+            className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-red-200 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+          <Button
+            className="bg-red-600 hover:bg-red-700 text-white border-red-600 w-full"
+            disabled={confirm !== PHRASE || resetMut.isPending}
+            onClick={() => resetMut.mutate()}
+          >
+            {resetMut.isPending ? "Clearing data…" : "Clear All Data"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("branding");
@@ -529,6 +746,7 @@ export default function Settings() {
     { key: "export", label: "Data Export" },
     { key: "import", label: "Data Import" },
     { key: "platform", label: "Platform" },
+    { key: "danger", label: "Danger Zone" },
   ];
 
   return (
@@ -545,9 +763,13 @@ export default function Settings() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`w-full text-left px-3 py-2 text-xs font-medium rounded-md transition-colors ${
-                tab === t.key
-                  ? "bg-[#0a0a0a] text-white"
-                  : "text-[#737373] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
+                t.key === "danger"
+                  ? tab === "danger"
+                    ? "bg-red-600 text-white"
+                    : "text-red-500 hover:text-red-600 hover:bg-red-50"
+                  : tab === t.key
+                    ? "bg-[#0a0a0a] text-white"
+                    : "text-[#737373] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
               }`}
             >
               {t.label}
@@ -561,6 +783,7 @@ export default function Settings() {
           {tab === "export" && <ExportTab />}
           {tab === "import" && <ImportTab />}
           {tab === "platform" && <PlatformTab config={config} />}
+          {tab === "danger" && <DangerTab />}
         </div>
       </div>
     </Layout>

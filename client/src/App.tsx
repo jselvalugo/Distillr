@@ -61,6 +61,7 @@ export default function App() {
             <Route path="/" component={Dashboard} />
             <Route path="/barrels" component={Barrels} />
             <Route path="/barrels/new" component={BarrelForm} />
+            <Route path="/barrels/:id/edit" component={BarrelForm} />
             <Route path="/production" component={Production} />
             <Route path="/production/new" component={BatchForm} />
             <Route path="/production/:id" component={BatchDetail} />
@@ -80,12 +81,15 @@ export default function App() {
             <Route path="/excise/:id/edit" component={ExciseForm} />
             <Route path="/clients" component={Clients} />
             <Route path="/clients/new" component={ClientForm} />
+            <Route path="/clients/:id/edit" component={ClientForm} />
             <Route path="/properties" component={Properties} />
             <Route path="/properties/new" component={PropertyForm} />
             <Route path="/sales-orders" component={SalesOrders} />
             <Route path="/sales-orders/new" component={SalesOrderForm} />
+            <Route path="/sales-orders/:id/edit" component={SalesOrderForm} />
             <Route path="/staff" component={StaffPage} />
             <Route path="/staff/new" component={StaffForm} />
+            <Route path="/staff/:id/edit" component={StaffForm} />
             <Route path="/users" component={Users} />
             <Route path="/users/new" component={UserForm} />
             <Route path="/users/:id/edit" component={UserForm} />

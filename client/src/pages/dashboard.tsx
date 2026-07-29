@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   FlaskConical, Package, Package2, Truck, ShoppingCart,
   Activity, Calendar, CheckCircle2, Archive, Droplets,
   Gauge, ClipboardList, BarChart3, ArrowRight,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout } from "../components/layout";
@@ -268,19 +270,79 @@ function PermitAlert({ permits }: { permits: PermitRow[] }) {
   );
 }
 
+// ─── Month navigator ─────────────────────────────────────────────────────────
+function MonthNavigator({
+  value, onChange,
+}: {
+  value: string | null;
+  onChange: (m: string | null) => void;
+}) {
+  const currentYM = new Date().toISOString().slice(0, 7);
+
+  function shift(delta: number) {
+    const base = value ?? currentYM;
+    const [y, m] = base.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  const label = value
+    ? new Date(value + "-02").toLocaleString("en-US", { month: "long", year: "numeric" })
+    : "All Time";
+
+  const isCurrentMonth = value === currentYM;
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => shift(-1)}
+        className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <span className="text-sm font-semibold text-white min-w-[130px] text-center">{label}</span>
+      <button
+        onClick={() => shift(1)}
+        disabled={isCurrentMonth || !value}
+        className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+      >
+        <ChevronRight size={14} />
+      </button>
+      <div className="w-px h-4 bg-white/15 mx-1" />
+      <button
+        onClick={() => onChange(value ? null : currentYM)}
+        className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${
+          !value
+            ? "bg-white/15 text-white"
+            : "text-white/40 hover:text-white hover:bg-white/10"
+        }`}
+      >
+        {value ? "All Time" : "By Month"}
+      </button>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(
+    new Date().toISOString().slice(0, 7)
+  );
+
+  const towerUrl = selectedMonth
+    ? `/api/distilling/control-tower?month=${selectedMonth}`
+    : "/api/distilling/control-tower";
 
   const { data: tower } = useQuery<DistilleryControlTowerSummary>({
-    queryKey: ["/api/distilling/control-tower"],
-    queryFn: () => apiRequest("/api/distilling/control-tower"),
+    queryKey: ["/api/distilling/control-tower", selectedMonth],
+    queryFn: () => apiRequest(towerUrl),
   });
   const { data: stats } = useQuery<Stats>({
     queryKey: ["/api/stats"],
     queryFn: () => apiRequest("/api/stats"),
   });
-  const { data: batches = [] } = useQuery<BatchRow[]>({
+  const { data: allBatches = [] } = useQuery<BatchRow[]>({
     queryKey: ["/api/distilling/batch-records"],
     queryFn: () => apiRequest("/api/distilling/batch-records"),
   });
@@ -289,9 +351,14 @@ export default function Dashboard() {
     queryFn: () => apiRequest("/api/permits"),
   });
 
-  const now = new Date();
-  const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  // Filter batches for pipeline/stage display by selected month
+  const batches = selectedMonth
+    ? allBatches.filter(b => b.batchDate?.startsWith(selectedMonth))
+    : allBatches;
+
+  // Always show currently active batches in the live pipeline (not month-filtered)
   const activeBatches = batches.filter(b => b.stage !== "closed");
+  const allActiveBatches = allBatches.filter(b => b.stage !== "closed");
 
   // Relative percentages for rings (within each section group)
   function relPct(val: number | undefined | null, ...others: (number | undefined | null)[]) {
@@ -319,8 +386,12 @@ export default function Dashboard() {
   const endGallons = Number(tower?.inventory?.endingUsGallons ?? 0);
   const endProof = Number(tower?.inventory?.endingProofGallons ?? 0);
 
+  const monthLabel = selectedMonth
+    ? new Date(selectedMonth + "-02").toLocaleString("en-US", { month: "long", year: "numeric" })
+    : "All Time";
+
   const completed = Number(stats?.completed ?? 0);
-  const totalBatches = activeBatches.length + completed;
+  const totalBatches = allActiveBatches.length + completed;
   const completedPct = totalBatches > 0 ? (completed / totalBatches) * 100 : 0;
 
   return (
@@ -330,14 +401,20 @@ export default function Dashboard() {
         {/* ── Hero ── */}
         <div className="bg-[#0a0a0a] px-8 pt-8 pb-10">
           <div className="max-w-6xl mx-auto">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1.5">{monthLabel}</p>
-            <h1 className="text-3xl font-bold text-white mb-1">Operations Overview</h1>
-            <p className="text-sm text-white/35 mb-8">Live distillery metrics — batch pipeline, production &amp; compliance</p>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Operations Overview</p>
+                <h1 className="text-3xl font-bold text-white leading-none">
+                  {monthLabel}
+                </h1>
+              </div>
+              <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+            </div>
 
             {/* Hero KPI cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Active Batches", value: activeBatches.length, sub: "in pipeline", icon: Activity, color: AMBER, pct: relPct(activeBatches.length, casesProduced, totalSold, proof), accent: true },
+                { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: AMBER, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
                 { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "produced", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
                 { label: "Cases Bottled", value: fmtNum(casesProduced, 0), sub: "this period", icon: Package, color: "#34d399", pct: relPct(casesProduced, totalSold) },
                 { label: "Cases Sold", value: fmtNum(totalSold, 0), sub: "fulfilled", icon: ShoppingCart, color: "#60a5fa", pct: relPct(totalSold, casesProduced) },
@@ -376,8 +453,9 @@ export default function Dashboard() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#737373]">Batch Pipeline</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#737373]">Active Batch Pipeline</span>
                 <div className="h-px bg-[#e5e5e5] w-8" />
+                <span className="text-[10px] text-[#b0b0b0]">live — not filtered by month</span>
               </div>
               <button
                 onClick={() => navigate("/production")}
@@ -386,8 +464,8 @@ export default function Dashboard() {
                 View all <ArrowRight size={11} />
               </button>
             </div>
-            <StageDistribution batches={batches} />
-            <BatchPipeline batches={batches} />
+            <StageDistribution batches={allBatches} />
+            <BatchPipeline batches={allBatches} />
           </section>
 
           {/* ── Production ── */}
@@ -396,7 +474,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={AMBER} />
               <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
-              <MetricCard label="Production Records" value={prodRecords || "—"} sub="mash logs" pct={relPct(prodRecords, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
+              <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
               <MetricCard label="Scheduled Batches" value={scheduled || "—"} sub="in planning" pct={relPct(scheduled, inProgress, prodRecords)} icon={Calendar} color="#60a5fa" />
             </div>
             {/* Proof efficiency callout */}
@@ -437,43 +515,54 @@ export default function Dashboard() {
             <div className="lg:col-span-2 space-y-3">
               <SectionLabel>Sales & Inventory Position</SectionLabel>
 
-              {/* Distributor vs Retail split card */}
+              {/* Cases summary card */}
               <div className="bg-white border border-[#e5e5e5] rounded-xl p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0]">Channel Split</p>
-                  <span className="text-xs font-bold text-[#0a0a0a] tabular-nums">{fmtNum(totalSold, 0)} total cases</span>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0]">Case Summary</p>
                 </div>
-                <div className="grid grid-cols-2 gap-6 mb-4">
+                <div className="grid grid-cols-3 gap-6 mb-4">
                   <div>
-                    <div className="flex items-end gap-2">
-                      <Truck size={14} color="#0369a1" />
-                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Distributor</p>
-                    </div>
-                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums mt-1">{fmtNum(distCases, 0)}</p>
-                    <p className="text-[10px] text-[#c0c0c0]">wholesale cases</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Bottled</p>
+                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums mt-1">{fmtNum(casesProduced, 0)}</p>
+                    <p className="text-[10px] text-[#c0c0c0]">total cases</p>
                   </div>
                   <div>
-                    <div className="flex items-end gap-2">
-                      <ShoppingCart size={14} color="#b45309" />
-                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Retail / DTC</p>
+                    <div className="flex items-end gap-1.5">
+                      <ShoppingCart size={13} color="#0369a1" />
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Sold</p>
                     </div>
-                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums mt-1">{fmtNum(retailCases, 0)}</p>
-                    <p className="text-[10px] text-[#c0c0c0]">direct cases</p>
+                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums mt-1">{fmtNum(totalSold, 0)}</p>
+                    <p className="text-[10px] text-[#c0c0c0]">cases on orders</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">On Hand</p>
+                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums mt-1">{fmtNum(Math.max(0, casesProduced - totalSold), 0)}</p>
+                    <p className="text-[10px] text-[#c0c0c0]">estimated remaining</p>
                   </div>
                 </div>
-                <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#b45309" labelA="Distributor" labelB="Retail" />
+                <FillBar
+                  pct={casesProduced > 0 ? (totalSold / casesProduced) * 100 : 0}
+                  color="#0369a1"
+                  height={6}
+                />
+                <div className="flex justify-between mt-1.5">
+                  <span className="text-[9px] text-[#c0c0c0]">0 cases sold</span>
+                  <span className="text-[9px] text-[#737373] font-semibold">
+                    {casesProduced > 0 ? `${Math.round((totalSold / casesProduced) * 100)}% sold` : "No production yet"}
+                  </span>
+                  <span className="text-[9px] text-[#c0c0c0]">{fmtNum(casesProduced, 0)} bottled</span>
+                </div>
               </div>
 
-              {/* Orders fulfilled */}
+              {/* Orders fulfilled + proof/gallons */}
               <div className="grid grid-cols-2 gap-3">
                 <MetricCard label="Orders Fulfilled" value={fulfilled || "—"} sub="approved + fulfilled" pct={relPct(fulfilled, totalSold / 10)} icon={CheckCircle2} color="#34d399" />
                 <div className="bg-white border border-[#e5e5e5] rounded-xl p-5">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0] mb-3">Bonded Inventory</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0] mb-3">Production Totals</p>
                   <div className="space-y-3">
                     {[
-                      { label: "Cases on hand", value: fmtNum(endCases, 0), pct: relPct(endCases, endGallons, endProof), color: "#0369a1" },
-                      { label: "US Gallons", value: fmtNum(endGallons, 1), pct: relPct(endGallons, endProof, endCases * 2), color: "#6366f1" },
-                      { label: "Proof Gallons", value: fmtNum(endProof, 1), pct: relPct(endProof, endGallons), color: "#818cf8" },
+                      { label: "Proof Gallons produced", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" },
+                      { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" },
                     ].map(item => (
                       <div key={item.label}>
                         <div className="flex justify-between mb-1">

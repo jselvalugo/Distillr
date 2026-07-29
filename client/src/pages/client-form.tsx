@@ -1,45 +1,78 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useLocation, useParams } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import type { Client } from "@shared/schema";
+
+const emptyForm = {
+  name: "", type: "Distributor", contact: "", contactEmail: "",
+  contactPhone: "", status: "Active", industrySegment: "",
+  accountTier: "", notes: "", website: "", billingAddress: "",
+};
 
 export default function ClientForm() {
   const [, navigate] = useLocation();
+  const params = useParams<{ id?: string }>();
+  const isEdit = !!(params as any).id;
+  const clientId = (params as any).id as string | undefined;
+
   const qc = useQueryClient();
-  const [form, setForm] = useState({
-    name: "", type: "Distributor", contact: "", contactEmail: "",
-    contactPhone: "", status: "Active", industrySegment: "",
-    accountTier: "", notes: "", website: "", billingAddress: "",
+  const [form, setForm] = useState(emptyForm);
+
+  const { data: existing } = useQuery<Client>({
+    queryKey: ["/api/clients", clientId],
+    queryFn: () => apiRequest(`/api/clients/${clientId}`),
+    enabled: isEdit,
   });
+
+  useEffect(() => {
+    if (existing) {
+      setForm({
+        name: existing.name ?? "",
+        type: existing.type ?? "Distributor",
+        contact: existing.contact ?? "",
+        contactEmail: existing.contactEmail ?? "",
+        contactPhone: existing.contactPhone ?? "",
+        status: existing.status ?? "Active",
+        industrySegment: (existing as any).industrySegment ?? "",
+        accountTier: (existing as any).accountTier ?? "",
+        notes: (existing as any).notes ?? "",
+        website: (existing as any).website ?? "",
+        billingAddress: (existing as any).billingAddress ?? "",
+      });
+    }
+  }, [existing]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
   const mut = useMutation({
-    mutationFn: () =>
-      apiRequest("/api/clients", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.name.trim(),
-          type: form.type,
-          contact: form.contact.trim(),
-          contactEmail: form.contactEmail.trim() || null,
-          contactPhone: form.contactPhone.trim() || null,
-          status: form.status,
-          industrySegment: form.industrySegment.trim() || null,
-          accountTier: form.accountTier || null,
-          notes: form.notes.trim() || null,
-          website: form.website.trim() || null,
-          billingAddress: form.billingAddress.trim() || null,
-        }),
-      }),
+    mutationFn: () => {
+      const body = {
+        name: form.name.trim(),
+        type: form.type,
+        contact: form.contact.trim(),
+        contactEmail: form.contactEmail.trim() || null,
+        contactPhone: form.contactPhone.trim() || null,
+        status: form.status,
+        industrySegment: form.industrySegment.trim() || null,
+        accountTier: form.accountTier || null,
+        notes: form.notes.trim() || null,
+        website: form.website.trim() || null,
+        billingAddress: form.billingAddress.trim() || null,
+      };
+      if (isEdit) {
+        return apiRequest(`/api/clients/${clientId}`, { method: "PATCH", body: JSON.stringify(body) });
+      }
+      return apiRequest("/api/clients", { method: "POST", body: JSON.stringify(body) });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast.success("Trading partner created");
+      toast.success(isEdit ? "Partner updated" : "Trading partner created");
       navigate("/clients");
     },
     onError: (e: any) => toast.error(e.message),
@@ -53,12 +86,12 @@ export default function ClientForm() {
 
   return (
     <FormLayout
-      title="New Trading Partner"
-      subtitle="Add a distributor, retailer, supplier, or contract partner"
-      breadcrumbs={[{ label: "Trading Partners", href: "/clients" }, { label: "New Partner" }]}
+      title={isEdit ? `Edit Partner — ${form.name || "…"}` : "New Trading Partner"}
+      subtitle={isEdit ? "Update partner details below" : "Add a distributor, retailer, supplier, or contract partner"}
+      breadcrumbs={[{ label: "Trading Partners", href: "/clients" }, { label: isEdit ? "Edit Partner" : "New Partner" }]}
       onSave={save}
       saving={mut.isPending}
-      saveLabel="Create Partner"
+      saveLabel={isEdit ? "Save Changes" : "Create Partner"}
       aside={
         <InfoCard>
           <p className="font-medium text-[#0a0a0a]">Partner types</p>

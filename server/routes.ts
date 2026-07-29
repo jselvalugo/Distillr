@@ -1616,6 +1616,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Admin: hard reset all operational data (keeps platform_config and users)
+  app.post("/api/admin/reset-all-data", requireAdmin, async (_req, res) => {
+    try {
+      await query(`
+        DELETE FROM barrel_events;
+        DELETE FROM barrels;
+        DELETE FROM distilling_batch_records;
+        DELETE FROM distilling_production_records;
+        DELETE FROM distilling_inventory_records;
+        DELETE FROM inventory_movements;
+        DELETE FROM inventory_lots;
+        DELETE FROM inventory_items;
+        DELETE FROM sales_orders;
+        DELETE FROM clients;
+        DELETE FROM compliance_records;
+        DELETE FROM permits;
+        DELETE FROM cola_records;
+        DELETE FROM labels;
+        DELETE FROM excise_tax_records;
+        DELETE FROM ttb_reports;
+        DELETE FROM staff;
+        DELETE FROM properties;
+        DELETE FROM distillery_equipment;
+        DELETE FROM calculator_presets;
+        DELETE FROM audit_logs;
+      `);
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message ?? "Reset failed" });
+    }
+  });
+
+  // Import excise product data from Excel (admin only)
+  app.post("/api/admin/import-excise-product-data", requireAdmin, async (req, res) => {
+    try {
+      const { records } = req.body as { records: Array<{
+        month: string; productName: string; abv: number;
+        distCases: number; retailCases: number; totalCases: number; proofGallons: number;
+      }> };
+      if (!Array.isArray(records) || records.length === 0) {
+        return res.status(400).json({ error: "records must be a non-empty array" });
+      }
+      const now = new Date().toISOString();
+      let inserted = 0; let updated = 0; let skipped = 0;
+      for (const r of records) {
+        const { month, productName, abv, distCases, retailCases, totalCases, proofGallons } = r;
+        if (!month || !productName || totalCases === 0) { skipped++; continue; }
+        const name = productName.trim();
+        const existing = await query(
+          `SELECT id FROM distilling_inventory_records WHERE product_name = $1 AND report_month = $2 AND title LIKE 'Imported:%' LIMIT 1`,
+          [name, month]
+        );
+        if (existing.length > 0) {
+          await query(
+            `UPDATE distilling_inventory_records SET
+               cases_to_distributors=$1, cases_to_retail=$2, cases_made=$3,
+               average_abv_percent=$4, ending_us_gallons=$5, ending_proof_gallons=$5,
+               current_month_inventory=$6, ending_month_inventory=$6, updated_at=$7
+             WHERE id=$8`,
+            [JSON.stringify({"750ml":distCases}), JSON.stringify({"750ml":retailCases}),
+             JSON.stringify({"750ml":totalCases}), abv, proofGallons, totalCases, now, existing[0].id]
+          );
+          updated++;
+        } else {
+          const id = `EINV-${month}-${name.replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_-]/g,"")}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+          await query(
+            `INSERT INTO distilling_inventory_records
+               (id, title, product_name, average_abv_percent, report_month,
+                cases_made, cases_to_distributors, cases_to_retail, bottles_made,
+                beginning_of_month_cases, current_month_inventory, ending_month_inventory,
+                ending_us_gallons, ending_proof_gallons, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+            [id, `Imported: ${name} ${month}`, name, abv, month,
+             JSON.stringify({"750ml":totalCases}), JSON.stringify({"750ml":distCases}),
+             JSON.stringify({"750ml":retailCases}), JSON.stringify({"750ml":totalCases*6}),
+             0, totalCases, totalCases, proofGallons, proofGallons, now, now]
+          );
+          inserted++;
+        }
+      }
+      res.json({ ok: true, inserted, updated, skipped });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Import failed";
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Core metrics and settings
   app.get("/api/stats", async (_req, res) => {
     try {
@@ -1629,21 +1716,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Distilling operations control tower (produced / bottled / sold)
   app.get("/api/distilling/control-tower", async (req, res) => {
     try {
-      if (typeof req.query.month === "string") {
-        return res.status(400).json({ error: "Use ?week=YYYY-Www (monthly query parameter is no longer supported)" });
+      const monthParam = typeof req.query.month === "string" ? req.query.month : undefined;
+      if (monthParam && !/^\d{4}-\d{2}$/.test(monthParam)) {
+        return res.status(400).json({ error: "month must be in YYYY-MM format" });
       }
-      const rawPeriod = typeof req.query.week === "string" ? req.query.week : undefined;
-      const period = normalizeDistillingPeriodKey(rawPeriod);
-      if (rawPeriod && !period) {
-        return res.status(400).json({ error: "Week must be in YYYY-Www format" });
-      }
-      const summary = await storage.getDistilleryControlTowerSummary(period);
+      const summary = await storage.getDistilleryControlTowerSummary(monthParam);
       res.json(withWeeklyControlTowerAliases(summary));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to fetch distilling control tower summary";
-      if (error instanceof Error && /Report week must be in YYYY-W\d{2} format|Report week must be in YYYY-Www format/.test(error.message)) {
-        return res.status(400).json({ error: "Week must be a valid ISO week in YYYY-Www format" });
-      }
       res.status(500).json({ error: message });
     }
   });
@@ -2493,10 +2573,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Barrel management
+  function withAgingDays<T extends { fillDate?: string | null; totalAgingDays?: number | null }>(barrel: T): T {
+    if (barrel.fillDate && barrel.totalAgingDays == null) {
+      const fill = new Date(barrel.fillDate);
+      const days = Math.max(0, Math.floor((Date.now() - fill.getTime()) / 86400000));
+      return { ...barrel, totalAgingDays: days };
+    }
+    return barrel;
+  }
+
   app.get("/api/barrels", async (_req, res) => {
     try {
       const barrels = await storage.getBarrels();
-      res.json(barrels);
+      res.json(barrels.map(withAgingDays));
     } catch {
       res.status(500).json({ error: "Failed to fetch barrels" });
     }
@@ -2506,7 +2595,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const barrel = await storage.getBarrel(req.params.id);
       if (!barrel) return res.status(404).json({ error: "Barrel not found" });
-      res.json(barrel);
+      res.json(withAgingDays(barrel));
     } catch {
       res.status(500).json({ error: "Failed to fetch barrel" });
     }
@@ -2836,39 +2925,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Catalog of products with fixed ABVs (null = variable, from batch records)
       const CATALOG: Array<{ key: string; name: string; abv: number | null }> = [
-        { key: "pitorro",             name: "Original Pitorro",       abv: 45   },
-        { key: "pitorroCoconut",      name: "Coconut Pitorro",        abv: 45   },
-        { key: "pitorroCitrus",       name: "Citrus Pitorro",         abv: 45   },
-        { key: "pitorroDeCafe",       name: "Café Pitorro",           abv: 45   },
-        { key: "libertalia",          name: "Libertalia",             abv: 42.5 },
-        { key: "oakAgedLibertalia",   name: "Oak Aged Libertalia",    abv: 42.5 },
-        { key: "riskey",              name: "Riskey",                 abv: 47   },
-        { key: "riskeyBarrelStrength",name: "Riskey Barrel Strength", abv: null },
-        { key: "coquito",             name: "Coquito",                abv: 7.2  },
-        { key: "lugosCraftLibations", name: "Lugo's Craft Libations", abv: 6.6  },
-        { key: "yoHo",               name: "Yo-Ho Spiced Rum",       abv: 40   },
+        { key: "pitorro",              name: "Original Pitorro",                abv: 45   },
+        { key: "pitorroCoconut",       name: "Coconut Pitorro",                 abv: 45   },
+        { key: "pitorroCitrus",        name: "Citrus Pitorro",                  abv: 45   },
+        { key: "pitorroDeCafe",        name: "Café Pitorro",                    abv: 45   },
+        { key: "libertalia",           name: "Libertalia",                      abv: 42.5 },
+        { key: "oakAgedLibertalia",    name: "Oak Aged Libertalia",             abv: 42.5 },
+        { key: "riskey",               name: "Riskey",                          abv: 47   },
+        { key: "riskeyBarrelStrength", name: "Riskey Barrel Strength",          abv: null },
+        { key: "coquito",              name: "Coquito",                         abv: 7.2  },
+        { key: "lugosCraftLibations",  name: "Lugo's Craft Libations",          abv: 6.6  },
+        { key: "saltLifeFruitGuava",   name: "Salt Life Passion Fruit/Guava",   abv: 9    },
+        { key: "saltLifeOrangeMango",  name: "Salt Life Passion Orange/Mango",  abv: 9    },
+        { key: "yoHo",                 name: "Yo-Ho Spiced Rum",                abv: 40   },
       ];
 
       // Fetch all inventory records for the month
       const invRows = await query(
-        `SELECT cases_to_distributors, cases_to_retail
+        `SELECT product_name, cases_to_distributors, cases_to_retail
            FROM distilling_inventory_records
           WHERE report_month = $1`,
         [month]
       );
 
-      // Aggregate distributor and retail cases per product key
+      // Map product names (as entered on the batch/bottling form) to catalog keys.
+      // Some products are recorded under a shorter working name than the catalog's
+      // full display name (e.g. batch-form.tsx uses "Libations" / "Yo-Ho").
+      const NAME_ALIASES: Record<string, string> = {
+        "libations": "lugosCraftLibations",
+        "yo-ho": "yoHo",
+      };
+      const nameToKey = new Map<string, string>();
+      for (const product of CATALOG) {
+        nameToKey.set(product.name.trim().toLowerCase(), product.key);
+      }
+      for (const [alias, key] of Object.entries(NAME_ALIASES)) {
+        nameToKey.set(alias, key);
+      }
+
+      // Aggregate distributor and retail cases per product key. Each inventory
+      // record belongs to a single product (product_name); cases_to_distributors/
+      // cases_to_retail are keyed by bottle size ("750ml", "1000ml", "1750ml"), so
+      // sum every value in the map to get that record's total cases.
       const distMap: Record<string, number> = {};
       const retailMap: Record<string, number> = {};
       for (const r of invRows as any[]) {
+        const productKey = nameToKey.get(String(r.product_name ?? "").trim().toLowerCase());
+        if (!productKey) continue;
         const dist = (r.cases_to_distributors ?? {}) as Record<string, number>;
         const retail = (r.cases_to_retail ?? {}) as Record<string, number>;
-        for (const [k, v] of Object.entries(dist)) {
-          distMap[k] = (distMap[k] ?? 0) + Number(v || 0);
-        }
-        for (const [k, v] of Object.entries(retail)) {
-          retailMap[k] = (retailMap[k] ?? 0) + Number(v || 0);
-        }
+        const distTotal = Object.values(dist).reduce((s, v) => s + Number(v || 0), 0);
+        const retailTotal = Object.values(retail).reduce((s, v) => s + Number(v || 0), 0);
+        distMap[productKey] = (distMap[productKey] ?? 0) + distTotal;
+        retailMap[productKey] = (retailMap[productKey] ?? 0) + retailTotal;
       }
 
       // Determine ABV for Riskey Barrel Strength from batch records
@@ -2896,7 +3005,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const totalCases  = distCases + retailCases;
         const proofGallons = totalCases * 1.19 * abv * 2 / 100;
         const exciseTax    = proofGallons * 2.70;
-        const perBottle    = totalCases > 0 ? exciseTax / (totalCases * 6) : 0;
+        const perBottle    = exciseTax / 6;
         return {
           key:          product.key,
           name:         product.name,
@@ -3435,10 +3544,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const EXPORTABLE_TABLES: Record<string, string> = {
     batches: "distilling_batch_records",
     barrels: "barrels",
+    barrel_events: "barrel_events",
     production_records: "distilling_production_records",
     inventory_records: "distilling_inventory_records",
     inventory_items: "inventory_items",
     inventory_lots: "inventory_lots",
+    inventory_movements: "inventory_movements",
     compliance: "compliance",
     clients: "clients",
     properties: "properties",
@@ -3450,15 +3561,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     cola_registrations: "cola_registrations",
     label_records: "label_records",
     state_excise_returns: "state_excise_returns",
+    equipment: "distillery_equipment",
+    calculator_presets: "calculator_presets",
   };
 
   const TAB_LABELS: Record<string, string> = {
     batches: "Production Batches",
     barrels: "Barrels",
+    barrel_events: "Barrel Events",
     production_records: "Production Records",
     inventory_records: "Inventory Records",
     inventory_items: "Inventory Items",
     inventory_lots: "Inventory Lots",
+    inventory_movements: "Inventory Movements",
     compliance: "Compliance",
     clients: "Clients",
     properties: "Properties",
@@ -3470,6 +3585,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     cola_registrations: "COLA Registrations",
     label_records: "Label Records",
     state_excise_returns: "FL Excise Returns",
+    equipment: "Distillery Equipment",
+    calculator_presets: "Calculator Presets",
   };
 
   // Reverse map: sheet tab label → table name (for import)
@@ -3556,13 +3673,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Helper to produce a hint string for a column
       function columnHint(col: string): string {
-        if (col === "id") return "# HINT: AUTO (leave blank for new records)";
-        if (col === "stage")
-          return "# HINT: planning | mash_fermentation | distillation | barreling | aging | bottling | closed";
-        if (col === "status") return "# HINT: (see valid values in field description)";
-        if (col.endsWith("_at") || col === "created_at" || col === "updated_at" || col.endsWith("_date"))
-          return "# HINT: YYYY-MM-DD";
-        if (col.includes("_id")) return "# HINT: reference ID (e.g. BATCH-xxx)";
+        if (col === "id") return "# AUTO — leave blank for new records; include to update existing";
+        if (col === "stage") return "# planning | mash_fermentation | distillation | barreling | aging | bottling | closed";
+        if (col === "status") return "# see valid values for each table in the platform";
+        if (col === "event_type") return "# gauge | temperature | dump | Fill | Sample | TopOff";
+        if (col === "spirit_type") return "# rum";
+        if (col === "tax_class") return "# craft_tier1 | craft_tier2 | standard";
+        if (col === "movement_type") return "# receipt | usage | adjustment | transfer | loss";
+        if (col === "type" || col === "zone") return "# see platform for valid values";
+        if (col.endsWith("_at") || col === "created_at" || col === "updated_at" || col.endsWith("_date") || col === "event_at" || col === "performed_at")
+          return "# YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ";
+        if (col.endsWith("_id")) return "# reference ID from related table";
+        if (col === "metadata" || col.endsWith("_made") || col.endsWith("_items") || col === "parameters" || col === "payload")
+          return '# JSON object e.g. {"750ml":10,"1000ml":5}';
+        if (col.includes("proof") || col.includes("abv") || col.includes("gallons") || col.includes("volume") || col.includes("capacity"))
+          return "# numeric (decimal point, not comma)";
+        if (col.includes("cases") || col.includes("bottles")) return "# integer";
         return "";
       }
 

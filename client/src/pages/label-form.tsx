@@ -7,12 +7,26 @@ import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../component
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 
-const CLASS_TYPES = ["Whiskey", "Bourbon", "Rum", "Vodka", "Gin", "Brandy", "Tequila", "Other"];
+const PRODUCTS = [
+  "Original Pitorro",
+  "Coconut Pitorro",
+  "Citrus Pitorro",
+  "Café Pitorro",
+  "Libertalia",
+  "Oak Aged Libertalia",
+  "Riskey",
+  "Riskey Barrel Strength",
+  "Coquito",
+  "Libations",
+  "Yo-Ho",
+] as const;
+
+const CLASS_TYPES = ["Rum"];
 const LABEL_STATUSES = ["draft", "approved", "in_use", "retired"];
 
 const empty = {
   productName: "", sku: "", version: "1.0", colaId: "", netContents: "",
-  alcoholContent: "", classType: "Whiskey", status: "draft", approvedAt: "", notes: "",
+  alcoholContent: "", classType: "Rum", status: "draft", approvedAt: "", notes: "",
 };
 
 interface LabelRecord {
@@ -109,7 +123,10 @@ export default function LabelForm() {
       <FormSection title="Label Identity">
         <FormGrid>
           <Field label="Product Name" required>
-            <Input value={form.productName} onChange={set("productName")} placeholder="e.g. Silver Rum" />
+            <Select value={form.productName} onChange={set("productName")}>
+              <option value="">— Select product —</option>
+              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
           </Field>
           <Field label="SKU" required hint="Stock keeping unit">
             <Input value={form.sku} onChange={set("sku")} placeholder="LIB-RUM-750" />

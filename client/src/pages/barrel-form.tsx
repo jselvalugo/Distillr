@@ -1,51 +1,95 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useLocation, useParams } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import type { Barrel } from "@shared/schema";
+
+const PRODUCTS = [
+  "Original Pitorro",
+  "Coconut Pitorro",
+  "Citrus Pitorro",
+  "Café Pitorro",
+  "Libertalia",
+  "Oak Aged Libertalia",
+  "Riskey",
+  "Riskey Barrel Strength",
+  "Coquito",
+  "Libations",
+  "Yo-Ho",
+] as const;
 
 const today = new Date().toISOString().slice(0, 10);
 
+const emptyForm = {
+  serialNumber: "",
+  productName: "",
+  status: "Aging",
+  fillDate: today,
+  fillProof: "",
+  fillVolume: "",
+  warehouseZone: "",
+  charLevel: "",
+  notes: "",
+};
+
 export default function BarrelForm() {
   const [, navigate] = useLocation();
+  const params = useParams<{ id?: string }>();
+  const isEdit = !!params.id;
   const qc = useQueryClient();
-  const [form, setForm] = useState({
-    serialNumber: "",
-    productName: "",
-    status: "Aging",
-    fillDate: today,
-    fillProof: "",
-    fillVolume: "",
-    warehouseZone: "",
-    charLevel: "",
-    notes: "",
+
+  const [form, setForm] = useState(emptyForm);
+
+  const { data: existing, isLoading: loadingExisting } = useQuery<Barrel>({
+    queryKey: ["/api/barrels", params.id],
+    queryFn: () => apiRequest(`/api/barrels/${params.id}`),
+    enabled: isEdit,
   });
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
+  useEffect(() => {
+    if (existing) {
+      setForm({
+        serialNumber: existing.serialNumber ?? "",
+        productName: existing.productName ?? "",
+        status: existing.status ?? "Aging",
+        fillDate: existing.fillDate ? String(existing.fillDate).slice(0, 10) : "",
+        fillProof: existing.fillProof != null ? String(existing.fillProof) : "",
+        fillVolume: existing.fillVolume != null ? String(existing.fillVolume) : "",
+        warehouseZone: existing.warehouseZone ?? "",
+        charLevel: existing.charLevel ?? "",
+        notes: (existing as any).notes ?? "",
+      });
+    }
+  }, [existing]);
+
+  const set = (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const payload = () => ({
+    serialNumber: form.serialNumber.trim(),
+    productName: form.productName.trim() || null,
+    status: form.status,
+    fillDate: form.fillDate || null,
+    fillProof: form.fillProof ? Number(form.fillProof) : null,
+    fillVolume: form.fillVolume ? Number(form.fillVolume) : null,
+    warehouseZone: form.warehouseZone.trim() || null,
+    charLevel: form.charLevel.trim() || null,
+    notes: form.notes.trim() || null,
+  });
 
   const mut = useMutation({
     mutationFn: () =>
-      apiRequest("/api/barrels", {
-        method: "POST",
-        body: JSON.stringify({
-          serialNumber: form.serialNumber.trim(),
-          productName: form.productName.trim() || null,
-          status: form.status,
-          fillDate: form.fillDate || null,
-          fillProof: form.fillProof ? Number(form.fillProof) : null,
-          fillVolume: form.fillVolume ? Number(form.fillVolume) : null,
-          warehouseZone: form.warehouseZone.trim() || null,
-          charLevel: form.charLevel.trim() || null,
-          notes: form.notes.trim() || null,
-        }),
-      }),
+      isEdit
+        ? apiRequest(`/api/barrels/${params.id}`, { method: "PATCH", body: JSON.stringify(payload()) })
+        : apiRequest("/api/barrels", { method: "POST", body: JSON.stringify(payload()) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/barrels"] });
-      toast.success("Barrel added");
+      toast.success(isEdit ? "Barrel updated" : "Barrel added");
       navigate("/barrels");
     },
     onError: (e: any) => toast.error(e.message),
@@ -56,14 +100,22 @@ export default function BarrelForm() {
     mut.mutate();
   }
 
+  if (isEdit && loadingExisting) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-[#737373]">
+        Loading barrel…
+      </div>
+    );
+  }
+
   return (
     <FormLayout
-      title="Add Barrel"
-      subtitle="Register a new barrel into the aging program"
-      breadcrumbs={[{ label: "Barrels", href: "/barrels" }, { label: "Add Barrel" }]}
+      title={isEdit ? `Edit Barrel — ${existing?.serialNumber ?? ""}` : "Add Barrel"}
+      subtitle={isEdit ? "Update barrel record and storage details" : "Register a new barrel into the aging program"}
+      breadcrumbs={[{ label: "Barrels", href: "/barrels" }, { label: isEdit ? "Edit Barrel" : "Add Barrel" }]}
       onSave={save}
       saving={mut.isPending}
-      saveLabel="Add Barrel"
+      saveLabel={isEdit ? "Save Changes" : "Add Barrel"}
       aside={
         <>
           <InfoCard>
@@ -92,7 +144,10 @@ export default function BarrelForm() {
             </Select>
           </Field>
           <Field label="Product Name" span="full">
-            <Input value={form.productName} onChange={set("productName")} placeholder="e.g. Straight Bourbon Whiskey" />
+            <Select value={form.productName} onChange={set("productName")}>
+              <option value="">— Select product —</option>
+              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
           </Field>
         </FormGrid>
       </FormSection>

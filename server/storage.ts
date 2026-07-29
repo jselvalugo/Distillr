@@ -2600,70 +2600,66 @@ export class PostgresStorage implements IStorage {
   }
 
   async getDistilleryControlTowerSummary(reportMonth?: string): Promise<DistilleryControlTowerSummary> {
-    const targetPeriod = normalizeReportMonth(reportMonth);
-    const [productionRecords, inventoryRecords, salesOrders] = await Promise.all([
-      this.getDistillingProductionRecords(),
-      this.getDistillingInventoryRecords(),
+    // Source everything from batch records — the single source of truth
+    const [allBatches, allOrders] = await Promise.all([
+      this.getDistillingBatchRecords(),
       this.getSalesOrders(),
     ]);
+    const batches = reportMonth
+      ? allBatches.filter(b => b.batchDate.startsWith(reportMonth))
+      : allBatches;
+    const salesOrders = reportMonth
+      ? allOrders.filter(o => o.orderDate.startsWith(reportMonth))
+      : allOrders;
 
-    const periodProduction = productionRecords.filter((record) =>
-      isDateWithinReportPeriod(record.distillDate, targetPeriod),
+    // Proof gallons produced — from batches that have reached distillation+
+    const proofGallonsProduced = roundNumber(
+      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).proofGallonsProduced), 0), 2,
     );
-    const periodInventory = inventoryRecords.filter((record) => record.reportMonth === targetPeriod);
-    const periodSalesOrders = salesOrders.filter((order) => {
-      if (!["Approved", "Fulfilled"].includes(order.status)) return false;
-      return isDateWithinReportPeriod(order.fulfilledDate || order.orderDate || "", targetPeriod);
-    });
+    // Wine gallons at distillation = fill wine gallons across all barreled batches
+    const wineGallonsDistilled = roundNumber(
+      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).fillWineGallons), 0), 2,
+    );
 
-    const latestInventory = [...periodInventory].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    const producedGallons = roundNumber(
-      periodProduction.reduce((sum, record) => sum + toFiniteNumber(record.gallonsDistilled), 0),
-      2,
-    );
-    const producedProofGallons = roundNumber(
-      periodProduction.reduce((sum, record) => sum + toFiniteNumber(record.proofOfGallons), 0),
-      2,
-    );
-    const bottledCases = periodInventory.reduce((sum, record) => sum + sumNumericRecord(record.casesMade), 0);
-    const bottledBottles = periodInventory.reduce((sum, record) => sum + sumNumericRecord(record.bottlesMade), 0);
-    const distributorCases = periodInventory.reduce((sum, record) => sum + sumNumericRecord(record.casesToDistributors), 0);
-    const retailCases = periodInventory.reduce((sum, record) => sum + sumNumericRecord(record.casesToRetail), 0);
+    // Bottling totals — only batches that have bottling data
+    const cases750  = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases750ml), 0);
+    const cases1000 = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases1000ml), 0);
+    const cases1750 = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases1750ml), 0);
+    const totalCasesBottled = cases750 + cases1000 + cases1750;
+    const totalBottles = cases750 * 6 + cases1000 * 6 + cases1750 * 6;
+
+    // Sales orders
+    const fulfilledOrders = salesOrders.filter(o => ["Approved", "Fulfilled"].includes(o.status));
+    const lineItemCases = (order: typeof salesOrders[0]) =>
+      (order.lineItems ?? []).reduce((s: number, li: any) => s + toFiniteNumber(li.quantity), 0);
+    const distCases = fulfilledOrders.reduce((sum, o) => sum + lineItemCases(o), 0);
 
     return {
       asOf: new Date().toISOString(),
-      reportMonth: targetPeriod,
+      reportMonth: reportMonth ?? new Date().toISOString().slice(0, 7),
       produced: {
-        recordCount: periodProduction.length,
-        gallonsDistilled: producedGallons,
-        proofGallons: producedProofGallons,
+        recordCount: batches.filter(b => ["distillation","barreling","aging","bottling","closed"].includes(b.stage)).length,
+        gallonsDistilled: wineGallonsDistilled,
+        proofGallons: proofGallonsProduced,
       },
       bottled: {
-        inventoryRecordCount: periodInventory.length,
-        casesMade: bottledCases,
-        bottlesMade: bottledBottles,
+        inventoryRecordCount: batches.filter(b => ["bottling","closed"].includes(b.stage)).length,
+        casesMade: totalCasesBottled,
+        bottlesMade: totalBottles,
       },
       sold: {
-        distributorCases,
-        retailCases,
-        totalCases: distributorCases + retailCases,
-        salesOrdersApprovedOrFulfilled: periodSalesOrders.length,
+        distributorCases: distCases,
+        retailCases: 0,
+        totalCases: distCases,
+        salesOrdersApprovedOrFulfilled: fulfilledOrders.length,
       },
-      inventory: latestInventory
-        ? {
-            beginningOfMonthCases: latestInventory.beginningOfMonthCases,
-            currentMonthInventory: latestInventory.currentMonthInventory,
-            endingMonthInventory: latestInventory.endingMonthInventory,
-            endingUsGallons: latestInventory.endingUsGallons,
-            endingProofGallons: latestInventory.endingProofGallons,
-          }
-        : {
-            beginningOfMonthCases: 0,
-            currentMonthInventory: 0,
-            endingMonthInventory: 0,
-            endingUsGallons: 0,
-            endingProofGallons: 0,
-          },
+      inventory: {
+        beginningOfMonthCases: 0,
+        currentMonthInventory: totalCasesBottled,
+        endingMonthInventory: totalCasesBottled,
+        endingUsGallons: wineGallonsDistilled,
+        endingProofGallons: proofGallonsProduced,
+      },
     };
   }
 

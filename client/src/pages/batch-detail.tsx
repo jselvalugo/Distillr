@@ -117,11 +117,6 @@ const STAGE_LABELS: Record<Stage, string> = {
 
 const SPIRIT_TYPES = [
   { value: "rum", label: "Rum" },
-  { value: "whiskey", label: "Whiskey" },
-  { value: "vodka", label: "Vodka" },
-  { value: "gin", label: "Gin" },
-  { value: "brandy", label: "Brandy" },
-  { value: "neutral_spirits", label: "Neutral Spirits" },
 ];
 
 const TAX_CLASSES = [
@@ -325,7 +320,7 @@ function PlanningForm({ data }: { data: BatchFull }) {
           <Input
             value={form.spiritClass}
             onChange={(e) => setForm((f) => ({ ...f, spiritClass: e.target.value }))}
-            placeholder="e.g. Dark Rum, Bourbon, Rye"
+            placeholder="e.g. Dark Rum, White Rum, Aged Rum"
           />
         </div>
         <div>
@@ -824,7 +819,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             onChange={(e) => setForm((f) => ({ ...f, containerType: e.target.value }))}
           >
             <option value="">— Select container —</option>
-            <option value="new_oak_barrel">New Oak Barrel (required for Bourbon)</option>
+            <option value="new_oak_barrel">New Oak Barrel</option>
             <option value="used_barrel">Used Oak Barrel</option>
             <option value="tank">Stainless Tank</option>
             <option value="other">Other</option>
@@ -854,9 +849,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             value={form.fillProof}
             onChange={(e) => setForm((f) => ({ ...f, fillProof: e.target.value }))}
           />
-          {(batch.spiritType === "whiskey") && (
-            <p className="text-[10px] text-[#a3a3a3] mt-0.5">Bourbon/Rye must enter barrel at ≤ 125 proof (27 CFR § 5.22)</p>
-          )}
+          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Rum must enter barrel at ≤ 190 proof (27 CFR § 5.22)</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Wine Gallons Filled *</label>
@@ -1298,9 +1291,9 @@ function AgingForm({ data }: { data: BatchFull }) {
 // Bottling Form
 // ---------------------------------------------------------------------------
 const BOTTLE_SIZES = [
-  { key: "750", label: "750 mL", galPerCase: 1.19, bottlesPerCase: 6 },
-  { key: "1000", label: "1 L", galPerCase: 1.585, bottlesPerCase: 6 },
-  { key: "1750", label: "1.75 L", galPerCase: 2.774, bottlesPerCase: 6 },
+  { key: "750", label: "750 mL", galPerCase: 1.1888, bottlesPerCase: 6 },
+  { key: "1000", label: "1 L", galPerCase: 1.5850, bottlesPerCase: 6 },
+  { key: "1750", label: "1.75 L", galPerCase: 2.7738, bottlesPerCase: 6 },
 ] as const;
 
 type SizeKey = typeof BOTTLE_SIZES[number]["key"];

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
@@ -132,7 +133,7 @@ function BatchDetailDialog({ batch, onClose, onEdit }: {
           <DetailRow label="Notes" value={batch.notes} />
         </Section>
 
-        {((batch as any).distillationProof || (batch as any).proofGallonsProduced || (batch as any).distillDate || (batch as any).stillType) && (
+        {!!((batch as any).distillationProof || (batch as any).proofGallonsProduced || (batch as any).distillDate || (batch as any).stillType) && (
           <Section title="Distillation">
             <DetailRow label="Distill Date" value={fmt((batch as any).distillDate)} />
             <DetailRow label="Still Type" value={(batch as any).stillType} />
@@ -141,7 +142,7 @@ function BatchDetailDialog({ batch, onClose, onEdit }: {
           </Section>
         )}
 
-        {((batch as any).fillProof || (batch as any).fillWineGallons || (batch as any).fillDate) && (
+        {!!((batch as any).fillProof || (batch as any).fillWineGallons || (batch as any).fillDate) && (
           <Section title="Barreling">
             <DetailRow label="Fill Date" value={fmt((batch as any).fillDate)} />
             <DetailRow label="Fill Number" value={(batch as any).fillNumber} />
@@ -152,14 +153,14 @@ function BatchDetailDialog({ batch, onClose, onEdit }: {
           </Section>
         )}
 
-        {((batch as any).targetDumpDate || (batch as any).amountReceivedGallons) && (
+        {!!((batch as any).targetDumpDate || (batch as any).amountReceivedGallons != null) && (
           <Section title="Aging">
             <DetailRow label="Target Dump Date" value={fmt((batch as any).targetDumpDate)} />
-            <DetailRow label="Amount Received" value={(batch as any).amountReceivedGallons ? `${(batch as any).amountReceivedGallons} gal` : null} />
+            <DetailRow label="Amount Received" value={(batch as any).amountReceivedGallons != null ? `${(batch as any).amountReceivedGallons} gal` : null} />
           </Section>
         )}
 
-        {((batch as any).bottlingDate || (batch as any).cases750ml || (batch as any).cases1000ml || (batch as any).cases1750ml) && (
+        {!!((batch as any).bottlingDate || (batch as any).cases750ml != null || (batch as any).cases1000ml != null || (batch as any).cases1750ml != null) && (
           <Section title="Bottling">
             <DetailRow label="Bottling Date" value={fmt((batch as any).bottlingDate)} />
             <DetailRow label="Lot Number" value={(batch as any).lotNumber} />
@@ -207,6 +208,7 @@ export default function Production() {
 
   const [viewTarget, setViewTarget] = useState<BatchRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BatchRow | null>(null);
+  const [stageFilter, setStageFilter] = useState<string>("all");
 
   const { data: batches = [] } = useQuery<BatchRow[]>({
     queryKey: ["/api/distilling/batch-records"],
@@ -224,12 +226,36 @@ export default function Production() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const STAGES = ["planning", "mash_fermentation", "distillation", "barreling", "aging", "bottling", "closed"] as const;
+  const filtered = stageFilter === "all" ? batches : batches.filter(b => b.stage === stageFilter);
+
   return (
     <Layout>
       <PageHeader
         title="Production"
-        subtitle="Distilling batch pipeline"
-        actions={<Button onClick={() => navigate("/production/new")}>+ New Batch</Button>}
+        subtitle={`${filtered.length} of ${batches.length} batch${batches.length !== 1 ? "es" : ""}`}
+        actions={
+          <>
+            <div className="flex items-center gap-1 bg-white border border-[#e5e5e5] rounded-md p-0.5">
+              <button
+                onClick={() => setStageFilter("all")}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === "all" ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+              >
+                All
+              </button>
+              {STAGES.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStageFilter(s)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === s ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+                >
+                  {STAGE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+            <Button onClick={() => navigate("/production/new")}>+ New Batch</Button>
+          </>
+        }
       />
 
       <div className="p-6">
@@ -245,14 +271,14 @@ export default function Production() {
               </Tr>
             </Thead>
             <Tbody>
-              {batches.length === 0 ? (
+              {filtered.length === 0 ? (
                 <Tr>
                   <Td colSpan={5} className="text-center text-[#737373] py-10">
-                    No batches yet — create one to get started
+                    {stageFilter === "all" ? "No batches yet — create one to get started" : `No batches in ${STAGE_LABELS[stageFilter]} stage`}
                   </Td>
                 </Tr>
               ) : (
-                batches.map((b) => (
+                filtered.map((b) => (
                   <Tr
                     key={b.id}
                     className="cursor-pointer hover:bg-[#f7f7f7]"
@@ -263,21 +289,28 @@ export default function Production() {
                     <Td className="text-[#737373]">{fmt(b.batchDate)}</Td>
                     <Td><StagePill stage={b.stage} /></Td>
                     <Td>
-                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Button size="sm" variant="outline" onClick={() => setViewTarget(b)}>
-                          View
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/production/${b.id}`)}>
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => setDeleteTarget(b)}
+                      <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => setViewTarget(b)}
+                          className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                          title="View details"
                         >
-                          Delete
-                        </Button>
+                          <Eye size={13} />
+                        </button>
+                        <button
+                          onClick={() => navigate(`/production/${b.id}`)}
+                          className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                          title="Edit batch"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(b)}
+                          className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
+                          title="Delete batch"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </Td>
                   </Tr>

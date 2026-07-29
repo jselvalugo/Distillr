@@ -2,38 +2,33 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Pencil, Trash2 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
 import { Dialog } from "../components/ui/dialog";
 import { statusBadge } from "../components/ui/badge";
 import type { Staff } from "@shared/schema";
 
-const emptyForm = { name: "", role: "", status: "Active", phone: "" };
-
 export default function StaffPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState(emptyForm);
+  const [deleteTarget, setDeleteTarget] = useState<Staff | null>(null);
 
   const { data: staff = [] } = useQuery<Staff[]>({
     queryKey: ["/api/staff"],
     queryFn: () => apiRequest("/api/staff"),
   });
 
-  const createMut = useMutation({
-    mutationFn: (d: typeof form) =>
-      apiRequest("/api/staff", { method: "POST", body: JSON.stringify(d) }),
+  const deleteMut = useMutation({
+    mutationFn: () => apiRequest(`/api/staff/${deleteTarget!.id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/staff"] });
-      setOpen(false);
-      setForm(emptyForm);
-      toast.success("Team member added");
+      setDeleteTarget(null);
+      toast.success("Team member removed");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -71,22 +66,41 @@ export default function StaffPage() {
                 <Th>Role</Th>
                 <Th>Status</Th>
                 <Th>Phone</Th>
+                <Th></Th>
               </Tr>
             </Thead>
             <Tbody>
               {filtered.length === 0 ? (
                 <Tr>
-                  <Td colSpan={4} className="text-center text-[#737373] py-10">
+                  <Td colSpan={5} className="text-center text-[#737373] py-10">
                     {search ? "No staff match your search" : "No staff members yet"}
                   </Td>
                 </Tr>
               ) : (
                 filtered.map((s) => (
-                  <Tr key={s.id}>
-                    <Td className="font-medium">{s.name}</Td>
-                    <Td>{s.role}</Td>
+                  <Tr key={s.id} className="hover:bg-[#f7f7f7]">
+                    <Td className="font-medium text-[#0a0a0a]">{s.name}</Td>
+                    <Td className="text-[#737373]">{s.role}</Td>
                     <Td>{statusBadge(s.status)}</Td>
-                    <Td>{s.phone}</Td>
+                    <Td className="text-[#737373]">{s.phone ?? "—"}</Td>
+                    <Td>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => navigate(`/staff/${s.id}/edit`)}
+                          className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                          title="Edit member"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(s)}
+                          className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
+                          title="Remove member"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </Td>
                   </Tr>
                 ))
               )}
@@ -95,35 +109,28 @@ export default function StaffPage() {
         </div>
       </div>
 
-      <Dialog open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="Add Team Member">
-        <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(form); }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Full Name *</label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Role *</label>
-              <Input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder="e.g. Head Distiller" required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Phone *</label>
-              <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Status</label>
-              <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-                <option>Active</option>
-                <option>Inactive</option>
-              </Select>
+      {deleteTarget && (
+        <Dialog open onClose={() => setDeleteTarget(null)} title="Remove Team Member">
+          <div className="space-y-4">
+            <p className="text-sm text-[#0a0a0a]">
+              Are you sure you want to remove <strong>{deleteTarget.name}</strong> from the team?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              This permanently deletes the staff record. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                onClick={() => deleteMut.mutate()}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Removing…" : "Remove Member"}
+              </Button>
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => { setOpen(false); setForm(emptyForm); }}>Cancel</Button>
-            <Button type="submit" disabled={createMut.isPending}>{createMut.isPending ? "Saving…" : "Add Member"}</Button>
-          </div>
-        </form>
-      </Dialog>
+        </Dialog>
+      )}
     </Layout>
   );
 }

@@ -7,11 +7,25 @@ import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../component
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 
-const CLASS_TYPES = ["Whiskey", "Bourbon", "Rum", "Vodka", "Gin", "Brandy", "Tequila", "Other"];
+const PRODUCTS = [
+  "Original Pitorro",
+  "Coconut Pitorro",
+  "Citrus Pitorro",
+  "Café Pitorro",
+  "Libertalia",
+  "Oak Aged Libertalia",
+  "Riskey",
+  "Riskey Barrel Strength",
+  "Coquito",
+  "Libations",
+  "Yo-Ho",
+] as const;
+
+const CLASS_TYPES = ["Rum"];
 const COLA_STATUSES = ["pending", "approved", "rejected", "expired", "revoked"];
 
 const empty = {
-  productName: "", brandName: "", classType: "Whiskey", formulaNumber: "",
+  productName: "", brandName: "", classType: "Rum", formulaNumber: "",
   colaNumber: "", status: "pending", appliedAt: "", approvedAt: "", expiresAt: "", notes: "",
 };
 
@@ -102,7 +116,10 @@ export default function ColaForm() {
       <FormSection title="Product Information">
         <FormGrid>
           <Field label="Product Name" required>
-            <Input value={form.productName} onChange={set("productName")} placeholder="e.g. Silver Rum" />
+            <Select value={form.productName} onChange={set("productName")}>
+              <option value="">— Select product —</option>
+              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
           </Field>
           <Field label="Brand Name" required>
             <Input value={form.brandName} onChange={set("brandName")} placeholder="e.g. Libertalia" />

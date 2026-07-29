@@ -1,27 +1,53 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { useLocation, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import type { SalesOrder } from "@shared/schema";
 
 const today = new Date().toISOString().slice(0, 10);
 
 interface Client { id: string; name: string }
 
+const emptyForm = {
+  orderNumber: "",
+  clientId: "",
+  orderDate: today,
+  status: "Draft",
+  currency: "USD",
+  notes: "",
+};
+
 export default function SalesOrderForm() {
   const [, navigate] = useLocation();
+  const params = useParams<{ id?: string }>();
+  const isEdit = !!(params as any).id;
+  const orderId = (params as any).id as string | undefined;
+
   const qc = useQueryClient();
-  const [form, setForm] = useState({
-    orderNumber: "",
-    clientId: "",
-    orderDate: today,
-    status: "Draft",
-    currency: "USD",
-    notes: "",
+  const [form, setForm] = useState(emptyForm);
+
+  const { data: existing } = useQuery<SalesOrder>({
+    queryKey: ["/api/sales-orders", orderId],
+    queryFn: () => apiRequest(`/api/sales-orders/${orderId}`),
+    enabled: isEdit,
   });
+
+  useEffect(() => {
+    if (existing) {
+      setForm({
+        orderNumber: existing.orderNumber,
+        clientId: existing.clientId ?? "",
+        orderDate: existing.orderDate,
+        status: existing.status,
+        currency: existing.currency ?? "USD",
+        notes: existing.notes ?? "",
+      });
+    }
+  }, [existing]);
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -32,22 +58,24 @@ export default function SalesOrderForm() {
     setForm(f => ({ ...f, [k]: e.target.value }));
 
   const mut = useMutation({
-    mutationFn: () =>
-      apiRequest("/api/sales-orders", {
-        method: "POST",
-        body: JSON.stringify({
-          orderNumber: form.orderNumber.trim(),
-          clientId: form.clientId || null,
-          orderDate: form.orderDate,
-          status: form.status,
-          currency: form.currency,
-          notes: form.notes.trim() || null,
-          lineItems: [],
-        }),
-      }),
+    mutationFn: () => {
+      const body = {
+        orderNumber: form.orderNumber.trim(),
+        clientId: form.clientId || null,
+        orderDate: form.orderDate,
+        status: form.status,
+        currency: form.currency,
+        notes: form.notes.trim() || null,
+        lineItems: existing?.lineItems ?? [],
+      };
+      if (isEdit) {
+        return apiRequest(`/api/sales-orders/${orderId}`, { method: "PATCH", body: JSON.stringify(body) });
+      }
+      return apiRequest("/api/sales-orders", { method: "POST", body: JSON.stringify(body) });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/sales-orders"] });
-      toast.success("Sales order created");
+      toast.success(isEdit ? "Order updated" : "Sales order created");
       navigate("/sales-orders");
     },
     onError: (e: any) => toast.error(e.message),
@@ -60,16 +88,16 @@ export default function SalesOrderForm() {
 
   return (
     <FormLayout
-      title="New Sales Order"
-      subtitle="Create a sales order for a trading partner"
-      breadcrumbs={[{ label: "Sales Orders", href: "/sales-orders" }, { label: "New Order" }]}
+      title={isEdit ? `Edit Order — ${form.orderNumber || "…"}` : "New Sales Order"}
+      subtitle={isEdit ? "Update order details below" : "Create a sales order for a trading partner"}
+      breadcrumbs={[{ label: "Sales Orders", href: "/sales-orders" }, { label: isEdit ? "Edit Order" : "New Order" }]}
       onSave={save}
       saving={mut.isPending}
-      saveLabel="Create Order"
+      saveLabel={isEdit ? "Save Changes" : "Create Order"}
       aside={
         <InfoCard>
           <p className="font-medium text-[#0a0a0a]">Order workflow</p>
-          <p>Create the order here, then add line items from the order detail page. Move through Draft → Confirmed → Shipped → Invoiced as the order progresses.</p>
+          <p>Move through Draft → Approved → Fulfilled as the order progresses.</p>
         </InfoCard>
       }
     >
@@ -84,9 +112,8 @@ export default function SalesOrderForm() {
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>
               <option>Draft</option>
-              <option>Confirmed</option>
-              <option>Shipped</option>
-              <option>Invoiced</option>
+              <option>Approved</option>
+              <option>Fulfilled</option>
               <option>Cancelled</option>
             </Select>
           </Field>

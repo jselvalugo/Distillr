@@ -5,6 +5,21 @@ import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
+import { Select } from "../components/ui/select";
+
+const PRODUCTS = [
+  "Original Pitorro",
+  "Coconut Pitorro",
+  "Citrus Pitorro",
+  "Café Pitorro",
+  "Libertalia",
+  "Oak Aged Libertalia",
+  "Riskey",
+  "Riskey Barrel Strength",
+  "Coquito",
+  "Libations",
+  "Yo-Ho",
+] as const;
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -65,8 +80,11 @@ export default function BatchForm() {
           <Field label="Batch Date" required>
             <Input type="date" value={form.batchDate} onChange={set("batchDate")} />
           </Field>
-          <Field label="Product Name" span="full" hint="Spirit type or brand name for this batch">
-            <Input value={form.productName} onChange={set("productName")} placeholder="e.g. Silver Rum, Bourbon Whiskey" />
+          <Field label="Product Name" span="full">
+            <Select value={form.productName} onChange={set("productName")}>
+              <option value="">— Select product —</option>
+              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
           </Field>
           <Field label="Notes" span="full">
             <textarea

@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
 import { Dialog } from "../components/ui/dialog";
 import { statusBadge } from "../components/ui/badge";
@@ -15,45 +15,108 @@ import type { Barrel } from "@shared/schema";
 
 const STATUSES = ["Filled", "Aging", "Ready", "Dumped", "Retired"] as const;
 
-const emptyForm = {
-  serialNumber: "",
-  productName: "",
-  status: "Filled",
-  warehouseZone: "",
-  charLevel: "",
-  fillDate: "",
-  fillProof: "",
-  fillVolume: "",
-  notes: "",
-};
+// ---------------------------------------------------------------------------
+// Read-only detail helpers
+// ---------------------------------------------------------------------------
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value == null || value === "" || value === "—") return null;
+  return (
+    <div className="flex justify-between items-start py-1.5 border-b border-[#f0f0f0] last:border-0">
+      <span className="text-xs text-[#737373] w-44 shrink-0">{label}</span>
+      <span className="text-xs font-medium text-[#0a0a0a] text-right">{value}</span>
+    </div>
+  );
+}
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">{title}</p>
+      <div className="rounded-lg border border-[#e5e5e5] px-3 py-1">{children}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Barrel detail dialog (read-only)
+// ---------------------------------------------------------------------------
+function BarrelDetailDialog({ barrel, onClose, onEdit }: {
+  barrel: Barrel;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const agingDays = barrel.totalAgingDays ?? null;
+  const proofGallons = barrel.fillProofGallons != null
+    ? `${fmtNum(barrel.fillProofGallons)} PG`
+    : null;
+
+  return (
+    <Dialog open onClose={onClose} title={`Barrel ${barrel.serialNumber}`}>
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+
+        <Section title="Identification">
+          <DetailRow label="Serial Number" value={<span className="font-mono">{barrel.serialNumber}</span>} />
+          <DetailRow label="Product" value={barrel.productName} />
+          <DetailRow label="Status" value={statusBadge(barrel.status)} />
+        </Section>
+
+        <Section title="Fill Details">
+          <DetailRow label="Fill Date" value={fmt(barrel.fillDate)} />
+          <DetailRow label="Fill Proof" value={barrel.fillProof != null ? `${barrel.fillProof}°` : null} />
+          <DetailRow label="Fill Volume" value={barrel.fillVolume != null ? `${fmtNum(barrel.fillVolume)} gal` : null} />
+          <DetailRow label="Fill Proof Gallons" value={proofGallons} />
+        </Section>
+
+        {(barrel.warehouseZone || barrel.charLevel) && (
+          <Section title="Storage">
+            <DetailRow label="Warehouse Zone" value={barrel.warehouseZone} />
+            <DetailRow label="Char Level" value={barrel.charLevel} />
+          </Section>
+        )}
+
+        <Section title="Aging">
+          <DetailRow label="Current Volume" value={barrel.currentVolume != null ? `${fmtNum(barrel.currentVolume)} gal` : null} />
+          <DetailRow label="Aging Days" value={agingDays != null ? `${agingDays} days` : null} />
+        </Section>
+
+        {(barrel as any).notes && (
+          <Section title="Notes">
+            <div className="py-1.5 text-xs text-[#404040]">{(barrel as any).notes}</div>
+          </Section>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center pt-4 mt-2 border-t border-[#e5e5e5]">
+        <Button variant="outline" onClick={onClose}>Close</Button>
+        <Button onClick={onEdit}>Edit Barrel →</Button>
+      </div>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 export default function Barrels() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+
+  const [viewTarget, setViewTarget] = useState<Barrel | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Barrel | null>(null);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState(emptyForm);
 
   const { data: barrels = [], isLoading } = useQuery<Barrel[]>({
     queryKey: ["/api/barrels"],
     queryFn: () => apiRequest("/api/barrels"),
   });
 
-  const createMut = useMutation({
-    mutationFn: (data: typeof form) =>
-      apiRequest("/api/barrels", {
-        method: "POST",
-        body: JSON.stringify({
-          ...data,
-          fillProof: data.fillProof ? +data.fillProof : undefined,
-          fillVolume: data.fillVolume ? +data.fillVolume : undefined,
-        }),
-      }),
+  const deleteMut = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/barrels/${deleteTarget!.id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/barrels"] });
-      setOpen(false);
-      setForm(emptyForm);
-      toast.success("Barrel added");
+      setDeleteTarget(null);
+      toast.success("Barrel deleted");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -101,29 +164,59 @@ export default function Barrels() {
                   <Th>Zone</Th>
                   <Th>Char</Th>
                   <Th>Aging Days</Th>
+                  <Th></Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {filtered.length === 0 ? (
                   <Tr>
-                    <Td colSpan={11} className="text-center text-[#737373] py-10">
+                    <Td colSpan={12} className="text-center text-[#737373] py-10">
                       {search ? "No barrels match your search" : "No barrels yet — add your first barrel"}
                     </Td>
                   </Tr>
                 ) : (
                   filtered.map((b) => (
-                    <Tr key={b.id}>
-                      <Td className="font-mono font-medium">{b.serialNumber}</Td>
-                      <Td>{b.productName ?? "—"}</Td>
+                    <Tr
+                      key={b.id}
+                      className="cursor-pointer hover:bg-[#f7f7f7]"
+                      onClick={() => setViewTarget(b)}
+                    >
+                      <Td className="font-mono font-medium text-[#0a0a0a]">{b.serialNumber}</Td>
+                      <Td className="text-[#737373]">{b.productName ?? "—"}</Td>
                       <Td>{statusBadge(b.status)}</Td>
-                      <Td>{fmt(b.fillDate)}</Td>
-                      <Td>{fmtNum(b.fillProof)}</Td>
-                      <Td>{fmtNum(b.fillVolume)}</Td>
-                      <Td>{fmtNum(b.fillProofGallons)}</Td>
-                      <Td>{fmtNum(b.currentVolume)}</Td>
-                      <Td>{b.warehouseZone ?? "—"}</Td>
-                      <Td>{b.charLevel ?? "—"}</Td>
-                      <Td>{b.totalAgingDays ?? "—"}</Td>
+                      <Td className="text-[#737373]">{fmt(b.fillDate)}</Td>
+                      <Td className="text-[#737373]">{fmtNum(b.fillProof)}</Td>
+                      <Td className="text-[#737373]">{fmtNum(b.fillVolume)}</Td>
+                      <Td className="text-[#737373]">{fmtNum(b.fillProofGallons)}</Td>
+                      <Td className="text-[#737373]">{fmtNum(b.currentVolume)}</Td>
+                      <Td className="text-[#737373]">{b.warehouseZone ?? "—"}</Td>
+                      <Td className="text-[#737373]">{b.charLevel ?? "—"}</Td>
+                      <Td className="text-[#737373]">{b.totalAgingDays ?? "—"}</Td>
+                      <Td>
+                        <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setViewTarget(b)}
+                            className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                            title="View details"
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            onClick={() => navigate(`/barrels/${b.id}/edit`)}
+                            className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                            title="Edit barrel"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(b)}
+                            className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
+                            title="Delete barrel"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </Td>
                     </Tr>
                   ))
                 )}
@@ -133,102 +226,40 @@ export default function Barrels() {
         </div>
       </div>
 
-      <Dialog open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="Add Barrel">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMut.mutate(form);
-          }}
-          className="space-y-3"
-        >
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Serial Number *</label>
-              <Input
-                value={form.serialNumber}
-                onChange={(e) => setForm((f) => ({ ...f, serialNumber: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Product Name</label>
-              <Input
-                value={form.productName}
-                onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Status</label>
-              <Select
-                value={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+      {/* Read-only detail dialog */}
+      {viewTarget && (
+        <BarrelDetailDialog
+          barrel={viewTarget}
+          onClose={() => setViewTarget(null)}
+          onEdit={() => { setViewTarget(null); navigate(`/barrels/${viewTarget.id}/edit`); }}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <Dialog open onClose={() => setDeleteTarget(null)} title="Delete Barrel">
+          <div className="space-y-4">
+            <p className="text-sm text-[#0a0a0a]">
+              Are you sure you want to delete barrel{" "}
+              <span className="font-mono font-semibold">{deleteTarget.serialNumber}</span>
+              {deleteTarget.productName && <> ({deleteTarget.productName})</>}?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              This permanently deletes the barrel record. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                onClick={() => deleteMut.mutate()}
+                disabled={deleteMut.isPending}
               >
-                {STATUSES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Fill Date</label>
-              <Input
-                type="date"
-                value={form.fillDate}
-                onChange={(e) => setForm((f) => ({ ...f, fillDate: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Fill Proof</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.fillProof}
-                onChange={(e) => setForm((f) => ({ ...f, fillProof: e.target.value }))}
-                placeholder="e.g. 125.0"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Fill Volume (gal)</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.fillVolume}
-                onChange={(e) => setForm((f) => ({ ...f, fillVolume: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Warehouse Zone</label>
-              <Input
-                value={form.warehouseZone}
-                onChange={(e) => setForm((f) => ({ ...f, warehouseZone: e.target.value }))}
-                placeholder="e.g. A-3"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Char Level</label>
-              <Input
-                value={form.charLevel}
-                onChange={(e) => setForm((f) => ({ ...f, charLevel: e.target.value }))}
-                placeholder="e.g. #3"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input
-                value={form.notes}
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              />
+                {deleteMut.isPending ? "Deleting…" : "Delete Barrel"}
+              </Button>
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => { setOpen(false); setForm(emptyForm); }}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createMut.isPending}>
-              {createMut.isPending ? "Saving…" : "Add Barrel"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+        </Dialog>
+      )}
     </Layout>
   );
 }
