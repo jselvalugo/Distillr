@@ -2,22 +2,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import type { SafeUser } from "@shared/schema";
 
+type AuthResponse = { user: SafeUser; csrfToken: string };
+
 export function useAuth() {
   const qc = useQueryClient();
 
   const { data: user, isLoading } = useQuery<SafeUser | null>({
     queryKey: ["/api/auth/me"],
-    queryFn: () => apiRequest<SafeUser>("/api/auth/me").catch(() => null),
+    queryFn: () =>
+      apiRequest<AuthResponse>("/api/auth/me")
+        .then((r) => r.user)
+        .catch(() => null),
     staleTime: Infinity,
   });
 
   const loginMut = useMutation({
     mutationFn: (creds: { email: string; password: string }) =>
-      apiRequest<SafeUser>("/api/auth/login", {
+      apiRequest<AuthResponse>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify(creds),
       }),
-    onSuccess: (u) => qc.setQueryData(["/api/auth/me"], u),
+    onSuccess: (r) => qc.setQueryData(["/api/auth/me"], r.user),
   });
 
   const logoutMut = useMutation({

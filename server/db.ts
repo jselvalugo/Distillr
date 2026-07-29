@@ -9,7 +9,7 @@ function isLocalDatabaseHost(host: string | null | undefined): boolean {
   if (!host) return true;
   const normalized = host.trim().toLowerCase();
   if (!normalized) return true;
-  if (normalized.startsWith("/")) return true; // unix socket
+  if (normalized.startsWith("/")) return true;
   if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true;
   if (normalized.startsWith("127.")) return true;
   if (normalized.startsWith("::ffff:127.")) return true;
@@ -17,7 +17,6 @@ function isLocalDatabaseHost(host: string | null | undefined): boolean {
 }
 
 function assertLocalDatabaseConfig(): void {
-  // When running in local-only mode (default), refuse accidental remote DB connections.
   if (!localOnlyMode || allowRemote) return;
 
   if (connectionString) {
@@ -42,7 +41,7 @@ assertLocalDatabaseConfig();
 
 export const pool = new Pool(
   connectionString
-    ? { connectionString }
+    ? { connectionString, ssl: { rejectUnauthorized: false } }
     : {
         host: process.env.PGHOST || "127.0.0.1",
         port: Number.parseInt(process.env.PGPORT || "5432", 10),
@@ -91,6 +90,11 @@ export async function initDatabase(): Promise<void> {
       requirement_statuses TEXT[] NOT NULL DEFAULT '{}',
       requirement_severities TEXT[] NOT NULL DEFAULT '{}'
     );
+
+    -- Add logo/branding columns if missing (idempotent migrations)
+    ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS logo_data_url TEXT;
+    ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS organization_name_override TEXT;
+    ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS dsp_number TEXT;
 
     CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,
@@ -182,49 +186,49 @@ export async function initDatabase(): Promise<void> {
       updated_at TEXT
     );
 
-	    CREATE TABLE IF NOT EXISTS job_photos (
-	      id TEXT PRIMARY KEY,
-	      job_id TEXT NOT NULL,
-	      filename TEXT NOT NULL,
-	      file_path TEXT NOT NULL,
-	      uploaded_by TEXT NOT NULL,
-	      uploaded_at TEXT NOT NULL
-	    );
+    CREATE TABLE IF NOT EXISTS job_photos (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      uploaded_by TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL
+    );
 
-	    CREATE TABLE IF NOT EXISTS attachments (
-	      id TEXT PRIMARY KEY,
-	      original_filename TEXT NOT NULL,
-	      file_path TEXT NOT NULL,
-	      mime_type TEXT NOT NULL,
-	      byte_size INTEGER NOT NULL,
-	      sha256 TEXT,
-	      doc_type TEXT NOT NULL,
-	      effective_on TEXT,
-	      expires_on TEXT,
-	      status TEXT NOT NULL,
-	      uploaded_by TEXT NOT NULL,
-	      uploaded_at TEXT NOT NULL,
-	      notes TEXT
-	    );
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      original_filename TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      sha256 TEXT,
+      doc_type TEXT NOT NULL,
+      effective_on TEXT,
+      expires_on TEXT,
+      status TEXT NOT NULL,
+      uploaded_by TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL,
+      notes TEXT
+    );
 
-	    CREATE TABLE IF NOT EXISTS attachment_links (
-	      id TEXT PRIMARY KEY,
-	      attachment_id TEXT NOT NULL,
-	      entity_type TEXT NOT NULL,
-	      entity_id TEXT NOT NULL,
-	      relationship TEXT NOT NULL,
-	      linked_by TEXT NOT NULL,
-	      linked_at TEXT NOT NULL
-	    );
+    CREATE TABLE IF NOT EXISTS attachment_links (
+      id TEXT PRIMARY KEY,
+      attachment_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      relationship TEXT NOT NULL,
+      linked_by TEXT NOT NULL,
+      linked_at TEXT NOT NULL
+    );
 
-	    CREATE INDEX IF NOT EXISTS attachment_links_entity_idx ON attachment_links(entity_type, entity_id);
-	    CREATE INDEX IF NOT EXISTS attachments_doc_type_idx ON attachments(doc_type);
-	    CREATE INDEX IF NOT EXISTS attachments_expires_idx ON attachments(expires_on);
+    CREATE INDEX IF NOT EXISTS attachment_links_entity_idx ON attachment_links(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS attachments_doc_type_idx ON attachments(doc_type);
+    CREATE INDEX IF NOT EXISTS attachments_expires_idx ON attachments(expires_on);
 
-	    CREATE TABLE IF NOT EXISTS inventory_items (
-	      id TEXT PRIMARY KEY,
-	      name TEXT NOT NULL,
-	      category TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
       unit_of_measure TEXT NOT NULL,
       status TEXT NOT NULL,
       notes TEXT,
@@ -431,11 +435,48 @@ export async function initDatabase(): Promise<void> {
 
     ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS ttb_operation_category TEXT;
     ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS production_stage TEXT;
+
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS product_name TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS barrel_id TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS spirit_type TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS spirit_class TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS distillation_proof DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS proof_gallons_produced DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS still_type TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_number TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_proof DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_wine_gallons DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_proof_gallons DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS container_type TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS bottling_date TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS bottling_proof DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS wine_gallons_bottled DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS proof_gallons_processed DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS cases_750ml INTEGER;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS cases_1000ml INTEGER;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS cases_1750ml INTEGER;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS total_cases INTEGER;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS lot_number TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS tax_class TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS excise_tax_due DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS distill_date TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_date TEXT;
     ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS tax_classification TEXT;
 
     ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS ttb_operation_category TEXT;
     ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS production_stage TEXT;
     ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS tax_classification TEXT;
+    ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS outdoor_temp DOUBLE PRECISION;
+    ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS wine_gallons DOUBLE PRECISION;
+
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS target_dump_date TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS amount_received_gallons DOUBLE PRECISION;
+
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS cases_cased JSONB;
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS bottles_empty JSONB;
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS amount_received_gallons DOUBLE PRECISION;
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS amount_lost_gallons DOUBLE PRECISION;
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS taxes_owed DOUBLE PRECISION;
 
     ALTER TABLE barrels ADD COLUMN IF NOT EXISTS product_name TEXT;
     ALTER TABLE barrels ADD COLUMN IF NOT EXISTS fill_proof_gallons DOUBLE PRECISION;
@@ -503,5 +544,85 @@ export async function initDatabase(): Promise<void> {
         ';
       END IF;
     END $$;
+
+    CREATE TABLE IF NOT EXISTS permits (
+      id TEXT PRIMARY KEY,
+      permit_type TEXT NOT NULL,
+      permit_number TEXT NOT NULL,
+      issuing_authority TEXT NOT NULL,
+      state TEXT,
+      issue_date TEXT NOT NULL,
+      expiration_date TEXT NOT NULL,
+      reminder_days_before INTEGER NOT NULL DEFAULT 90,
+      status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS cola_registrations (
+      id TEXT PRIMARY KEY,
+      product_name TEXT NOT NULL,
+      brand_name TEXT NOT NULL,
+      class_type TEXT NOT NULL,
+      formula_number TEXT,
+      cola_number TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      applied_at TEXT,
+      approved_at TEXT,
+      expires_at TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS label_records (
+      id TEXT PRIMARY KEY,
+      product_name TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      version TEXT NOT NULL,
+      cola_id TEXT,
+      net_contents TEXT,
+      alcohol_content NUMERIC,
+      class_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      approved_at TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS state_excise_returns (
+      id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      due_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      total_proof_gallons NUMERIC NOT NULL DEFAULT 0,
+      rate_per_proof_gallon NUMERIC NOT NULL DEFAULT 0,
+      total_tax NUMERIC NOT NULL DEFAULT 0,
+      filed_at TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS distillery_equipment (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      display_name TEXT,
+      type TEXT NOT NULL DEFAULT 'tank',
+      zone TEXT NOT NULL DEFAULT 'other',
+      capacity NUMERIC,
+      capacity_unit TEXT DEFAULT 'gallons',
+      status TEXT NOT NULL DEFAULT 'empty',
+      linked_batch_id TEXT,
+      linked_barrel_id TEXT,
+      notes TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 }

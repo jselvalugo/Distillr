@@ -4,10 +4,10 @@
   functions = "netlify/functions"
 
 [build.environment]
-  NODE_VERSION      = "20"
-  ALLOW_REMOTE      = "true"
-  LOCAL_ONLY_MODE   = "false"
-  SEED_DEMO_DATA    = "true"
+  NODE_VERSION    = "20"
+  ALLOW_REMOTE    = "true"
+  LOCAL_ONLY_MODE = "false"
+  SEED_DEMO_DATA  = "true"
 
 # Proxy all /api/* requests to the serverless function
 [[redirects]]
@@ -22,5 +22,8 @@
   status = 200
 
 [functions]
-  node_bundler = "esbuild"
+  node_bundler          = "esbuild"
   external_node_modules = ["pg-native"]
+
+[context.production]
+  command = "npm run build:netlify"

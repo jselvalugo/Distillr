@@ -1,11 +1,14 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { createServer } from "http";
 import serverless from "serverless-http";
 import { registerRoutes } from "../../server/routes";
-import { initDatabase } from "../../server/db";
+import { initDatabase, pool } from "../../server/db";
 import { seedAdminUser } from "../../server/seed-admin";
 import { resolveSessionSecret } from "../../server/security-config";
+
+const PgSession = connectPgSimple(session);
 
 const app = express();
 const httpServer = createServer(app);
@@ -38,6 +41,11 @@ app.use(express.urlencoded({ extended: false }));
 
 app.use(
   session({
+    store: new PgSession({
+      pool: pool as any,
+      tableName: "session",
+      createTableIfMissing: false,
+    }),
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -46,7 +54,7 @@ app.use(
       secure: true,
       httpOnly: true,
       sameSite: "none",
-      maxAge: 1000 * 60 * 60 * 24,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   })
 );
@@ -79,11 +87,16 @@ async function ensureInit() {
   initialized = true;
 }
 
-const handler = serverless(app, { basePath: "/api" });
+const netlifyHandler = serverless(app, {
+  binary: [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",
+    "application/pdf",
+    "image/*",
+  ],
+});
 
-export default async (req: Request, context: unknown) => {
+export const handler = async (event: unknown, context: unknown) => {
   await ensureInit();
-  return handler(req, context);
+  return netlifyHandler(event, context);
 };
-
-export const config = { path: "/api/*" };

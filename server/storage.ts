@@ -496,6 +496,8 @@ function mapBarrelEvent(row: Record<string, unknown>): BarrelEvent {
     eventAt: String(row.event_at),
     volumeChange: row.volume_change === null ? null : Number(row.volume_change),
     proofAtEvent: row.proof_at_event === null ? null : Number(row.proof_at_event),
+    outdoorTemp: row.outdoor_temp === null || row.outdoor_temp === undefined ? null : Number(row.outdoor_temp),
+    wineGallons: row.wine_gallons === null || row.wine_gallons === undefined ? null : Number(row.wine_gallons),
     ttbOperationCategory: toNullableText(row.ttb_operation_category) as BarrelEvent["ttbOperationCategory"],
     productionStage: toNullableText(row.production_stage) as BarrelEvent["productionStage"],
     taxClassification: toNullableText(row.tax_classification) as BarrelEvent["taxClassification"],
@@ -586,6 +588,33 @@ function mapDistillingBatchRecord(row: Record<string, unknown>): DistillingBatch
     inventoryRecordId: toNullableText(row.inventory_record_id),
     salesOrderId: toNullableText(row.sales_order_id),
     notes: toNullableText(row.notes),
+    productName: toNullableText(row.product_name),
+    barrelId: toNullableText(row.barrel_id),
+    spiritType: toNullableText(row.spirit_type),
+    spiritClass: toNullableText(row.spirit_class),
+    distillationProof: toFiniteNumber(row.distillation_proof),
+    proofGallonsProduced: toFiniteNumber(row.proof_gallons_produced),
+    stillType: toNullableText(row.still_type),
+    fillNumber: toNullableText(row.fill_number),
+    fillProof: toFiniteNumber(row.fill_proof),
+    fillWineGallons: toFiniteNumber(row.fill_wine_gallons),
+    fillProofGallons: toFiniteNumber(row.fill_proof_gallons),
+    containerType: toNullableText(row.container_type),
+    bottlingDate: toNullableText(row.bottling_date),
+    bottlingProof: toFiniteNumber(row.bottling_proof),
+    wineGallonsBottled: toFiniteNumber(row.wine_gallons_bottled),
+    proofGallonsProcessed: toFiniteNumber(row.proof_gallons_processed),
+    cases750ml: row.cases_750ml != null ? Number(row.cases_750ml) : null,
+    cases1000ml: row.cases_1000ml != null ? Number(row.cases_1000ml) : null,
+    cases1750ml: row.cases_1750ml != null ? Number(row.cases_1750ml) : null,
+    totalCases: row.total_cases != null ? Number(row.total_cases) : null,
+    lotNumber: toNullableText(row.lot_number),
+    taxClass: toNullableText(row.tax_class),
+    exciseTaxDue: toFiniteNumber(row.excise_tax_due),
+    distillDate: toNullableText(row.distill_date),
+    fillDate: toNullableText(row.fill_date),
+    targetDumpDate: toNullableText(row.target_dump_date),
+    amountReceivedGallons: toFiniteNumber(row.amount_received_gallons),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -638,6 +667,7 @@ function mapDistillingInventoryRecord(row: Record<string, unknown>): DistillingI
 function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
   return {
     organizationName: String(row.organization_name),
+    organizationNameOverride: row.organization_name_override != null ? String(row.organization_name_override) : null,
     platformTagline: String(row.platform_tagline),
     industry: String(row.industry),
     supportEmail: String(row.support_email),
@@ -645,6 +675,8 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     website: String(row.website),
     primaryAddress: String(row.primary_address),
     timeZone: String(row.time_zone),
+    dspNumber: row.dsp_number != null ? String(row.dsp_number) : null,
+    logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
     accountTypes: toStringArray(row.account_types),
     accountStatuses: toStringArray(row.account_statuses),
     accountIndustries: toStringArray(row.account_industries),
@@ -802,6 +834,11 @@ export interface IStorage {
     docType: string,
     excludeAttachmentId: string,
   ): Promise<void>;
+
+  getEquipmentList(): Promise<any[]>;
+  createEquipment(data: any): Promise<any>;
+  updateEquipment(id: string, data: any): Promise<any>;
+  deleteEquipment(id: string): Promise<void>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -1569,13 +1606,14 @@ export class PostgresStorage implements IStorage {
     return rows.map(mapBarrelEvent);
   }
 
-  async createBarrelEvent(event: InsertBarrelEvent): Promise<BarrelEvent> {
+  async createBarrelEvent(event: InsertBarrelEvent & { outdoorTemp?: number | null; wineGallons?: number | null }): Promise<BarrelEvent> {
     const eventAt = event.eventAt || new Date().toISOString();
     const rows = await query(
       `INSERT INTO barrel_events (
-        id, barrel_id, event_type, event_at, volume_change, proof_at_event, ttb_operation_category,
-        production_stage, tax_classification, from_location_id, to_location_id, notes, performed_by, metadata
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        id, barrel_id, event_type, event_at, volume_change, proof_at_event, outdoor_temp, wine_gallons,
+        ttb_operation_category, production_stage, tax_classification, from_location_id, to_location_id,
+        notes, performed_by, metadata
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       [
         event.id || generateId("BEVT"),
@@ -1584,6 +1622,8 @@ export class PostgresStorage implements IStorage {
         eventAt,
         event.volumeChange ?? null,
         event.proofAtEvent ?? null,
+        event.outdoorTemp ?? null,
+        event.wineGallons ?? null,
         event.ttbOperationCategory || null,
         event.productionStage || null,
         event.taxClassification || null,
@@ -2059,19 +2099,57 @@ export class PostgresStorage implements IStorage {
     const now = new Date().toISOString();
     const rows = await query(
       `INSERT INTO distilling_batch_records (
-        id, batch_code, batch_date, stage, status, production_record_id, inventory_record_id, sales_order_id, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      RETURNING *`,
+        id, batch_code, batch_date, stage, status,
+        production_record_id, inventory_record_id, sales_order_id, notes,
+        product_name, barrel_id, spirit_type, spirit_class,
+        distillation_proof, proof_gallons_produced, still_type,
+        fill_number, fill_proof, fill_wine_gallons, fill_proof_gallons, container_type,
+        bottling_date, bottling_proof, wine_gallons_bottled, proof_gallons_processed,
+        cases_750ml, cases_1000ml, cases_1750ml, total_cases,
+        lot_number, tax_class, excise_tax_due, distill_date, fill_date,
+        target_dump_date, amount_received_gallons,
+        created_at, updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
+      ) RETURNING *`,
       [
         record.id || generateId("DBATCH"),
         record.batchCode || `DBATCH-${Date.now()}`,
         record.batchDate || now.slice(0, 10),
-        record.stage || "Production",
+        record.stage || "planning",
         record.status || "Draft",
         record.productionRecordId || null,
         record.inventoryRecordId || null,
         record.salesOrderId || null,
         record.notes || null,
+        record.productName || null,
+        record.barrelId || null,
+        record.spiritType || null,
+        record.spiritClass || null,
+        record.distillationProof ?? null,
+        record.proofGallonsProduced ?? null,
+        record.stillType || null,
+        record.fillNumber || null,
+        record.fillProof ?? null,
+        record.fillWineGallons ?? null,
+        record.fillProofGallons ?? null,
+        record.containerType || null,
+        record.bottlingDate || null,
+        record.bottlingProof ?? null,
+        record.wineGallonsBottled ?? null,
+        record.proofGallonsProcessed ?? null,
+        record.cases750ml ?? null,
+        record.cases1000ml ?? null,
+        record.cases1750ml ?? null,
+        record.totalCases ?? null,
+        record.lotNumber || null,
+        record.taxClass || null,
+        record.exciseTaxDue ?? null,
+        record.distillDate || null,
+        record.fillDate || null,
+        record.targetDumpDate || null,
+        record.amountReceivedGallons ?? null,
         record.createdAt || now,
         record.updatedAt || now,
       ],
@@ -2099,27 +2177,29 @@ export class PostgresStorage implements IStorage {
 
     const rows = await query(
       `UPDATE distilling_batch_records SET
-        batch_code = $2,
-        batch_date = $3,
-        stage = $4,
-        status = $5,
-        production_record_id = $6,
-        inventory_record_id = $7,
-        sales_order_id = $8,
-        notes = $9,
-        updated_at = $10
+        batch_code = $2, batch_date = $3, stage = $4, status = $5,
+        production_record_id = $6, inventory_record_id = $7, sales_order_id = $8, notes = $9,
+        product_name = $10, barrel_id = $11, spirit_type = $12, spirit_class = $13,
+        distillation_proof = $14, proof_gallons_produced = $15, still_type = $16,
+        fill_number = $17, fill_proof = $18, fill_wine_gallons = $19, fill_proof_gallons = $20, container_type = $21,
+        bottling_date = $22, bottling_proof = $23, wine_gallons_bottled = $24, proof_gallons_processed = $25,
+        cases_750ml = $26, cases_1000ml = $27, cases_1750ml = $28, total_cases = $29,
+        lot_number = $30, tax_class = $31, excise_tax_due = $32, distill_date = $33, fill_date = $34,
+        target_dump_date = $35, amount_received_gallons = $36,
+        updated_at = $37
       WHERE id = $1
       RETURNING *`,
       [
         id,
-        next.batchCode,
-        next.batchDate,
-        next.stage,
-        next.status,
-        next.productionRecordId || null,
-        next.inventoryRecordId || null,
-        next.salesOrderId || null,
-        next.notes || null,
+        next.batchCode, next.batchDate, next.stage, next.status,
+        next.productionRecordId ?? null, next.inventoryRecordId ?? null, next.salesOrderId ?? null, next.notes ?? null,
+        next.productName ?? null, next.barrelId ?? null, next.spiritType ?? null, next.spiritClass ?? null,
+        next.distillationProof ?? null, next.proofGallonsProduced ?? null, next.stillType ?? null,
+        next.fillNumber ?? null, next.fillProof ?? null, next.fillWineGallons ?? null, next.fillProofGallons ?? null, next.containerType ?? null,
+        next.bottlingDate ?? null, next.bottlingProof ?? null, next.wineGallonsBottled ?? null, next.proofGallonsProcessed ?? null,
+        next.cases750ml ?? null, next.cases1000ml ?? null, next.cases1750ml ?? null, next.totalCases ?? null,
+        next.lotNumber ?? null, next.taxClass ?? null, next.exciseTaxDue ?? null, next.distillDate ?? null, next.fillDate ?? null,
+        next.targetDumpDate ?? null, next.amountReceivedGallons ?? null,
         next.updatedAt,
       ],
     );
@@ -2643,16 +2723,22 @@ export class PostgresStorage implements IStorage {
   }
 
   async getStats(): Promise<Stats> {
-    const rows = await query<{ status: string; count: number }>(
-      `SELECT status, COUNT(*)::int AS count FROM jobs GROUP BY status`,
+    const rows = await query<{ stage: string; count: number }>(
+      `SELECT stage, COUNT(*)::int AS count FROM distilling_batch_records GROUP BY stage`,
     );
 
-    const map = new Map(rows.map((row) => [row.status, Number(row.count)]));
+    const map = new Map(rows.map((row) => [row.stage, Number(row.count)]));
+    const inProgress =
+      (map.get("mash_fermentation") || 0) +
+      (map.get("distillation") || 0) +
+      (map.get("barreling") || 0) +
+      (map.get("aging") || 0) +
+      (map.get("bottling") || 0);
     return {
-      scheduled: map.get("Scheduled") || 0,
-      inProgress: map.get("In Progress") || 0,
-      completed: map.get("Completed") || 0,
-      blocked: map.get("Blocked") || 0,
+      scheduled: map.get("planning") || 0,
+      inProgress,
+      completed: map.get("closed") || 0,
+      blocked: 0,
     };
   }
 
@@ -2671,15 +2757,17 @@ export class PostgresStorage implements IStorage {
 
     await query(
       `INSERT INTO platform_config (
-        id, organization_name, platform_tagline, industry, support_email, support_phone,
-        website, primary_address, time_zone, account_types, account_statuses, account_industries,
+        id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
+        website, primary_address, time_zone, dsp_number, logo_data_url,
+        account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities
       ) VALUES (
-        1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
+        1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
       )
       ON CONFLICT (id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
+        organization_name_override = EXCLUDED.organization_name_override,
         platform_tagline = EXCLUDED.platform_tagline,
         industry = EXCLUDED.industry,
         support_email = EXCLUDED.support_email,
@@ -2687,6 +2775,8 @@ export class PostgresStorage implements IStorage {
         website = EXCLUDED.website,
         primary_address = EXCLUDED.primary_address,
         time_zone = EXCLUDED.time_zone,
+        dsp_number = EXCLUDED.dsp_number,
+        logo_data_url = EXCLUDED.logo_data_url,
         account_types = EXCLUDED.account_types,
         account_statuses = EXCLUDED.account_statuses,
         account_industries = EXCLUDED.account_industries,
@@ -2700,6 +2790,7 @@ export class PostgresStorage implements IStorage {
         requirement_severities = EXCLUDED.requirement_severities`,
       [
         next.organizationName,
+        next.organizationNameOverride ?? null,
         next.platformTagline,
         next.industry,
         next.supportEmail,
@@ -2707,6 +2798,8 @@ export class PostgresStorage implements IStorage {
         next.website,
         next.primaryAddress,
         next.timeZone,
+        next.dspNumber ?? null,
+        next.logoDataUrl ?? null,
         next.accountTypes,
         next.accountStatuses,
         next.accountIndustries,
@@ -2868,6 +2961,413 @@ export class PostgresStorage implements IStorage {
 			[entityType, entityId, docType, excludeAttachmentId],
 		);
 	}
+
+	// Equipment
+	async getEquipmentList(): Promise<any[]> {
+		const rows = await query("SELECT * FROM distillery_equipment ORDER BY zone, sort_order, name");
+		return rows.map(r => ({
+			id: String((r as any).id),
+			name: String((r as any).name),
+			displayName: (r as any).display_name ? String((r as any).display_name) : null,
+			type: String((r as any).type),
+			zone: String((r as any).zone),
+			capacity: (r as any).capacity != null ? Number((r as any).capacity) : null,
+			capacityUnit: String((r as any).capacity_unit ?? "gallons"),
+			status: String((r as any).status),
+			linkedBatchId: (r as any).linked_batch_id ? String((r as any).linked_batch_id) : null,
+			linkedBarrelId: (r as any).linked_barrel_id ? String((r as any).linked_barrel_id) : null,
+			notes: (r as any).notes ? String((r as any).notes) : null,
+			sortOrder: Number((r as any).sort_order ?? 0),
+			createdAt: String((r as any).created_at),
+			updatedAt: String((r as any).updated_at),
+		}));
+	}
+
+	async createEquipment(data: any): Promise<any> {
+		const now = new Date().toISOString();
+		const id = generateId("EQ");
+		await query(
+			`INSERT INTO distillery_equipment (id, name, display_name, type, zone, capacity, capacity_unit, status, linked_batch_id, linked_barrel_id, notes, sort_order, created_at, updated_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+			[id, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now, now]
+		);
+		return this.getEquipmentList().then(list => list.find(e => e.id === id)!);
+	}
+
+	async updateEquipment(id: string, data: any): Promise<any> {
+		const now = new Date().toISOString();
+		await query(
+			`UPDATE distillery_equipment SET name=$2, display_name=$3, type=$4, zone=$5, capacity=$6, capacity_unit=$7, status=$8, linked_batch_id=$9, linked_barrel_id=$10, notes=$11, sort_order=$12, updated_at=$13 WHERE id=$1`,
+			[id, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now]
+		);
+		return this.getEquipmentList().then(list => list.find(e => e.id === id)!);
+	}
+
+	async deleteEquipment(id: string): Promise<void> {
+		await query("DELETE FROM distillery_equipment WHERE id=$1", [id]);
+	}
+}
+
+function derivePermitStatus(expirationDate: string, reminderDaysBefore: number): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(expirationDate);
+  expiry.setHours(0, 0, 0, 0);
+  if (expiry < today) return "expired";
+  const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= reminderDaysBefore) return "expiring_soon";
+  return "active";
+}
+
+function mapPermit(row: Record<string, unknown>) {
+  const reminderDaysBefore = Number(row.reminder_days_before ?? 90);
+  const expirationDate = String(row.expiration_date ?? "");
+  return {
+    id: String(row.id),
+    permitType: String(row.permit_type),
+    permitNumber: String(row.permit_number),
+    issuingAuthority: String(row.issuing_authority),
+    state: row.state != null ? String(row.state) : null,
+    issueDate: String(row.issue_date),
+    expirationDate,
+    reminderDaysBefore,
+    status: derivePermitStatus(expirationDate, reminderDaysBefore),
+    notes: row.notes != null ? String(row.notes) : null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function mapColaRegistration(row: Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    productName: String(row.product_name),
+    brandName: String(row.brand_name),
+    classType: String(row.class_type),
+    formulaNumber: row.formula_number != null ? String(row.formula_number) : null,
+    colaNumber: row.cola_number != null ? String(row.cola_number) : null,
+    status: String(row.status),
+    appliedAt: row.applied_at != null ? String(row.applied_at) : null,
+    approvedAt: row.approved_at != null ? String(row.approved_at) : null,
+    expiresAt: row.expires_at != null ? String(row.expires_at) : null,
+    notes: row.notes != null ? String(row.notes) : null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function mapLabelRecord(row: Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    productName: String(row.product_name),
+    sku: String(row.sku),
+    version: String(row.version),
+    colaId: row.cola_id != null ? String(row.cola_id) : null,
+    netContents: row.net_contents != null ? String(row.net_contents) : null,
+    alcoholContent: row.alcohol_content != null ? Number(row.alcohol_content) : null,
+    classType: String(row.class_type),
+    status: String(row.status),
+    approvedAt: row.approved_at != null ? String(row.approved_at) : null,
+    notes: row.notes != null ? String(row.notes) : null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function mapStateExciseReturn(row: Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    state: String(row.state),
+    periodStart: String(row.period_start),
+    periodEnd: String(row.period_end),
+    dueDate: String(row.due_date),
+    status: String(row.status),
+    totalProofGallons: Number(row.total_proof_gallons),
+    ratePerProofGallon: Number(row.rate_per_proof_gallon),
+    totalTax: Number(row.total_tax),
+    filedAt: row.filed_at != null ? String(row.filed_at) : null,
+    notes: row.notes != null ? String(row.notes) : null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export async function getPermits() {
+  const rows = await query("SELECT * FROM permits ORDER BY expiration_date ASC");
+  return rows.map(mapPermit);
+}
+
+export async function createPermit(data: Record<string, unknown>) {
+  const id = generateId("PRMT");
+  const now = new Date().toISOString();
+  const rows = await query(
+    `INSERT INTO permits (id, permit_type, permit_number, issuing_authority, state, issue_date, expiration_date, reminder_days_before, status, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11) RETURNING *`,
+    [
+      id,
+      String(data.permitType ?? ""),
+      String(data.permitNumber ?? ""),
+      String(data.issuingAuthority ?? ""),
+      data.state != null && String(data.state).trim() !== "" ? String(data.state) : null,
+      String(data.issueDate ?? ""),
+      String(data.expirationDate ?? ""),
+      Number(data.reminderDaysBefore ?? 90),
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+      now,
+    ],
+  );
+  return mapPermit(rows[0]);
+}
+
+export async function updatePermit(id: string, data: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  const rows = await query(
+    `UPDATE permits SET
+       permit_type = COALESCE($2, permit_type),
+       permit_number = COALESCE($3, permit_number),
+       issuing_authority = COALESCE($4, issuing_authority),
+       state = $5,
+       issue_date = COALESCE($6, issue_date),
+       expiration_date = COALESCE($7, expiration_date),
+       reminder_days_before = COALESCE($8, reminder_days_before),
+       notes = $9,
+       updated_at = $10
+     WHERE id = $1 RETURNING *`,
+    [
+      id,
+      data.permitType != null ? String(data.permitType) : null,
+      data.permitNumber != null ? String(data.permitNumber) : null,
+      data.issuingAuthority != null ? String(data.issuingAuthority) : null,
+      data.state != null && String(data.state).trim() !== "" ? String(data.state) : null,
+      data.issueDate != null ? String(data.issueDate) : null,
+      data.expirationDate != null ? String(data.expirationDate) : null,
+      data.reminderDaysBefore != null ? Number(data.reminderDaysBefore) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+    ],
+  );
+  if (!rows[0]) throw new Error("Permit not found");
+  return mapPermit(rows[0]);
+}
+
+export async function deletePermit(id: string) {
+  await query("DELETE FROM permits WHERE id = $1", [id]);
+}
+
+export async function getColaRegistrations() {
+  const rows = await query("SELECT * FROM cola_registrations ORDER BY created_at DESC");
+  return rows.map(mapColaRegistration);
+}
+
+export async function createColaRegistration(data: Record<string, unknown>) {
+  const id = generateId("COLA");
+  const now = new Date().toISOString();
+  const rows = await query(
+    `INSERT INTO cola_registrations (id, product_name, brand_name, class_type, formula_number, cola_number, status, applied_at, approved_at, expires_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [
+      id,
+      String(data.productName ?? ""),
+      String(data.brandName ?? ""),
+      String(data.classType ?? ""),
+      data.formulaNumber != null && String(data.formulaNumber).trim() !== "" ? String(data.formulaNumber) : null,
+      data.colaNumber != null && String(data.colaNumber).trim() !== "" ? String(data.colaNumber) : null,
+      String(data.status ?? "pending"),
+      data.appliedAt != null && String(data.appliedAt).trim() !== "" ? String(data.appliedAt) : null,
+      data.approvedAt != null && String(data.approvedAt).trim() !== "" ? String(data.approvedAt) : null,
+      data.expiresAt != null && String(data.expiresAt).trim() !== "" ? String(data.expiresAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+      now,
+    ],
+  );
+  return mapColaRegistration(rows[0]);
+}
+
+export async function updateColaRegistration(id: string, data: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  const rows = await query(
+    `UPDATE cola_registrations SET
+       product_name = COALESCE($2, product_name),
+       brand_name = COALESCE($3, brand_name),
+       class_type = COALESCE($4, class_type),
+       formula_number = $5,
+       cola_number = $6,
+       status = COALESCE($7, status),
+       applied_at = $8,
+       approved_at = $9,
+       expires_at = $10,
+       notes = $11,
+       updated_at = $12
+     WHERE id = $1 RETURNING *`,
+    [
+      id,
+      data.productName != null ? String(data.productName) : null,
+      data.brandName != null ? String(data.brandName) : null,
+      data.classType != null ? String(data.classType) : null,
+      data.formulaNumber != null && String(data.formulaNumber).trim() !== "" ? String(data.formulaNumber) : null,
+      data.colaNumber != null && String(data.colaNumber).trim() !== "" ? String(data.colaNumber) : null,
+      data.status != null ? String(data.status) : null,
+      data.appliedAt != null && String(data.appliedAt).trim() !== "" ? String(data.appliedAt) : null,
+      data.approvedAt != null && String(data.approvedAt).trim() !== "" ? String(data.approvedAt) : null,
+      data.expiresAt != null && String(data.expiresAt).trim() !== "" ? String(data.expiresAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+    ],
+  );
+  if (!rows[0]) throw new Error("COLA registration not found");
+  return mapColaRegistration(rows[0]);
+}
+
+export async function deleteColaRegistration(id: string) {
+  await query("DELETE FROM cola_registrations WHERE id = $1", [id]);
+}
+
+export async function getLabelRecords() {
+  const rows = await query("SELECT * FROM label_records ORDER BY created_at DESC");
+  return rows.map(mapLabelRecord);
+}
+
+export async function createLabelRecord(data: Record<string, unknown>) {
+  const id = generateId("LBL");
+  const now = new Date().toISOString();
+  const rows = await query(
+    `INSERT INTO label_records (id, product_name, sku, version, cola_id, net_contents, alcohol_content, class_type, status, approved_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [
+      id,
+      String(data.productName ?? ""),
+      String(data.sku ?? ""),
+      String(data.version ?? "1.0"),
+      data.colaId != null && String(data.colaId).trim() !== "" ? String(data.colaId) : null,
+      data.netContents != null && String(data.netContents).trim() !== "" ? String(data.netContents) : null,
+      data.alcoholContent != null && String(data.alcoholContent).trim() !== "" ? Number(data.alcoholContent) : null,
+      String(data.classType ?? ""),
+      String(data.status ?? "draft"),
+      data.approvedAt != null && String(data.approvedAt).trim() !== "" ? String(data.approvedAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+      now,
+    ],
+  );
+  return mapLabelRecord(rows[0]);
+}
+
+export async function updateLabelRecord(id: string, data: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  const rows = await query(
+    `UPDATE label_records SET
+       product_name = COALESCE($2, product_name),
+       sku = COALESCE($3, sku),
+       version = COALESCE($4, version),
+       cola_id = $5,
+       net_contents = $6,
+       alcohol_content = $7,
+       class_type = COALESCE($8, class_type),
+       status = COALESCE($9, status),
+       approved_at = $10,
+       notes = $11,
+       updated_at = $12
+     WHERE id = $1 RETURNING *`,
+    [
+      id,
+      data.productName != null ? String(data.productName) : null,
+      data.sku != null ? String(data.sku) : null,
+      data.version != null ? String(data.version) : null,
+      data.colaId != null && String(data.colaId).trim() !== "" ? String(data.colaId) : null,
+      data.netContents != null && String(data.netContents).trim() !== "" ? String(data.netContents) : null,
+      data.alcoholContent != null && String(data.alcoholContent).trim() !== "" ? Number(data.alcoholContent) : null,
+      data.classType != null ? String(data.classType) : null,
+      data.status != null ? String(data.status) : null,
+      data.approvedAt != null && String(data.approvedAt).trim() !== "" ? String(data.approvedAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+    ],
+  );
+  if (!rows[0]) throw new Error("Label record not found");
+  return mapLabelRecord(rows[0]);
+}
+
+export async function deleteLabelRecord(id: string) {
+  await query("DELETE FROM label_records WHERE id = $1", [id]);
+}
+
+export async function getStateExciseReturns() {
+  const rows = await query("SELECT * FROM state_excise_returns ORDER BY period_start DESC");
+  return rows.map(mapStateExciseReturn);
+}
+
+export async function createStateExciseReturn(data: Record<string, unknown>) {
+  const id = generateId("SER");
+  const now = new Date().toISOString();
+  const proofGallons = Number(data.totalProofGallons ?? 0);
+  const rate = Number(data.ratePerProofGallon ?? 0);
+  const totalTax = Math.round(proofGallons * rate * 100) / 100;
+  const rows = await query(
+    `INSERT INTO state_excise_returns (id, state, period_start, period_end, due_date, status, total_proof_gallons, rate_per_proof_gallon, total_tax, filed_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    [
+      id,
+      String(data.state ?? ""),
+      String(data.periodStart ?? ""),
+      String(data.periodEnd ?? ""),
+      String(data.dueDate ?? ""),
+      String(data.status ?? "draft"),
+      proofGallons,
+      rate,
+      totalTax,
+      data.filedAt != null && String(data.filedAt).trim() !== "" ? String(data.filedAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+      now,
+    ],
+  );
+  return mapStateExciseReturn(rows[0]);
+}
+
+export async function updateStateExciseReturn(id: string, data: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  const proofGallons = data.totalProofGallons != null ? Number(data.totalProofGallons) : null;
+  const rate = data.ratePerProofGallon != null ? Number(data.ratePerProofGallon) : null;
+  const rows = await query(
+    `UPDATE state_excise_returns SET
+       state = COALESCE($2, state),
+       period_start = COALESCE($3, period_start),
+       period_end = COALESCE($4, period_end),
+       due_date = COALESCE($5, due_date),
+       status = COALESCE($6, status),
+       total_proof_gallons = COALESCE($7, total_proof_gallons),
+       rate_per_proof_gallon = COALESCE($8, rate_per_proof_gallon),
+       total_tax = CASE
+         WHEN $7 IS NOT NULL OR $8 IS NOT NULL
+         THEN COALESCE($7, total_proof_gallons) * COALESCE($8, rate_per_proof_gallon)
+         ELSE total_tax
+       END,
+       filed_at = $9,
+       notes = $10,
+       updated_at = $11
+     WHERE id = $1 RETURNING *`,
+    [
+      id,
+      data.state != null ? String(data.state) : null,
+      data.periodStart != null ? String(data.periodStart) : null,
+      data.periodEnd != null ? String(data.periodEnd) : null,
+      data.dueDate != null ? String(data.dueDate) : null,
+      data.status != null ? String(data.status) : null,
+      proofGallons,
+      rate,
+      data.filedAt != null && String(data.filedAt).trim() !== "" ? String(data.filedAt) : null,
+      data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
+      now,
+    ],
+  );
+  if (!rows[0]) throw new Error("State excise return not found");
+  return mapStateExciseReturn(rows[0]);
+}
+
+export async function deleteStateExciseReturn(id: string) {
+  await query("DELETE FROM state_excise_returns WHERE id = $1", [id]);
 }
 
 export const storage: IStorage = new PostgresStorage();

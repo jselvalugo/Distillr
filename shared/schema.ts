@@ -368,7 +368,7 @@ export type InsertBarrel = z.infer<typeof insertBarrelSchema>;
 export const barrelEventSchema = z.object({
   id: z.string(),
   barrelId: z.string(),
-  eventType: z.enum(["Fill", "Transfer", "Sample", "TopOff", "Dump", "Empty", "Retire"]),
+  eventType: z.enum(["Fill", "Transfer", "Sample", "TopOff", "Dump", "Empty", "Retire", "gauge", "temperature", "dump"]),
   eventAt: z.string(),
   volumeChange: z.number().nullable().optional(),
   proofAtEvent: z.number().nullable().optional(),
@@ -532,7 +532,15 @@ export type CalculatorPreset = z.infer<typeof calculatorPresetSchema>;
 export type InsertCalculatorPreset = z.infer<typeof insertCalculatorPresetSchema>;
 
 // Distilling production / bottling / sales workflow records
-export const distillingBatchStages = ["Production", "Processing", "Bottling", "Sales"] as const;
+export const distillingBatchStages = [
+  "planning",
+  "mash_fermentation",
+  "distillation",
+  "barreling",
+  "aging",
+  "bottling",
+  "closed",
+] as const;
 export const distillingBatchStatuses = ["Draft", "In Progress", "Completed", "Closed"] as const;
 
 export const distillingBatchRecordSchema = z.object({
@@ -544,7 +552,38 @@ export const distillingBatchRecordSchema = z.object({
   productionRecordId: z.string().nullable().optional(),
   inventoryRecordId: z.string().nullable().optional(),
   salesOrderId: z.string().nullable().optional(),
+  productName: z.string().nullable().optional(),
+  barrelId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  // Planning / Spirit classification
+  spiritType: z.string().nullable().optional(),
+  spiritClass: z.string().nullable().optional(),
+  // Distillation TTB fields
+  distillationProof: z.number().nullable().optional(),
+  proofGallonsProduced: z.number().nullable().optional(),
+  stillType: z.string().nullable().optional(),
+  // Barreling TTB fields
+  fillNumber: z.string().nullable().optional(),
+  fillProof: z.number().nullable().optional(),
+  fillWineGallons: z.number().nullable().optional(),
+  fillProofGallons: z.number().nullable().optional(),
+  containerType: z.string().nullable().optional(),
+  // Bottling TTB fields
+  bottlingDate: z.string().nullable().optional(),
+  bottlingProof: z.number().nullable().optional(),
+  wineGallonsBottled: z.number().nullable().optional(),
+  proofGallonsProcessed: z.number().nullable().optional(),
+  cases750ml: z.number().int().nullable().optional(),
+  cases1000ml: z.number().int().nullable().optional(),
+  cases1750ml: z.number().int().nullable().optional(),
+  totalCases: z.number().int().nullable().optional(),
+  lotNumber: z.string().nullable().optional(),
+  taxClass: z.string().nullable().optional(),
+  exciseTaxDue: z.number().nullable().optional(),
+  distillDate: z.string().nullable().optional(),
+  fillDate: z.string().nullable().optional(),
+  targetDumpDate: z.string().nullable().optional(),
+  amountReceivedGallons: z.number().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -555,7 +594,34 @@ export const insertDistillingBatchRecordSchema = distillingBatchRecordSchema.par
   productionRecordId: true,
   inventoryRecordId: true,
   salesOrderId: true,
+  productName: true,
+  barrelId: true,
   notes: true,
+  spiritType: true,
+  spiritClass: true,
+  distillationProof: true,
+  proofGallonsProduced: true,
+  stillType: true,
+  fillNumber: true,
+  fillProof: true,
+  fillWineGallons: true,
+  fillProofGallons: true,
+  containerType: true,
+  bottlingDate: true,
+  bottlingProof: true,
+  wineGallonsBottled: true,
+  proofGallonsProcessed: true,
+  cases750ml: true,
+  cases1000ml: true,
+  cases1750ml: true,
+  totalCases: true,
+  lotNumber: true,
+  taxClass: true,
+  exciseTaxDue: true,
+  distillDate: true,
+  fillDate: true,
+  targetDumpDate: true,
+  amountReceivedGallons: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -594,53 +660,10 @@ export const insertDistillingProductionRecordSchema = distillingProductionRecord
 export type DistillingProductionRecord = z.infer<typeof distillingProductionRecordSchema>;
 export type InsertDistillingProductionRecord = z.infer<typeof insertDistillingProductionRecordSchema>;
 
-export const distillingCasesMadeSchema = z.object({
-  pitorro: z.number().int().nonnegative(),
-  pitorroDeCafe: z.number().int().nonnegative(),
-  pitorroCoconut: z.number().int().nonnegative(),
-  pitorroCitrus: z.number().int().nonnegative(),
-  libertalia: z.number().int().nonnegative(),
-  oakAgedLibertalia: z.number().int().nonnegative(),
-  riskey: z.number().int().nonnegative(),
-  riskeyBarrelStrength: z.number().int().nonnegative(),
-  coquito: z.number().int().nonnegative(),
-  lugosCraftLibations: z.number().int().nonnegative(),
-  yoHo: z.number().int().nonnegative(),
-});
-
-export const distillingCasesToDistributorsSchema = z.object({
-  pitorro: z.number().int().nonnegative(),
-  pitorroDeCafe: z.number().int().nonnegative(),
-  pitorroCoconut: z.number().int().nonnegative(),
-  pitorroCitrus: z.number().int().nonnegative(),
-  libertalia: z.number().int().nonnegative(),
-  riskey: z.number().int().nonnegative(),
-  riskeyBarrelStrength: z.number().int().nonnegative(),
-  coquito: z.number().int().nonnegative(),
-  lugosCraftLibations: z.number().int().nonnegative(),
-  yoHo: z.number().int().nonnegative(),
-});
-
-export const distillingCasesToRetailSchema = z.object({
-  pitorro: z.number().int().nonnegative(),
-  pitorroDeCafe: z.number().int().nonnegative(),
-  pitorroCoconut: z.number().int().nonnegative(),
-  pitorroCitrus: z.number().int().nonnegative(),
-  libertalia: z.number().int().nonnegative(),
-  oakAgedLibertalia: z.number().int().nonnegative(),
-  riskey: z.number().int().nonnegative(),
-  riskeyBarrelStrength: z.number().int().nonnegative(),
-  coquito: z.number().int().nonnegative(),
-});
-
-export const distillingBottlesMadeSchema = z.object({
-  pitorro: z.number().int().nonnegative(),
-  pitorroDeCafe: z.number().int().nonnegative(),
-  pitorroCoconut: z.number().int().nonnegative(),
-  libertalia: z.number().int().nonnegative(),
-  oakAgedLibertalia: z.number().int().nonnegative(),
-  riskey: z.number().int().nonnegative(),
-});
+export const distillingCasesMadeSchema = z.record(z.string(), z.number().int().nonnegative());
+export const distillingCasesToDistributorsSchema = z.record(z.string(), z.number().int().nonnegative());
+export const distillingCasesToRetailSchema = z.record(z.string(), z.number().int().nonnegative());
+export const distillingBottlesMadeSchema = z.record(z.string(), z.number().int().nonnegative());
 
 export type DistillingCasesMade = z.infer<typeof distillingCasesMadeSchema>;
 export type DistillingCasesToDistributors = z.infer<typeof distillingCasesToDistributorsSchema>;
@@ -731,6 +754,7 @@ export type Stats = z.infer<typeof statsSchema>;
 // Platform Config
 export const platformConfigSchema = z.object({
   organizationName: z.string(),
+  organizationNameOverride: z.string().nullable().optional(),
   platformTagline: z.string(),
   industry: z.string(),
   supportEmail: z.string(),
@@ -738,6 +762,8 @@ export const platformConfigSchema = z.object({
   website: z.string(),
   primaryAddress: z.string(),
   timeZone: z.string(),
+  dspNumber: z.string().nullable().optional(),
+  logoDataUrl: z.string().nullable().optional(),
   accountTypes: z.array(z.string()),
   accountStatuses: z.array(z.string()),
   accountIndustries: z.array(z.string()),

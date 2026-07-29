@@ -133,6 +133,12 @@ export class AuthStorage {
     };
   }
 
+  async resetPassword(id: string, newPassword: string): Promise<void> {
+    const passwordHash = await hashPassword(newPassword);
+    const rows = await query("UPDATE users SET password_hash = $2 WHERE id = $1 RETURNING id", [id, passwordHash]);
+    if (!rows[0]) throw new Error("User not found");
+  }
+
   async deleteUser(id: string): Promise<void> {
     await query("DELETE FROM users WHERE id = $1", [id]);
   }

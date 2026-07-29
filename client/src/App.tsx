@@ -30,6 +30,7 @@ import Users from "./pages/users";
 import UserForm from "./pages/user-form";
 import Reports from "./pages/reports";
 import Settings from "./pages/settings";
+import FloorPlan from "./pages/floor-plan";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="/users/:id/edit" component={UserForm} />
             <Route path="/reports" component={Reports} />
             <Route path="/settings" component={Settings} />
+            <Route path="/floor-plan" component={FloorPlan} />
           </Switch>
         </AuthGuard>
       </Route>

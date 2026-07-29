@@ -10,7 +10,11 @@ export type PolicyResource =
   | "ttbReportExport"
   | "salesOrders"
   | "clientAttachments"
-  | "jobPhotos";
+  | "jobPhotos"
+  | "permits"
+  | "colaRegistrations"
+  | "labelRecords"
+  | "stateExciseReturns";
 
 export type PolicyAction = "read" | "write" | "delete" | "upload" | "approve" | "export";
 
@@ -61,6 +65,26 @@ export const AUTHORIZATION_POLICY_MATRIX: Record<
     read: allRoles,
     upload: ["admin", "distiller", "cellar"],
     delete: ["admin", "distiller", "cellar"],
+  },
+  permits: {
+    read: allRoles,
+    write: ["admin", "compliance"],
+    delete: ["admin"],
+  },
+  colaRegistrations: {
+    read: allRoles,
+    write: ["admin", "compliance"],
+    delete: ["admin"],
+  },
+  labelRecords: {
+    read: allRoles,
+    write: ["admin", "compliance"],
+    delete: ["admin"],
+  },
+  stateExciseReturns: {
+    read: allRoles,
+    write: ["admin", "compliance"],
+    delete: ["admin"],
   },
 };
 
