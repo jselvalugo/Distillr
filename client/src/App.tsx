@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { useAuth } from "./hooks/use-auth";
+import Landing from "./pages/landing";
 import Login from "./pages/login";
+import Signup from "./pages/signup";
 import Dashboard from "./pages/dashboard";
 import Barrels from "./pages/barrels";
 import BarrelForm from "./pages/barrel-form";
@@ -51,14 +53,29 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Smart root: landing page for visitors, dashboard for authenticated users
+function RootRoute() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-[#737373]">
+        Loading…
+      </div>
+    );
+  }
+  if (!user) return <Landing />;
+  return <Dashboard />;
+}
+
 export default function App() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
+      <Route path="/" component={RootRoute} />
       <Route>
         <AuthGuard>
           <Switch>
-            <Route path="/" component={Dashboard} />
             <Route path="/barrels" component={Barrels} />
             <Route path="/barrels/new" component={BarrelForm} />
             <Route path="/barrels/:id/edit" component={BarrelForm} />

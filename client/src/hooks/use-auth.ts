@@ -33,10 +33,20 @@ export function useAuth() {
     },
   });
 
+  const signupMut = useMutation({
+    mutationFn: (data: { distilleryName: string; adminName: string; email: string; password: string }) =>
+      apiRequest<AuthResponse>("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (r) => qc.setQueryData(["/api/auth/me"], r.user),
+  });
+
   return {
     user: user ?? null,
     isLoading,
     login: loginMut,
     logout: logoutMut,
+    signup: signupMut,
   };
 }

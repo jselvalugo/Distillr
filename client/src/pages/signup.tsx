@@ -4,10 +4,10 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 const FEATURES = [
-  { label: "Batch Intelligence", desc: "7-stage production workflow with real-time proof gallon tracking" },
-  { label: "TTB Compliance Engine", desc: "Auto-generated Forms 5110.40 and 5000.24 from live batch data" },
-  { label: "Barrel Analytics", desc: "Angel's share monitoring, aging curves, and bonded storage balance" },
-  { label: "Regulatory Automation", desc: "COLA tracking, state excise returns, permit renewal alerts" },
+  { label: "Instant Setup", desc: "Your distillery is ready in minutes — no lengthy onboarding" },
+  { label: "TTB Ready", desc: "Compliance reports auto-generated from your data on day one" },
+  { label: "Team Access", desc: "Add staff with role-based permissions for admin and operators" },
+  { label: "No Credit Card", desc: "Start free and upgrade when you're ready to scale" },
 ];
 
 function AnimatedBackground() {
@@ -48,7 +48,6 @@ function AnimatedBackground() {
     function draw() {
       ctx!.clearRect(0, 0, w, h);
 
-      // Draw connections
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -65,7 +64,6 @@ function AnimatedBackground() {
         }
       }
 
-      // Draw particles
       for (const p of particles) {
         p.x += p.vx;
         p.y += p.vy;
@@ -104,12 +102,16 @@ function AnimatedBackground() {
   );
 }
 
-export default function Login() {
-  const { login, user } = useAuth();
+export default function Signup() {
+  const { signup, user } = useAuth();
   const [, navigate] = useLocation();
+
+  const [distilleryName, setDistilleryName] = useState("");
+  const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [activeFeature, setActiveFeature] = useState(0);
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (user) navigate("/");
@@ -122,32 +124,51 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (distilleryName.trim().length < 2) {
+      toast.error("Distillery name must be at least 2 characters");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+
+    setIsPending(true);
     try {
-      await login.mutateAsync({ email, password });
+      await signup.mutateAsync({ distilleryName: distilleryName.trim(), adminName: adminName.trim(), email, password });
+      navigate("/");
     } catch (err: any) {
-      toast.error(err.message || "Login failed");
+      toast.error(err.message || "Failed to create account");
+    } finally {
+      setIsPending(false);
     }
   };
 
   return (
     <div className="min-h-screen flex" style={{ background: "#080808" }}>
 
-      {/* Left panel — hero */}
+      {/* ── Left panel ── */}
       <div className="hidden lg:flex flex-col flex-1 relative overflow-hidden">
         <AnimatedBackground />
 
         {/* Dark overlay gradient */}
         <div
           className="absolute inset-0"
-          style={{ background: "linear-gradient(135deg, rgba(8,8,8,0.88) 0%, rgba(15,15,15,0.72) 50%, rgba(8,8,8,0.92) 100%)" }}
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(8,8,8,0.88) 0%, rgba(15,15,15,0.72) 50%, rgba(8,8,8,0.92) 100%)",
+          }}
         />
 
-        {/* White glow orbs */}
+        {/* Glow orbs */}
         <div
           className="absolute"
           style={{
-            width: 600, height: 600,
-            top: "10%", left: "15%",
+            width: 600,
+            height: 600,
+            top: "10%",
+            left: "15%",
             background: "radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)",
             borderRadius: "50%",
             filter: "blur(40px)",
@@ -156,8 +177,10 @@ export default function Login() {
         <div
           className="absolute"
           style={{
-            width: 300, height: 300,
-            bottom: "20%", right: "10%",
+            width: 300,
+            height: 300,
+            bottom: "20%",
+            right: "10%",
             background: "radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%)",
             borderRadius: "50%",
             filter: "blur(30px)",
@@ -172,8 +195,13 @@ export default function Login() {
               style={{ background: "linear-gradient(135deg, #2a2a2a, #000000)" }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
-                  stroke="white" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+                <path
+                  d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
                 <path d="M8 6V10M6 8H10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
@@ -184,29 +212,45 @@ export default function Login() {
           <div className="mb-14">
             <div
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-6 text-xs font-medium tracking-widest uppercase"
-              style={{ background: "rgba(255,255,255,0.08)", color: "#ffffff", border: "1px solid rgba(255,255,255,0.15)" }}
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                color: "#ffffff",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
-              Distillery Technology Platform
+              Free Trial
             </div>
 
             <h1 className="text-5xl font-bold leading-tight mb-5" style={{ color: "#f5f0e8" }}>
-              Craft spirit<br />
-              <span style={{ background: "linear-gradient(90deg, #ffffff, #a0a0a0, #ffffff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                operations,
+              Start your
+              <br />
+              <span
+                style={{
+                  background: "linear-gradient(90deg, #ffffff, #a0a0a0, #ffffff)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                free trial.
               </span>
-              <br />reimagined.
             </h1>
 
             <p className="text-base leading-relaxed max-w-md" style={{ color: "rgba(245,240,232,0.55)" }}>
-              From grain to glass — manage every stage of production with precision tooling built for TTB compliance, barrel intelligence, and craft distillery scale.
+              Join distilleries using Distillr to manage production, compliance, and growth — no
+              credit card required.
             </p>
           </div>
 
           {/* Rotating feature highlight */}
           <div
             className="rounded-xl p-5 mb-8"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(10px)" }}
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              backdropFilter: "blur(10px)",
+            }}
           >
             <div className="flex gap-2 mb-4">
               {FEATURES.map((_, i) => (
@@ -214,11 +258,16 @@ export default function Login() {
                   key={i}
                   onClick={() => setActiveFeature(i)}
                   className="h-0.5 flex-1 rounded-full cursor-pointer transition-all duration-500"
-                  style={{ background: i === activeFeature ? "#ffffff" : "rgba(255,255,255,0.12)" }}
+                  style={{
+                    background: i === activeFeature ? "#ffffff" : "rgba(255,255,255,0.12)",
+                  }}
                 />
               ))}
             </div>
-            <p className="text-xs font-semibold mb-1" style={{ color: "#ffffff", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            <p
+              className="text-xs font-semibold mb-1"
+              style={{ color: "#ffffff", letterSpacing: "0.08em", textTransform: "uppercase" }}
+            >
               {FEATURES[activeFeature].label}
             </p>
             <p className="text-sm" style={{ color: "rgba(245,240,232,0.65)" }}>
@@ -234,24 +283,29 @@ export default function Login() {
               { val: "Real-Time", label: "Proof Gallon Calc" },
             ].map((s) => (
               <div key={s.val}>
-                <p className="text-xl font-bold" style={{ color: "#ffffff" }}>{s.val}</p>
-                <p className="text-xs mt-0.5" style={{ color: "rgba(245,240,232,0.4)" }}>{s.label}</p>
+                <p className="text-xl font-bold" style={{ color: "#ffffff" }}>
+                  {s.val}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "rgba(245,240,232,0.4)" }}>
+                  {s.label}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Right panel — login form */}
+      {/* ── Right panel — signup form ── */}
       <div
-        className="w-full lg:w-[440px] flex flex-col items-center justify-center px-8 py-12 relative"
+        className="w-full lg:w-[480px] flex flex-col items-center justify-center px-8 py-12 relative"
         style={{ background: "#0d0d0d", borderLeft: "1px solid rgba(255,255,255,0.07)" }}
       >
         {/* Top subtle glow */}
         <div
           className="absolute top-0 left-1/2 -translate-x-1/2"
           style={{
-            width: 300, height: 200,
+            width: 300,
+            height: 200,
             background: "radial-gradient(ellipse, rgba(200,136,42,0.1) 0%, transparent 70%)",
             filter: "blur(20px)",
           }}
@@ -265,31 +319,40 @@ export default function Login() {
               style={{ background: "linear-gradient(135deg, #2a2a2a, #000000)" }}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
-                  stroke="white" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+                <path
+                  d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                  fill="none"
+                />
               </svg>
             </div>
             <span className="text-white font-bold tracking-tight">Distillr</span>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-1.5" style={{ color: "#f5f0e8" }}>Welcome back</h2>
+            <h2 className="text-2xl font-bold mb-1.5" style={{ color: "#f5f0e8" }}>
+              Create your account
+            </h2>
             <p className="text-sm" style={{ color: "rgba(245,240,232,0.4)" }}>
-              Sign in to your operations dashboard
+              Set up your distillery in minutes — free forever to start
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Distillery Name */}
             <div>
               <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
-                Email address
+                Distillery name
               </label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@distillery.com"
+                type="text"
+                value={distilleryName}
+                onChange={(e) => setDistilleryName(e.target.value)}
+                placeholder="Copper Ridge Distillery"
                 required
+                minLength={2}
                 autoFocus
                 className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
                 style={{
@@ -302,15 +365,16 @@ export default function Login() {
               />
             </div>
 
+            {/* Full Name */}
             <div>
               <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
-                Password
+                Your name
               </label>
               <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                type="text"
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+                placeholder="Jane Smith"
                 required
                 className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
                 style={{
@@ -323,63 +387,118 @@ export default function Login() {
               />
             </div>
 
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+                Email address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@distillery.com"
+                required
+                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#f5f0e8",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
+                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={8}
+                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#f5f0e8",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
+                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+              />
+              <p className="text-[10px] mt-1.5" style={{ color: "rgba(245,240,232,0.3)" }}>
+                Minimum 8 characters
+              </p>
+            </div>
+
             <button
               type="submit"
-              disabled={login.isPending}
+              disabled={isPending}
               className="w-full py-3 rounded-lg text-sm font-semibold transition-all mt-2"
               style={{
-                background: login.isPending ? "rgba(255,255,255,0.5)" : "#ffffff",
+                background: isPending ? "rgba(255,255,255,0.5)" : "#ffffff",
                 color: "#0a0a0a",
-                opacity: login.isPending ? 0.7 : 1,
-                cursor: login.isPending ? "not-allowed" : "pointer",
-                boxShadow: login.isPending ? "none" : "0 0 24px rgba(255,255,255,0.12)",
+                opacity: isPending ? 0.7 : 1,
+                cursor: isPending ? "not-allowed" : "pointer",
+                boxShadow: isPending ? "none" : "0 0 24px rgba(255,255,255,0.12)",
               }}
             >
-              {login.isPending ? "Signing in…" : "Sign in"}
+              {isPending ? "Creating account…" : "Create account"}
             </button>
           </form>
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-8">
             <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-            <span className="text-xs" style={{ color: "rgba(245,240,232,0.2)" }}>secure access</span>
+            <span className="text-xs" style={{ color: "rgba(245,240,232,0.2)" }}>secure signup</span>
             <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
           </div>
 
           {/* Trust badges */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: "⚡", label: "Real-time sync", sub: "Live batch updates" },
+              { icon: "⚡", label: "Instant Setup", sub: "Ready in minutes" },
               { icon: "🔐", label: "Role-based access", sub: "Admin & staff tiers" },
               { icon: "📊", label: "TTB reporting", sub: "Auto-generated filings" },
-              { icon: "🥃", label: "Craft-first design", sub: "Built for distillers" },
+              { icon: "🥃", label: "No credit card", sub: "Free to get started" },
             ].map((b) => (
               <div
                 key={b.label}
                 className="rounded-lg p-3"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
               >
                 <p className="text-xs font-medium mb-0.5" style={{ color: "rgba(245,240,232,0.7)" }}>
                   {b.label}
                 </p>
-                <p className="text-[10px]" style={{ color: "rgba(245,240,232,0.3)" }}>{b.sub}</p>
+                <p className="text-[10px]" style={{ color: "rgba(245,240,232,0.3)" }}>
+                  {b.sub}
+                </p>
               </div>
             ))}
           </div>
 
-          <p className="text-center text-sm mt-8" style={{ color: "rgba(245,240,232,0.4)" }}>
-            Don't have an account?{" "}
-            <a
-              href="/signup"
-              style={{ color: "#c9952a", textDecoration: "none", fontWeight: 500 }}
-              onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
-              onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
+          {/* Sign in link */}
+          <p className="text-center text-xs mt-8" style={{ color: "rgba(245,240,232,0.3)" }}>
+            Already have an account?{" "}
+            <button
+              onClick={() => navigate("/login")}
+              className="font-medium transition-colors duration-200"
+              style={{ color: "rgba(245,240,232,0.65)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f0e8")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.65)")}
             >
-              Start free trial
-            </a>
+              Sign in
+            </button>
           </p>
 
-          <p className="text-center text-[10px] mt-4" style={{ color: "rgba(245,240,232,0.2)" }}>
+          <p className="text-center text-[10px] mt-5" style={{ color: "rgba(245,240,232,0.2)" }}>
             Distillr — Distillery Technology Platform &copy; {new Date().getFullYear()}
           </p>
         </div>

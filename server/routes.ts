@@ -1476,6 +1476,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Public self-service registration — creates a new tenant + admin user + auto-login
+  app.post("/api/auth/signup", async (req, res) => {
+    const clientKey = getLoginClientKey(req);
+    const retryAfterSeconds = loginRateLimiter.getRetryAfterSeconds(clientKey);
+    if (retryAfterSeconds > 0) {
+      return res.status(429).json({ error: "Too many attempts. Please wait.", retryAfterSeconds });
+    }
+
+    try {
+      const schema = z.object({
+        distilleryName: z.string().trim().min(2, "Distillery name must be at least 2 characters"),
+        adminName: z.string().trim().min(1, "Name is required"),
+        email: z.string().email("Enter a valid email address"),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+      });
+
+      const data = schema.parse(req.body);
+
+      // Auto-generate a unique slug from the distillery name
+      const baseSlug = data.distilleryName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 40);
+      const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+
+      const tenant = await createTenant({ name: data.distilleryName, slug });
+
+      const user = await runWithTenant(tenant.id, () =>
+        authStorage.createUser({
+          email: data.email,
+          password: data.password,
+          name: data.adminName,
+          role: "admin",
+          status: "active",
+        }),
+      );
+
+      await regenerateSession(req);
+      req.session.user = user;
+      req.session.csrfToken = createCsrfToken();
+      res.setHeader("X-CSRF-Token", req.session.csrfToken);
+      loginRateLimiter.registerSuccess(clientKey);
+      res.status(201).json({ user, csrfToken: req.session.csrfToken });
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        const msg = error.errors?.[0]?.message || "Invalid signup data";
+        return res.status(400).json({ error: msg });
+      }
+      if (String(error?.message).includes("already exists")) {
+        return res.status(409).json({ error: "An account with this email already exists" });
+      }
+      loginRateLimiter.registerFailure(clientKey);
+      res.status(500).json({ error: "Failed to create account. Please try again." });
+    }
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) return res.status(500).json({ error: "Failed to logout" });
