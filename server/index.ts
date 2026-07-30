@@ -125,7 +125,16 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    res.status(status).json({ message });
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
+  });
+
+  process.on("uncaughtException", (err) => {
+    log(`uncaughtException: ${err.message}`, "error");
+  });
+  process.on("unhandledRejection", (reason) => {
+    log(`unhandledRejection: ${reason}`, "error");
   });
 
   if (process.env.NODE_ENV === "production") {
