@@ -4,6 +4,8 @@ import { useAuth } from "./hooks/use-auth";
 import Landing from "./pages/landing";
 import Login from "./pages/login";
 import Signup from "./pages/signup";
+import AdminLogin from "./pages/admin-login";
+import AdminDashboard from "./pages/admin-dashboard";
 import Dashboard from "./pages/dashboard";
 import Barrels from "./pages/barrels";
 import BarrelForm from "./pages/barrel-form";
@@ -70,6 +72,8 @@ function RootRoute() {
 export default function App() {
   return (
     <Switch>
+      <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/" component={RootRoute} />

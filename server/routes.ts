@@ -103,6 +103,7 @@ declare module "express-session" {
   interface SessionData {
     user: SafeUser & { tenantId: string };
     csrfToken?: string;
+    isSuperAdmin?: boolean;
   }
 }
 
@@ -1461,6 +1462,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!user) {
         loginRateLimiter.registerFailure(clientKey);
         return res.status(401).json({ error: "Invalid email or password" });
+      }
+      const tenant = await getTenantById(user.tenantId);
+      if (tenant && tenant.status !== "active") {
+        return res.status(403).json({ error: "Your account has been suspended. Please contact support." });
       }
       await regenerateSession(req);
       req.session.user = user;
@@ -4042,6 +4047,103 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       await deleteTenant(req.params.id);
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Admin Panel: Session-based super-admin UI ───────────────────────────
+  // Auth against SUPER_ADMIN_EMAIL + SUPER_ADMIN_PASSWORD env vars.
+
+  function requireAdminSession(req: Request, res: Response, next: NextFunction) {
+    if (!req.session.isSuperAdmin) return res.status(401).json({ error: "Unauthorized" });
+    next();
+  }
+
+  app.post("/api/admin/login", async (req, res) => {
+    try {
+      const adminEmail = process.env.SUPER_ADMIN_EMAIL;
+      const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
+      if (!adminEmail || !adminPassword) {
+        return res.status(503).json({ error: "Admin credentials not configured" });
+      }
+      const { email, password } = z.object({ email: z.string(), password: z.string() }).parse(req.body);
+      if (email !== adminEmail || password !== adminPassword) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      await regenerateSession(req);
+      req.session.isSuperAdmin = true;
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/logout", (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
+  });
+
+  app.get("/api/admin/me", (req, res) => {
+    if (!req.session.isSuperAdmin) return res.status(401).json({ error: "Unauthorized" });
+    res.json({ ok: true });
+  });
+
+  app.get("/api/admin/tenants", requireAdminSession, async (_req, res) => {
+    try {
+      const result = await query(`
+        SELECT t.id, t.name, t.slug, t.plan, t.status, t.created_at,
+               COUNT(u.id)::int AS user_count
+        FROM tenants t
+        LEFT JOIN users u ON u.tenant_id = t.id
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/tenants", requireAdminSession, async (req, res) => {
+    try {
+      const data = createTenantSchema.parse(req.body);
+      const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan });
+      await runWithTenant(tenant.id, async () => {
+        await authStorage.createUser({
+          email: data.adminEmail,
+          password: data.adminPassword,
+          name: data.adminName || data.adminEmail.split("@")[0],
+          role: "admin",
+          status: "active",
+        });
+      });
+      res.status(201).json(tenant);
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:id", requireAdminSession, async (req, res) => {
+    try {
+      const data = z.object({
+        name: z.string().trim().min(1).optional(),
+        slug: z.string().trim().min(1).optional(),
+        plan: z.enum(["standard", "pro", "enterprise"]).optional(),
+        status: z.enum(["active", "suspended", "cancelled"]).optional(),
+      }).parse(req.body);
+      const tenant = await updateTenant(req.params.id, data);
+      res.json(tenant);
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/tenants/:id", requireAdminSession, async (req, res) => {
+    try {
+      await deleteTenant(req.params.id);
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
