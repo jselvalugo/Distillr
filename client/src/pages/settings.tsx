@@ -41,7 +41,7 @@ const EXPORT_TABLES = [
   { key: "calculator_presets", label: "Calculator Presets", desc: "Saved calculator configurations" },
 ];
 
-type Tab = "branding" | "export" | "import" | "platform" | "danger";
+type Tab = "general" | "branding" | "export" | "import" | "danger";
 
 function downloadCSV(tableKey: string) {
   const a = document.createElement("a");
@@ -52,22 +52,124 @@ function downloadCSV(tableKey: string) {
   document.body.removeChild(a);
 }
 
+// ─── General Tab ────────────────────────────────────────────────────────────
+
+function GeneralTab({ config }: { config: PlatformConfig | undefined }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    organizationName: config?.organizationName ?? "",
+    dspNumber: config?.dspNumber ?? "",
+    supportEmail: config?.supportEmail ?? "",
+    timeZone: config?.timeZone ?? "",
+    platformTagline: config?.platformTagline ?? "",
+  });
+  const [saved, setSaved] = useState(false);
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      apiRequest<PlatformConfig>("/api/platform-config", {
+        method: "PATCH",
+        body: JSON.stringify({
+          organizationName: form.organizationName,
+          dspNumber: form.dspNumber || null,
+          supportEmail: form.supportEmail,
+          timeZone: form.timeZone,
+          platformTagline: form.platformTagline,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const field = (
+    label: string,
+    key: keyof typeof form,
+    opts?: { placeholder?: string; hint?: string; type?: string }
+  ) => (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-[#0a0a0a]">{label}</label>
+      {opts?.hint && <p className="text-xs text-[#737373]">{opts.hint}</p>}
+      <Input
+        value={form[key]}
+        onChange={(e) => { setForm((f) => ({ ...f, [key]: e.target.value })); setSaved(false); }}
+        placeholder={opts?.placeholder}
+        type={opts?.type ?? "text"}
+      />
+    </div>
+  );
+
+  return (
+    <div className="p-8 max-w-xl space-y-8">
+      <div>
+        <h2 className="text-base font-semibold text-[#0a0a0a]">General Settings</h2>
+        <p className="text-sm text-[#737373] mt-0.5">
+          Core details used across TTB filings, reports, and compliance documents.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-[#e5e5e5] divide-y divide-[#f0f0f0]">
+        <div className="p-5 space-y-5">
+          {field("Distillery / Organization Name", "organizationName", {
+            placeholder: "e.g. Lugo's Craft Distillery",
+            hint: "Appears on TTB reports, Word exports, and official documents.",
+          })}
+          {field("DSP Permit Number", "dspNumber", {
+            placeholder: "e.g. DSP-FL-20001",
+            hint: "Required on all TTB filings (27 CFR § 19.91).",
+          })}
+        </div>
+
+        <div className="p-5 space-y-5">
+          {field("Support / Contact Email", "supportEmail", {
+            placeholder: "e.g. ops@yourdistillery.com",
+            type: "email",
+          })}
+          {field("Time Zone", "timeZone", {
+            placeholder: "e.g. America/New_York",
+            hint: "IANA timezone identifier — used in scheduling and report timestamps.",
+          })}
+          {field("Platform Tagline", "platformTagline", {
+            placeholder: "e.g. Distillery operations and compliance",
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+          {saveMut.isPending ? "Saving…" : "Save Changes"}
+        </Button>
+        {saved && (
+          <span className="text-sm text-[#22c55e] font-medium">Saved</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Branding Tab ────────────────────────────────────────────────────────────
+
 function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [pendingDataUrl, setPendingDataUrl] = useState<string | null>(null);
-  const [orgNameInput, setOrgNameInput] = useState(config?.organizationNameOverride ?? "");
+  const [dragOver, setDragOver] = useState(false);
 
   const saveMut = useMutation({
-    mutationFn: (body: { logoDataUrl?: string; organizationName?: string }) =>
+    mutationFn: (body: { logoDataUrl: string }) =>
       apiRequest<PlatformConfig>("/api/platform-config", {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
-      toast.success("Saved");
+      setPreview(null);
+      setPendingDataUrl(null);
+      toast.success("Logo saved");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -77,16 +179,12 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
       apiRequest<{ success: boolean }>("/api/platform-config/logo", { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
-      setPreview(null);
-      setPendingDataUrl(null);
       toast.success("Logo removed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function handleFile(file: File) {
     if (file.size > 512 * 1024) {
       toast.error("File too large — maximum 512 KB");
       return;
@@ -100,101 +198,108 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
     reader.readAsDataURL(file);
   }
 
+  const currentLogo = config?.logoDataUrl;
+
   return (
-    <div className="space-y-6 p-6">
-      {/* Current Logo */}
+    <div className="p-8 max-w-xl space-y-8">
       <div>
-        <h3 className="text-xs font-semibold text-[#0a0a0a] uppercase tracking-wider mb-3">
-          Current Logo
-        </h3>
-        <div className="border border-[#e5e5e5] rounded-md p-4 bg-white flex items-center gap-4">
-          {config?.logoDataUrl ? (
-            <>
-              <img
-                src={config.logoDataUrl}
-                alt="Logo"
-                className="max-h-16 object-contain"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => removeMut.mutate()}
-                disabled={removeMut.isPending}
-              >
-                Remove Logo
-              </Button>
-            </>
-          ) : (
-            <span className="text-xs text-[#737373]">No logo uploaded</span>
-          )}
-        </div>
+        <h2 className="text-base font-semibold text-[#0a0a0a]">Branding</h2>
+        <p className="text-sm text-[#737373] mt-0.5">
+          Upload your distillery's logo. It will appear in the navigation bar and exported documents.
+        </p>
       </div>
 
-      {/* Upload New Logo */}
-      <div>
-        <h3 className="text-xs font-semibold text-[#0a0a0a] uppercase tracking-wider mb-3">
-          Upload New Logo
-        </h3>
-        <div className="border border-[#e5e5e5] rounded-md p-4 bg-white space-y-3">
+      {/* Current logo */}
+      <div className="bg-white rounded-xl border border-[#e5e5e5] p-5">
+        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wider mb-4">Current Logo</p>
+        {currentLogo ? (
+          <div className="flex items-center gap-5">
+            <div className="h-16 w-40 flex items-center justify-center rounded-lg border border-[#e5e5e5] bg-[#f7f7f7] p-2">
+              <img src={currentLogo} alt="Current logo" className="max-h-full max-w-full object-contain" />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => removeMut.mutate()}
+              disabled={removeMut.isPending}
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              {removeMut.isPending ? "Removing…" : "Remove Logo"}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-16 rounded-lg border border-dashed border-[#e5e5e5] bg-[#f7f7f7]">
+            <span className="text-xs text-[#a3a3a3]">No logo uploaded</span>
+          </div>
+        )}
+      </div>
+
+      {/* Upload new logo */}
+      <div className="bg-white rounded-xl border border-[#e5e5e5] p-5 space-y-4">
+        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wider">
+          {currentLogo ? "Replace Logo" : "Upload Logo"}
+        </p>
+
+        <div
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+            dragOver
+              ? "border-[#0a0a0a] bg-[#0a0a0a]/5"
+              : preview
+              ? "border-[#22c55e]/40 bg-green-50/30"
+              : "border-[#e5e5e5] hover:border-[#0a0a0a]/30"
+          }`}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files[0];
+            if (f) handleFile(f);
+          }}
+        >
           <input
             ref={fileRef}
             type="file"
             accept="image/png,image/jpeg,image/svg+xml,image/webp"
             className="hidden"
-            onChange={handleFileChange}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-              Choose File
-            </Button>
-            <span className="text-xs text-[#737373]">Max 512 KB. PNG, JPG, SVG, or WebP.</span>
-          </div>
-          {preview && (
-            <div className="space-y-2">
-              <p className="text-xs text-[#737373]">Preview:</p>
-              <img src={preview} alt="Preview" className="max-h-16 object-contain" />
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (pendingDataUrl) saveMut.mutate({ logoDataUrl: pendingDataUrl });
-                }}
-                disabled={saveMut.isPending}
-              >
-                Save Logo
-              </Button>
+          {preview ? (
+            <div className="space-y-3">
+              <img src={preview} alt="Preview" className="max-h-16 mx-auto object-contain" />
+              <p className="text-xs text-[#737373]">Click to choose a different file</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-[#737373]">Drop your logo here or click to browse</p>
+              <p className="text-xs text-[#a3a3a3]">PNG, JPG, SVG, or WebP — max 512 KB</p>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Organization Name */}
-      <div>
-        <h3 className="text-xs font-semibold text-[#0a0a0a] uppercase tracking-wider mb-3">
-          Organization Name
-        </h3>
-        <div className="border border-[#e5e5e5] rounded-md p-4 bg-white space-y-3">
-          <p className="text-xs text-[#737373]">
-            Override the name displayed in the navigation bar.
-          </p>
-          <div className="flex items-center gap-3 max-w-sm">
-            <Input
-              value={orgNameInput}
-              onChange={(e) => setOrgNameInput(e.target.value)}
-              placeholder="Your Distillery Name"
-            />
+        {preview && (
+          <div className="flex items-center gap-3">
             <Button
-              size="sm"
-              onClick={() => saveMut.mutate({ organizationName: orgNameInput })}
+              onClick={() => { if (pendingDataUrl) saveMut.mutate({ logoDataUrl: pendingDataUrl }); }}
               disabled={saveMut.isPending}
             >
-              Save
+              {saveMut.isPending ? "Uploading…" : "Save Logo"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setPreview(null); setPendingDataUrl(null); }}
+            >
+              Cancel
             </Button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
+
+// ─── Export Tab ───────────────────────────────────────────────────────────────
 
 function ExportTab() {
   const { data: counts } = useQuery<Record<string, number>>({
@@ -213,49 +318,40 @@ function ExportTab() {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-start justify-between">
+    <div className="p-8 space-y-6">
+      <div className="flex items-start justify-between max-w-4xl">
         <div>
-          <h3 className="text-sm font-semibold text-[#0a0a0a]">Export Data</h3>
-          <p className="text-xs text-[#737373] mt-0.5">
-            Download any table as CSV. Use the same column headers for mass import.
+          <h2 className="text-base font-semibold text-[#0a0a0a]">Data Export</h2>
+          <p className="text-sm text-[#737373] mt-0.5">
+            Download any table as CSV or export everything as Excel.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={downloadAll}>
+        <Button variant="outline" onClick={downloadAll}>
           Download All as Excel
         </Button>
       </div>
 
-      <div className="border border-[#e5e5e5] rounded-md bg-white overflow-hidden">
+      <div className="border border-[#e5e5e5] rounded-xl bg-white overflow-hidden max-w-4xl">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#e5e5e5] bg-[#f7f7f7]">
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">
-                Table
-              </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">
-                Description
-              </th>
-              <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">
-                Rows
-              </th>
-              <th className="px-4 py-2.5" />
+              <th className="text-left px-5 py-3 text-xs font-semibold text-[#737373] uppercase tracking-wider">Table</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-[#737373] uppercase tracking-wider hidden sm:table-cell">Description</th>
+              <th className="text-right px-5 py-3 text-xs font-semibold text-[#737373] uppercase tracking-wider">Rows</th>
+              <th className="px-5 py-3" />
             </tr>
           </thead>
-          <tbody>
-            {EXPORT_TABLES.map((t, i) => (
-              <tr
-                key={t.key}
-                className={i < EXPORT_TABLES.length - 1 ? "border-b border-[#e5e5e5]" : ""}
-              >
-                <td className="px-4 py-3 text-xs font-medium text-[#0a0a0a]">{t.label}</td>
-                <td className="px-4 py-3 text-xs text-[#737373]">{t.desc}</td>
-                <td className="px-4 py-3 text-xs text-right text-[#737373]">
-                  {counts ? (counts[t.key] ?? 0) : "—"}
+          <tbody className="divide-y divide-[#f0f0f0]">
+            {EXPORT_TABLES.map((t) => (
+              <tr key={t.key} className="hover:bg-[#fafafa] transition-colors">
+                <td className="px-5 py-3 text-xs font-medium text-[#0a0a0a]">{t.label}</td>
+                <td className="px-5 py-3 text-xs text-[#737373] hidden sm:table-cell">{t.desc}</td>
+                <td className="px-5 py-3 text-xs text-right text-[#737373] tabular-nums">
+                  {counts ? (counts[t.key] ?? 0).toLocaleString() : "—"}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-5 py-3 text-right">
                   <Button variant="outline" size="sm" onClick={() => downloadCSV(t.key)}>
-                    Download CSV
+                    CSV
                   </Button>
                 </td>
               </tr>
@@ -267,80 +363,7 @@ function ExportTab() {
   );
 }
 
-function PlatformTab({ config }: { config: PlatformConfig | undefined }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    organizationName: config?.organizationName ?? "",
-    tagline: config?.platformTagline ?? "",
-    supportEmail: config?.supportEmail ?? "",
-    timeZone: config?.timeZone ?? "",
-    dspNumber: config?.dspNumber ?? "",
-  });
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      apiRequest<PlatformConfig>("/api/platform-config", {
-        method: "PATCH",
-        body: JSON.stringify({ organizationName: form.organizationName, dspNumber: form.dspNumber || null }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
-      toast.success("Platform settings saved");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="p-6 space-y-4">
-      <h3 className="text-sm font-semibold text-[#0a0a0a]">Platform Settings</h3>
-      <div className="border border-[#e5e5e5] rounded-md p-4 bg-white space-y-4 max-w-md">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[#737373]">Organization Name</label>
-          <Input
-            value={form.organizationName}
-            onChange={(e) => setForm((f) => ({ ...f, organizationName: e.target.value }))}
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[#737373]">DSP Permit Number</label>
-          <Input
-            value={form.dspNumber}
-            onChange={(e) => setForm((f) => ({ ...f, dspNumber: e.target.value }))}
-            placeholder="e.g. DSP-NY-20001"
-          />
-          <p className="text-[10px] text-[#a3a3a3]">Required on all TTB filings (27 CFR § 19.91)</p>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[#737373]">Platform Tagline</label>
-          <Input
-            value={form.tagline}
-            onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
-            disabled
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[#737373]">Support Email</label>
-          <Input
-            value={form.supportEmail}
-            onChange={(e) => setForm((f) => ({ ...f, supportEmail: e.target.value }))}
-            disabled
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-[#737373]">Time Zone</label>
-          <Input
-            value={form.timeZone}
-            onChange={(e) => setForm((f) => ({ ...f, timeZone: e.target.value }))}
-            disabled
-          />
-        </div>
-        <Button size="sm" onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-          Save
-        </Button>
-      </div>
-    </div>
-  );
-}
+// ─── Import Tab ───────────────────────────────────────────────────────────────
 
 type ImportRowResult = {
   sheet: string;
@@ -439,18 +462,18 @@ function ExciseImportCard() {
   }
 
   return (
-    <div className="border border-[#e5e5e5] rounded-xl bg-white overflow-hidden mb-6">
-      <div className="px-5 py-4 border-b border-[#e5e5e5] bg-[#f7f7f7]">
+    <div className="bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
+      <div className="px-5 py-4 border-b border-[#e5e5e5]">
         <p className="text-sm font-semibold text-[#0a0a0a]">Excise Tax Excel Import</p>
         <p className="text-xs text-[#737373] mt-0.5">
-          Upload your monthly excise tax Excel file. Each sheet is a month — products with zero cases are skipped automatically.
+          Upload your monthly excise tax Excel file. Each sheet is a month — rows with zero cases are skipped.
         </p>
       </div>
       <div className="p-5 space-y-4">
         {!exciseResult ? (
           <>
             <div
-              className="border-2 border-dashed border-[#e5e5e5] rounded-lg p-8 text-center cursor-pointer hover:border-[#0a0a0a]/30 transition-colors"
+              className="border-2 border-dashed border-[#e5e5e5] rounded-xl p-8 text-center cursor-pointer hover:border-[#0a0a0a]/30 transition-colors"
               onClick={() => exciseRef.current?.click()}
             >
               <input
@@ -460,24 +483,26 @@ function ExciseImportCard() {
               {exciseFile ? (
                 <div>
                   <p className="text-sm font-medium text-[#0a0a0a]">{exciseFile.name}</p>
-                  <p className="text-xs text-[#737373] mt-0.5">{Object.keys(byMonth).length} months detected, {excisePreview?.length ?? 0} product rows — click to change</p>
+                  <p className="text-xs text-[#737373] mt-0.5">
+                    {Object.keys(byMonth).length} months · {excisePreview?.length ?? 0} products — click to change
+                  </p>
                 </div>
               ) : (
                 <p className="text-sm text-[#737373]">Drop Excise Tax.xlsx here or click to browse</p>
               )}
             </div>
             {excisePreview && excisePreview.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-[#737373] uppercase tracking-wider">Preview — months detected</p>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-[#737373] uppercase tracking-wider">Months detected</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(byMonth).sort(([a],[b]) => a.localeCompare(b)).map(([month, count]) => (
                     <span key={month} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f0f0f0] text-[11px] font-medium text-[#0a0a0a]">
                       {new Date(month + "-02").toLocaleString("en-US",{month:"short",year:"numeric"})}
-                      <span className="text-[#737373]">·{count}</span>
+                      <span className="text-[#737373]">· {count}</span>
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center gap-3 pt-1">
+                <div className="flex items-center gap-3">
                   <Button onClick={runExciseImport} disabled={exciseImporting}>
                     {exciseImporting ? "Importing…" : `Import ${excisePreview.length} Records`}
                   </Button>
@@ -487,11 +512,11 @@ function ExciseImportCard() {
             )}
           </>
         ) : (
-          <div className="space-y-3">
-            <div className="flex gap-6 text-center">
-              <div><p className="text-2xl font-bold text-[#22c55e]">{exciseResult.inserted}</p><p className="text-xs text-[#737373]">Inserted</p></div>
-              <div><p className="text-2xl font-bold text-[#3b82f6]">{exciseResult.updated}</p><p className="text-xs text-[#737373]">Updated</p></div>
-              <div><p className="text-2xl font-bold text-[#a3a3a3]">{exciseResult.skipped}</p><p className="text-xs text-[#737373]">Skipped</p></div>
+          <div className="space-y-4">
+            <div className="flex gap-8">
+              <div className="text-center"><p className="text-2xl font-bold text-[#22c55e]">{exciseResult.inserted}</p><p className="text-xs text-[#737373] mt-0.5">Inserted</p></div>
+              <div className="text-center"><p className="text-2xl font-bold text-[#3b82f6]">{exciseResult.updated}</p><p className="text-xs text-[#737373] mt-0.5">Updated</p></div>
+              <div className="text-center"><p className="text-2xl font-bold text-[#a3a3a3]">{exciseResult.skipped}</p><p className="text-xs text-[#737373] mt-0.5">Skipped</p></div>
             </div>
             <p className="text-xs text-[#737373]">Data is now visible in Reports → Excise Tax Return for each imported month.</p>
             <Button variant="outline" size="sm" onClick={() => { setExciseFile(null); setExcisePreview(null); setExciseResult(null); }}>
@@ -512,10 +537,7 @@ function ImportTab() {
   const [dragOver, setDragOver] = useState(false);
 
   function handleFile(f: File) {
-    if (!f.name.endsWith(".xlsx")) {
-      toast.error("Please upload an .xlsx file");
-      return;
-    }
+    if (!f.name.endsWith(".xlsx")) { toast.error("Please upload an .xlsx file"); return; }
     setFile(f);
     setResults(null);
   }
@@ -554,115 +576,111 @@ function ImportTab() {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-8 space-y-6 max-w-3xl">
+      <div>
+        <h2 className="text-base font-semibold text-[#0a0a0a]">Data Import</h2>
+        <p className="text-sm text-[#737373] mt-0.5">
+          Upload an Excel file to bulk-import data. Rows with existing IDs are updated; new rows are inserted.
+        </p>
+      </div>
+
       <ExciseImportCard />
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-[#0a0a0a]">Import Data from Excel</h3>
-          <p className="text-xs text-[#737373] mt-0.5">
-            Upload the exported Excel file (.xlsx). Each sheet maps to its table — rows with an existing ID will be updated, new rows will be inserted. The Audit Log sheet is read-only and will be skipped.
-          </p>
-        </div>
-      </div>
 
-      {/* Download template */}
-      <div className="border border-[#e5e5e5] rounded-md p-4 bg-white flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium text-[#0a0a0a]">Download Import Template</p>
-          <p className="text-xs text-[#737373] mt-0.5">
-            Download a blank template with all current fields and instructions.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => { window.location.href = "/api/export/template.xlsx"; }}>
-          Download Import Template
-        </Button>
-      </div>
-
-      {/* Drop zone */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-10 text-center transition-colors cursor-pointer ${
-          dragOver ? "border-[#0a0a0a] bg-[#0a0a0a]/5" : "border-[#e5e5e5] bg-white hover:border-[#0a0a0a]/30"
-        }`}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => fileRef.current?.click()}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-        />
-        {file ? (
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-[#0a0a0a]">{file.name}</p>
-            <p className="text-xs text-[#737373]">{(file.size / 1024).toFixed(1)} KB — click to change</p>
+      <div className="bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#e5e5e5] flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#0a0a0a]">Full Data Import</p>
+            <p className="text-xs text-[#737373] mt-0.5">Import from the exported Excel template. Audit Log sheet is read-only and will be skipped.</p>
           </div>
-        ) : (
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-[#737373]">Drop your Excel file here or click to browse</p>
-            <p className="text-xs text-[#a3a3a3]">Only .xlsx files are accepted (max 20 MB)</p>
-          </div>
-        )}
-      </div>
-
-      {file && !results && (
-        <div className="flex items-center gap-3">
-          <Button onClick={runImport} disabled={importing}>
-            {importing ? "Importing…" : "Import Data"}
-          </Button>
-          <Button variant="outline" onClick={() => { setFile(null); setResults(null); }}>
-            Clear
+          <Button variant="outline" size="sm" onClick={() => { window.location.href = "/api/export/template.xlsx"; }}>
+            Download Template
           </Button>
         </div>
-      )}
+        <div className="p-5 space-y-4">
+          <div
+            className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
+              dragOver ? "border-[#0a0a0a] bg-[#0a0a0a]/5" : "border-[#e5e5e5] bg-white hover:border-[#0a0a0a]/30"
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+          >
+            <input
+              ref={fileRef} type="file" accept=".xlsx" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            />
+            {file ? (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-[#0a0a0a]">{file.name}</p>
+                <p className="text-xs text-[#737373]">{(file.size / 1024).toFixed(1)} KB — click to change</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-[#737373]">Drop your Excel file here or click to browse</p>
+                <p className="text-xs text-[#a3a3a3]">Only .xlsx files accepted (max 20 MB)</p>
+              </div>
+            )}
+          </div>
 
-      {/* Results */}
-      {results && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-[#0a0a0a] uppercase tracking-wider">Import Results</h4>
-            <Button variant="outline" size="sm" onClick={() => { setFile(null); setResults(null); }}>
-              Import Another File
-            </Button>
-          </div>
-          <div className="border border-[#e5e5e5] rounded-md bg-white overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#e5e5e5] bg-[#f7f7f7]">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Sheet</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Inserted</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Updated</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Skipped</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r, i) => (
-                  <tr key={r.sheet} className={i < results.length - 1 ? "border-b border-[#e5e5e5]" : ""}>
-                    <td className="px-4 py-3 text-xs font-medium text-[#0a0a0a]">{r.sheet}</td>
-                    <td className="px-4 py-3 text-xs text-right text-[#22c55e] font-medium">{r.inserted || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-right text-[#3b82f6] font-medium">{r.updated || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-right text-[#737373]">{r.skipped || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-[#737373]">
-                      {r.errors.length > 0 ? (
-                        <span className="text-red-600">{r.errors[0]}{r.errors.length > 1 ? ` (+${r.errors.length - 1} more)` : ""}</span>
-                      ) : r.table === "—" ? (
-                        <span className="text-amber-600">Unknown sheet</span>
-                      ) : "OK"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {file && !results && (
+            <div className="flex items-center gap-3">
+              <Button onClick={runImport} disabled={importing}>
+                {importing ? "Importing…" : "Import Data"}
+              </Button>
+              <Button variant="outline" onClick={() => { setFile(null); setResults(null); }}>
+                Clear
+              </Button>
+            </div>
+          )}
+
+          {results && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-[#0a0a0a] uppercase tracking-wider">Import Results</p>
+                <Button variant="outline" size="sm" onClick={() => { setFile(null); setResults(null); }}>
+                  Import Another File
+                </Button>
+              </div>
+              <div className="rounded-lg border border-[#e5e5e5] overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e5e5e5] bg-[#f7f7f7]">
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Sheet</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Inserted</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Updated</th>
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Skipped</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#737373] uppercase tracking-wider">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f0f0]">
+                    {results.map((r) => (
+                      <tr key={r.sheet} className="hover:bg-[#fafafa]">
+                        <td className="px-4 py-3 text-xs font-medium text-[#0a0a0a]">{r.sheet}</td>
+                        <td className="px-4 py-3 text-xs text-right text-[#22c55e] font-medium">{r.inserted || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-right text-[#3b82f6] font-medium">{r.updated || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-right text-[#737373]">{r.skipped || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-[#737373]">
+                          {r.errors.length > 0 ? (
+                            <span className="text-red-600">{r.errors[0]}{r.errors.length > 1 ? ` (+${r.errors.length - 1} more)` : ""}</span>
+                          ) : r.table === "—" ? (
+                            <span className="text-amber-600">Unknown sheet</span>
+                          ) : "OK"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
+
+// ─── Danger Zone Tab ──────────────────────────────────────────────────────────
 
 function DangerTab() {
   const qc = useQueryClient();
@@ -683,47 +701,58 @@ function DangerTab() {
   const PHRASE = "delete all data";
 
   return (
-    <div className="p-6 max-w-lg space-y-6">
+    <div className="p-8 max-w-lg space-y-6">
       <div>
-        <p className="text-sm font-semibold text-[#0a0a0a] mb-1">Reset All Operational Data</p>
-        <p className="text-xs text-[#737373]">
-          Permanently deletes all batches, barrels, barrel events, inventory, sales orders, trading partners, compliance records, staff, permits, and reports.
-          Your account, platform settings, and branding are preserved.
+        <h2 className="text-base font-semibold text-red-600">Danger Zone</h2>
+        <p className="text-sm text-[#737373] mt-0.5">
+          Irreversible actions. Proceed with caution.
         </p>
       </div>
 
-      {done ? (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 font-medium">
-          Done — the system has been cleared. You can start fresh.
-        </div>
-      ) : (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-4">
-          <p className="text-xs text-red-700 font-semibold uppercase tracking-wide">This cannot be undone.</p>
-          <p className="text-xs text-red-600">
-            Type <span className="font-mono font-bold">{PHRASE}</span> to confirm:
+      <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-red-100 bg-red-50/50">
+          <p className="text-sm font-semibold text-red-700">Reset All Operational Data</p>
+          <p className="text-xs text-red-600/80 mt-0.5">
+            Permanently deletes all batches, barrels, barrel events, inventory, sales orders, trading partners,
+            compliance records, staff, permits, and reports. Your account, settings, and branding are preserved.
           </p>
-          <input
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder={PHRASE}
-            className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-red-200 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-          <Button
-            className="bg-red-600 hover:bg-red-700 text-white border-red-600 w-full"
-            disabled={confirm !== PHRASE || resetMut.isPending}
-            onClick={() => resetMut.mutate()}
-          >
-            {resetMut.isPending ? "Clearing data…" : "Clear All Data"}
-          </Button>
         </div>
-      )}
+        <div className="p-5">
+          {done ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 font-medium">
+              Done — the system has been cleared. You can start fresh.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-[#737373]">
+                Type <span className="font-mono font-semibold text-red-600">{PHRASE}</span> to confirm:
+              </p>
+              <input
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder={PHRASE}
+                className="w-full rounded-lg border border-[#e5e5e5] bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-[#d4d4d4] focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300"
+              />
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600 w-full"
+                disabled={confirm !== PHRASE || resetMut.isPending}
+                onClick={() => resetMut.mutate()}
+              >
+                {resetMut.isPending ? "Clearing data…" : "Clear All Data"}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
 export default function Settings() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("branding");
+  const [tab, setTab] = useState<Tab>("general");
 
   const { data: config } = useQuery<PlatformConfig>({
     queryKey: ["/api/platform-config"],
@@ -742,33 +771,30 @@ export default function Settings() {
   }
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: "general", label: "General" },
     { key: "branding", label: "Branding" },
     { key: "export", label: "Data Export" },
     { key: "import", label: "Data Import" },
-    { key: "platform", label: "Platform" },
     { key: "danger", label: "Danger Zone" },
   ];
 
   return (
     <Layout>
-      <PageHeader
-        title="Settings"
-        subtitle="Platform configuration — Admin only"
-      />
+      <PageHeader title="Settings" subtitle="Platform configuration — Admin only" />
       <div className="flex" style={{ minHeight: "calc(100vh - 8rem)" }}>
         {/* Sidebar */}
-        <aside className="w-44 border-r border-[#e5e5e5] bg-white p-3 space-y-0.5 shrink-0">
+        <aside className="w-48 border-r border-[#e5e5e5] bg-white p-3 space-y-0.5 shrink-0">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`w-full text-left px-3 py-2 text-xs font-medium rounded-md transition-colors ${
+              className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                 t.key === "danger"
                   ? tab === "danger"
-                    ? "bg-red-600 text-white"
+                    ? "bg-red-600 text-white font-medium"
                     : "text-red-500 hover:text-red-600 hover:bg-red-50"
                   : tab === t.key
-                    ? "bg-[#0a0a0a] text-white"
+                    ? "bg-[#0a0a0a] text-white font-medium"
                     : "text-[#737373] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
               }`}
             >
@@ -778,11 +804,11 @@ export default function Settings() {
         </aside>
 
         {/* Content */}
-        <div className="flex-1 bg-[#f7f7f7]">
+        <div className="flex-1 bg-[#f7f7f7] overflow-auto">
+          {tab === "general" && <GeneralTab config={config} />}
           {tab === "branding" && <BrandingTab config={config} />}
           {tab === "export" && <ExportTab />}
           {tab === "import" && <ImportTab />}
-          {tab === "platform" && <PlatformTab config={config} />}
           {tab === "danger" && <DangerTab />}
         </div>
       </div>
