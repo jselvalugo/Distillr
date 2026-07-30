@@ -1484,6 +1484,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
   app.get("/api/auth/me", (req, res) => {
     if (!req.session?.user) {
       return res.status(401).json({ error: "Not authenticated" });
