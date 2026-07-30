@@ -763,8 +763,11 @@ export default function Settings() {
   if (user && user.role !== "admin") {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-64 text-[#737373] text-sm">
-          Access restricted to administrators.
+        <div className="flex flex-col items-center justify-center h-64 gap-2 text-center px-4">
+          <p className="text-sm font-semibold text-[#0a0a0a]">Admin Access Required</p>
+          <p className="text-xs text-[#737373] max-w-xs">
+            Settings are only available to administrators. Contact your Distillr account admin if you need access.
+          </p>
         </div>
       </Layout>
     );
