@@ -58,18 +58,29 @@ export async function query<T = Record<string, unknown>>(text: string, params?: 
 
 export async function initDatabase(): Promise<void> {
   await query(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      plan TEXT NOT NULL DEFAULT 'standard',
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      email TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
       role TEXT NOT NULL,
       status TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (tenant_id, email)
     );
 
     CREATE TABLE IF NOT EXISTS platform_config (
-      id SMALLINT PRIMARY KEY DEFAULT 1,
+      tenant_id TEXT PRIMARY KEY,
       organization_name TEXT NOT NULL,
       platform_tagline TEXT NOT NULL,
       industry TEXT NOT NULL,
@@ -95,6 +106,56 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS logo_data_url TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS organization_name_override TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS dsp_number TEXT;
+
+    -- Multi-tenancy: migrate old singleton platform_config (id SMALLINT) to tenant_id-keyed rows
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'platform_config' AND column_name = 'id' AND data_type IN ('smallint', 'integer')
+      ) THEN
+        ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+        UPDATE platform_config SET tenant_id = 'default' WHERE tenant_id IS NULL;
+        ALTER TABLE platform_config DROP CONSTRAINT IF EXISTS platform_config_pkey;
+        ALTER TABLE platform_config ALTER COLUMN tenant_id SET NOT NULL;
+        ALTER TABLE platform_config ADD PRIMARY KEY (tenant_id);
+        ALTER TABLE platform_config DROP COLUMN IF EXISTS id;
+      END IF;
+    END $$;
+
+    -- Multi-tenancy: add tenant_id to users if missing (old deployments had UNIQUE on email)
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+
+    -- Multi-tenancy: add tenant_id to all data tables
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE properties ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE staff ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE compliance ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE job_photos ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE attachments ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE attachment_links ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE inventory_lots ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE barrels ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE barrel_events ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE ttb_reports ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE calculator_presets ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE distilling_production_records ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE distilling_inventory_records ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE permits ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE cola_registrations ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE label_records ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE state_excise_returns ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE distillery_equipment ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+
+    -- Ensure tenants table has a 'default' row for existing single-tenant deployments
+    INSERT INTO tenants (id, name, slug, plan, status)
+    VALUES ('default', 'Default Organization', 'default', 'standard', 'active')
+    ON CONFLICT (id) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,

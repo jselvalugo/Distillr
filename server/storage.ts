@@ -50,6 +50,7 @@ import {
   defaultPlatformConfig,
 } from "@shared/schema";
 import { query } from "./db";
+import { getCurrentTenantId } from "./tenant-context";
 import {
   MIN_RECORD_RETENTION_YEARS,
   addYearsIso,
@@ -843,38 +844,44 @@ export interface IStorage {
 
 export class PostgresStorage implements IStorage {
   async getJobs(): Promise<Job[]> {
-    const rows = await query("SELECT * FROM jobs ORDER BY scheduled_date DESC, start_time ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM jobs WHERE tenant_id = $1 ORDER BY scheduled_date DESC, start_time ASC", [tenantId]);
     return rows.map(mapJob);
   }
 
   async getJob(id: string): Promise<Job | undefined> {
-    const rows = await query("SELECT * FROM jobs WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM jobs WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapJob(rows[0]) : undefined;
   }
 
   async getJobsByAssignedUserId(userId: string): Promise<Job[]> {
-    const rows = await query("SELECT * FROM jobs WHERE assigned_user_id = $1", [userId]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM jobs WHERE assigned_user_id = $1 AND tenant_id = $2", [userId, tenantId]);
     return rows.map(mapJob);
   }
 
   async getJobsByCrewMemberName(name: string): Promise<Job[]> {
-    const rows = await query("SELECT * FROM jobs WHERE EXISTS (SELECT 1 FROM unnest(crew) c WHERE lower(c) = lower($1))", [name]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM jobs WHERE EXISTS (SELECT 1 FROM unnest(crew) c WHERE lower(c) = lower($1)) AND tenant_id = $2", [name, tenantId]);
     return rows.map(mapJob);
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
     const nowDate = new Date().toISOString().slice(0, 10);
     const id = insertJob.id || generateId("BATCH");
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO jobs (
-        id, property_id, address, service, service_category, status, start_time, end_time,
+        id, tenant_id, property_id, address, service, service_category, status, start_time, end_time,
         crew, priority, block_reason, scheduled_date, assigned_user_id, work_order_number,
         estimated_minutes, completion_notes, after_photos
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
       ) RETURNING *`,
       [
         id,
+        tenantId,
         insertJob.propertyId || "",
         insertJob.address || "",
         insertJob.service || "",
@@ -910,6 +917,7 @@ export class PostgresStorage implements IStorage {
       completionNotes: updates.completionNotes === undefined ? existing.completionNotes : updates.completionNotes,
     };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE jobs SET
         property_id = $2,
@@ -928,7 +936,7 @@ export class PostgresStorage implements IStorage {
         estimated_minutes = $15,
         completion_notes = $16,
         after_photos = $17
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $18
       RETURNING *`,
       [
         id,
@@ -948,6 +956,7 @@ export class PostgresStorage implements IStorage {
         next.estimatedMinutes ?? null,
         next.completionNotes || null,
         next.afterPhotos || [],
+        tenantId,
       ],
     );
 
@@ -955,31 +964,36 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteJob(id: string): Promise<void> {
-    await query("DELETE FROM jobs WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM jobs WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getClients(): Promise<Client[]> {
-    const rows = await query("SELECT * FROM clients ORDER BY name ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM clients WHERE tenant_id = $1 ORDER BY name ASC", [tenantId]);
     return rows.map(mapClient);
   }
 
   async getClient(id: string): Promise<Client | undefined> {
-    const rows = await query("SELECT * FROM clients WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM clients WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapClient(rows[0]) : undefined;
   }
 
   async createClient(client: InsertClient): Promise<Client> {
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO clients (
-        id, name, legal_name, dba, type, contact, contact_title, contact_email, contact_phone,
+        id, tenant_id, name, legal_name, dba, type, contact, contact_title, contact_email, contact_phone,
         account_owner, status, website, support_email, support_phone, billing_address,
         headquarters_address, payment_terms, tax_id, industry_segment, account_tier,
         onboarding_status, renewal_date, notes, coi_expires_on, service_agreement_expires_on
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
       ) RETURNING *`,
       [
         client.id || generateId("PARTNER"),
+        tenantId,
         client.name || "",
         client.legalName || null,
         client.dba || null,
@@ -1014,6 +1028,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Client not found");
     const next = { ...existing, ...updates };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE clients SET
         name = $2,
@@ -1040,7 +1055,7 @@ export class PostgresStorage implements IStorage {
         notes = $23,
         coi_expires_on = $24,
         service_agreement_expires_on = $25
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $26
       RETURNING *`,
       [
         id,
@@ -1068,6 +1083,7 @@ export class PostgresStorage implements IStorage {
         next.notes || null,
         next.coiExpiresOn || null,
         next.serviceAgreementExpiresOn || null,
+        tenantId,
       ],
     );
 
@@ -1075,27 +1091,32 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteClient(id: string): Promise<void> {
-    await query("DELETE FROM clients WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM clients WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getProperties(): Promise<Property[]> {
-    const rows = await query("SELECT * FROM properties ORDER BY name ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM properties WHERE tenant_id = $1 ORDER BY name ASC", [tenantId]);
     return rows.map(mapProperty);
   }
 
   async getProperty(id: string): Promise<Property | undefined> {
-    const rows = await query("SELECT * FROM properties WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM properties WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapProperty(rows[0]) : undefined;
   }
 
   async createProperty(property: InsertProperty): Promise<Property> {
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO properties (
-        id, name, address, client_id, type, status, region, site_contact, site_contact_phone, access_notes
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        id, tenant_id, name, address, client_id, type, status, region, site_contact, site_contact_phone, access_notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *`,
       [
         property.id || generateId("FAC"),
+        tenantId,
         property.name || "",
         property.address || "",
         property.clientId || "",
@@ -1115,6 +1136,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Property not found");
     const next = { ...existing, ...updates };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE properties SET
         name = $2,
@@ -1126,7 +1148,7 @@ export class PostgresStorage implements IStorage {
         site_contact = $8,
         site_contact_phone = $9,
         access_notes = $10
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $11
       RETURNING *`,
       [
         id,
@@ -1139,6 +1161,7 @@ export class PostgresStorage implements IStorage {
         next.siteContact || null,
         next.siteContactPhone || null,
         next.accessNotes || null,
+        tenantId,
       ],
     );
 
@@ -1146,30 +1169,35 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteProperty(id: string): Promise<void> {
-    await query("DELETE FROM properties WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM properties WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getStaff(): Promise<Staff[]> {
-    const rows = await query("SELECT * FROM staff ORDER BY name ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM staff WHERE tenant_id = $1 ORDER BY name ASC", [tenantId]);
     return rows.map(mapStaff);
   }
 
   async getStaffMember(id: string): Promise<Staff | undefined> {
-    const rows = await query("SELECT * FROM staff WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM staff WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapStaff(rows[0]) : undefined;
   }
 
   async getStaffByUserId(userId: string): Promise<Staff | undefined> {
-    const rows = await query("SELECT * FROM staff WHERE user_id = $1 LIMIT 1", [userId]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM staff WHERE user_id = $1 AND tenant_id = $2 LIMIT 1", [userId, tenantId]);
     return rows[0] ? mapStaff(rows[0]) : undefined;
   }
 
   async createStaff(staff: InsertStaff): Promise<Staff> {
+    const tenantId = getCurrentTenantId();
     const rows = await query(
-      `INSERT INTO staff (id, name, role, status, phone, user_id)
-       VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO staff (id, tenant_id, name, role, status, phone, user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        RETURNING *`,
-      [staff.id || generateId("TEAM"), staff.name || "", staff.role || "", staff.status || "Active", staff.phone || "", staff.userId || null],
+      [staff.id || generateId("TEAM"), tenantId, staff.name || "", staff.role || "", staff.status || "Active", staff.phone || "", staff.userId || null],
     );
     return mapStaff(rows[0]);
   }
@@ -1179,30 +1207,35 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Staff member not found");
     const next = { ...existing, ...updates };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
-      `UPDATE staff SET name = $2, role = $3, status = $4, phone = $5, user_id = $6 WHERE id = $1 RETURNING *`,
-      [id, next.name, next.role, next.status, next.phone, next.userId || null],
+      `UPDATE staff SET name = $2, role = $3, status = $4, phone = $5, user_id = $6 WHERE id = $1 AND tenant_id = $7 RETURNING *`,
+      [id, next.name, next.role, next.status, next.phone, next.userId || null, tenantId],
     );
 
     return mapStaff(rows[0]);
   }
 
   async deleteStaff(id: string): Promise<void> {
-    await query("DELETE FROM staff WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM staff WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getCompliance(): Promise<Compliance[]> {
-    const rows = await query("SELECT * FROM compliance ORDER BY type ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM compliance WHERE tenant_id = $1 ORDER BY type ASC", [tenantId]);
     return rows.map(mapCompliance);
   }
 
   async getComplianceDoc(id: string): Promise<Compliance | undefined> {
-    const rows = await query("SELECT * FROM compliance WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM compliance WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapCompliance(rows[0]) : undefined;
   }
 
   async getComplianceByClient(clientId: string): Promise<Compliance[]> {
-    const rows = await query("SELECT * FROM compliance WHERE client_id = $1 ORDER BY type ASC", [clientId]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM compliance WHERE client_id = $1 AND tenant_id = $2 ORDER BY type ASC", [clientId, tenantId]);
     return rows.map(mapCompliance);
   }
 
@@ -1211,14 +1244,16 @@ export class PostgresStorage implements IStorage {
     const retentionYears = compliance.retentionYears ?? MIN_RECORD_RETENTION_YEARS;
     const retentionUntil = compliance.retentionUntil || addYearsIso(compliance.lastReviewedOn || now, retentionYears);
     const regulatoryArea = compliance.regulatoryArea || deriveComplianceAreaFromType(compliance.type);
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO compliance (
-        id, client_id, type, regulatory_area, jurisdiction, control_reference, status, expires, document_url,
+        id, tenant_id, client_id, type, regulatory_area, jurisdiction, control_reference, status, expires, document_url,
         owner, severity, required_for, last_reviewed_on, retention_years, retention_until, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING *`,
       [
         compliance.id || generateId("COMP"),
+        tenantId,
         compliance.clientId || "",
         compliance.type || "",
         regulatoryArea,
@@ -1253,6 +1288,7 @@ export class PostgresStorage implements IStorage {
       existing.retentionUntil ||
       addYearsIso(merged.lastReviewedOn || merged.createdAt || now, retentionYears);
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE compliance SET
         client_id = $2,
@@ -1271,7 +1307,7 @@ export class PostgresStorage implements IStorage {
         retention_until = $15,
         created_at = $16,
         updated_at = $17
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $18
       RETURNING *`,
       [
         id,
@@ -1291,6 +1327,7 @@ export class PostgresStorage implements IStorage {
         retentionUntil,
         merged.createdAt || existing.createdAt || now,
         now,
+        tenantId,
       ],
     );
 
@@ -1305,27 +1342,32 @@ export class PostgresStorage implements IStorage {
         `Record retention policy prevents deletion until ${existing.retentionUntil || "retention date is configured"}`,
       );
     }
-    await query("DELETE FROM compliance WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM compliance WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getInventoryItems(): Promise<InventoryItem[]> {
-    const rows = await query("SELECT * FROM inventory_items ORDER BY name ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM inventory_items WHERE tenant_id = $1 ORDER BY name ASC", [tenantId]);
     return rows.map(mapInventoryItem);
   }
 
   async getInventoryItem(id: string): Promise<InventoryItem | undefined> {
-    const rows = await query("SELECT * FROM inventory_items WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM inventory_items WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapInventoryItem(rows[0]) : undefined;
   }
 
   async createInventoryItem(item: InsertInventoryItem): Promise<InventoryItem> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
-      `INSERT INTO inventory_items (id, name, category, unit_of_measure, status, notes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO inventory_items (id, tenant_id, name, category, unit_of_measure, status, notes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        RETURNING *`,
       [
         item.id || generateId("INV"),
+        tenantId,
         item.name || "",
         item.category || "",
         item.unitOfMeasure || "",
@@ -1343,6 +1385,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Inventory item not found");
 
     const next = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE inventory_items SET
         name = $2,
@@ -1351,38 +1394,43 @@ export class PostgresStorage implements IStorage {
         status = $5,
         notes = $6,
         updated_at = $7
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $8
       RETURNING *`,
-      [id, next.name, next.category, next.unitOfMeasure, next.status, next.notes || null, next.updatedAt],
+      [id, next.name, next.category, next.unitOfMeasure, next.status, next.notes || null, next.updatedAt, tenantId],
     );
 
     return mapInventoryItem(rows[0]);
   }
 
   async deleteInventoryItem(id: string): Promise<void> {
-    await query("DELETE FROM inventory_items WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM inventory_items WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getInventoryLots(): Promise<InventoryLot[]> {
-    const rows = await query("SELECT * FROM inventory_lots ORDER BY created_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM inventory_lots WHERE tenant_id = $1 ORDER BY created_at DESC", [tenantId]);
     return rows.map(mapInventoryLot);
   }
 
   async getInventoryLot(id: string): Promise<InventoryLot | undefined> {
-    const rows = await query("SELECT * FROM inventory_lots WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM inventory_lots WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapInventoryLot(rows[0]) : undefined;
   }
 
   async createInventoryLot(lot: InsertInventoryLot): Promise<InventoryLot> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO inventory_lots (
-        id, item_id, batch_id, lot_code, quantity, unit_of_measure, abv, proof_gallons,
+        id, tenant_id, item_id, batch_id, lot_code, quantity, unit_of_measure, abv, proof_gallons,
         location_id, received_at, expires_at, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       RETURNING *`,
       [
         lot.id || generateId("LOT"),
+        tenantId,
         lot.itemId || "",
         lot.batchId || null,
         lot.lotCode || "",
@@ -1406,6 +1454,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Inventory lot not found");
 
     const next = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE inventory_lots SET
         item_id = $2,
@@ -1420,7 +1469,7 @@ export class PostgresStorage implements IStorage {
         expires_at = $11,
         notes = $12,
         updated_at = $13
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $14
       RETURNING *`,
       [
         id,
@@ -1436,6 +1485,7 @@ export class PostgresStorage implements IStorage {
         next.expiresAt || null,
         next.notes || null,
         next.updatedAt,
+        tenantId,
       ],
     );
 
@@ -1443,24 +1493,28 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteInventoryLot(id: string): Promise<void> {
-    await query("DELETE FROM inventory_lots WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM inventory_lots WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getInventoryMovements(): Promise<InventoryMovement[]> {
-    const rows = await query("SELECT * FROM inventory_movements ORDER BY performed_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM inventory_movements WHERE tenant_id = $1 ORDER BY performed_at DESC", [tenantId]);
     return rows.map(mapInventoryMovement);
   }
 
   async createInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement> {
     const performedAt = movement.performedAt || new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO inventory_movements (
-        id, lot_id, movement_type, quantity, ttb_operation_category, production_stage, tax_classification,
+        id, tenant_id, lot_id, movement_type, quantity, ttb_operation_category, production_stage, tax_classification,
         from_location_id, to_location_id, reason, performed_by, performed_at, metadata
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       RETURNING *`,
       [
         movement.id || generateId("MOVE"),
+        tenantId,
         movement.lotId || "",
         movement.movementType || "Adjust",
         movement.quantity ?? 0,
@@ -1480,27 +1534,31 @@ export class PostgresStorage implements IStorage {
   }
 
   async getBarrels(): Promise<Barrel[]> {
-    const rows = await query("SELECT * FROM barrels ORDER BY created_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM barrels WHERE tenant_id = $1 ORDER BY created_at DESC", [tenantId]);
     return rows.map(mapBarrel);
   }
 
   async getBarrel(id: string): Promise<Barrel | undefined> {
-    const rows = await query("SELECT * FROM barrels WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM barrels WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapBarrel(rows[0]) : undefined;
   }
 
   async createBarrel(barrel: InsertBarrel): Promise<Barrel> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO barrels (
-        id, serial_number, product_name, fill_date, fill_proof, fill_proof_gallons, fill_volume, current_volume,
+        id, tenant_id, serial_number, product_name, fill_date, fill_proof, fill_proof_gallons, fill_volume, current_volume,
         current_proof_gallons, total_aging_days, dump_date, cases_made, percent_bottled, losses_proof_gallons,
         status, location_id, warehouse_zone, char_level, origin_batch_id, color_notes, nose_notes,
         sample_percent_notes, outdoor_temp, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
       RETURNING *`,
       [
         barrel.id || generateId("BARREL"),
+        tenantId,
         barrel.serialNumber || "",
         barrel.productName || null,
         barrel.fillDate || null,
@@ -1537,6 +1595,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Barrel not found");
 
     const next = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE barrels SET
         serial_number = $2,
@@ -1563,7 +1622,7 @@ export class PostgresStorage implements IStorage {
         outdoor_temp = $23,
         notes = $24,
         updated_at = $25
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $26
       RETURNING *`,
       [
         id,
@@ -1591,6 +1650,7 @@ export class PostgresStorage implements IStorage {
         next.outdoorTemp || null,
         next.notes || null,
         next.updatedAt,
+        tenantId,
       ],
     );
 
@@ -1598,25 +1658,29 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteBarrel(id: string): Promise<void> {
-    await query("DELETE FROM barrels WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM barrels WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getBarrelEvents(barrelId: string): Promise<BarrelEvent[]> {
-    const rows = await query("SELECT * FROM barrel_events WHERE barrel_id = $1 ORDER BY event_at DESC", [barrelId]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM barrel_events WHERE barrel_id = $1 AND tenant_id = $2 ORDER BY event_at DESC", [barrelId, tenantId]);
     return rows.map(mapBarrelEvent);
   }
 
   async createBarrelEvent(event: InsertBarrelEvent & { outdoorTemp?: number | null; wineGallons?: number | null }): Promise<BarrelEvent> {
     const eventAt = event.eventAt || new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO barrel_events (
-        id, barrel_id, event_type, event_at, volume_change, proof_at_event, outdoor_temp, wine_gallons,
+        id, tenant_id, barrel_id, event_type, event_at, volume_change, proof_at_event, outdoor_temp, wine_gallons,
         ttb_operation_category, production_stage, tax_classification, from_location_id, to_location_id,
         notes, performed_by, metadata
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *`,
       [
         event.id || generateId("BEVT"),
+        tenantId,
         event.barrelId || "",
         event.eventType || "Transfer",
         eventAt,
@@ -1639,12 +1703,14 @@ export class PostgresStorage implements IStorage {
   }
 
   async getTtbReports(): Promise<TtbReport[]> {
-    const rows = await query("SELECT * FROM ttb_reports ORDER BY report_period_start DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM ttb_reports WHERE tenant_id = $1 ORDER BY report_period_start DESC", [tenantId]);
     return rows.map(mapTtbReport);
   }
 
   async getTtbReport(id: string): Promise<TtbReport | undefined> {
-    const rows = await query("SELECT * FROM ttb_reports WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM ttb_reports WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapTtbReport(rows[0]) : undefined;
   }
 
@@ -1655,14 +1721,16 @@ export class PostgresStorage implements IStorage {
       report.dueDate ||
       defaultDueDateForCadence(report.reportPeriodEnd || new Date().toISOString().slice(0, 10), cadence);
     const retentionUntil = report.retentionUntil || addYearsIso(now, MIN_RECORD_RETENTION_YEARS);
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO ttb_reports (
-        id, report_period_start, report_period_end, filing_type, filing_cadence, due_date, excise_tax_due,
+        id, tenant_id, report_period_start, report_period_end, filing_type, filing_cadence, due_date, excise_tax_due,
         status, generated_at, approved_at, approved_by, exported_at, retention_until, payload, json_path, csv_path, pdf_path
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING *`,
       [
         report.id || generateId("TTP"),
+        tenantId,
         report.reportPeriodStart || "",
         report.reportPeriodEnd || "",
         report.filingType || "Storage Operations",
@@ -1694,6 +1762,7 @@ export class PostgresStorage implements IStorage {
       next.filingCadence || deriveCadenceFromPeriod(next.reportPeriodStart || "", next.reportPeriodEnd || "");
     const dueDate = next.dueDate || defaultDueDateForCadence(next.reportPeriodEnd, cadence);
     const retentionUntil = next.retentionUntil || existing.retentionUntil || addYearsIso(new Date().toISOString());
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE ttb_reports SET
         report_period_start = $2,
@@ -1712,7 +1781,7 @@ export class PostgresStorage implements IStorage {
         json_path = $15,
         csv_path = $16,
         pdf_path = $17
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $18
       RETURNING *`,
       [
         id,
@@ -1732,6 +1801,7 @@ export class PostgresStorage implements IStorage {
         next.jsonPath || null,
         next.csvPath || null,
         next.pdfPath || null,
+        tenantId,
       ],
     );
 
@@ -1746,32 +1816,37 @@ export class PostgresStorage implements IStorage {
         `Record retention policy prevents deletion until ${existing.retentionUntil || "retention date is configured"}`,
       );
     }
-    await query("DELETE FROM ttb_reports WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM ttb_reports WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getAuditLogs(limit = 200): Promise<AuditLog[]> {
     const boundedLimit = Math.max(1, Math.min(limit, 2000));
-    const rows = await query("SELECT * FROM audit_logs ORDER BY occurred_at DESC LIMIT $1", [boundedLimit]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY occurred_at DESC LIMIT $2", [tenantId, boundedLimit]);
     return rows.map(mapAuditLog);
   }
 
   async getAuditLogsByEntity(entityType: string, entityId: string, limit = 200): Promise<AuditLog[]> {
     const boundedLimit = Math.max(1, Math.min(limit, 2000));
+    const tenantId = getCurrentTenantId();
     const rows = await query(
-      "SELECT * FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 ORDER BY occurred_at DESC LIMIT $3",
-      [entityType, entityId, boundedLimit],
+      "SELECT * FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 AND tenant_id = $3 ORDER BY occurred_at DESC LIMIT $4",
+      [entityType, entityId, tenantId, boundedLimit],
     );
     return rows.map(mapAuditLog);
   }
 
   async createAuditLog(entry: InsertAuditLog): Promise<AuditLog> {
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO audit_logs (
-        id, entity_type, entity_id, action, actor_name, actor_role, occurred_at, details
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        id, tenant_id, entity_type, entity_id, action, actor_name, actor_role, occurred_at, details
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *`,
       [
         entry.id || generateId("AUDIT"),
+        tenantId,
         entry.entityType || "",
         entry.entityId || "",
         entry.action || "",
@@ -1785,25 +1860,29 @@ export class PostgresStorage implements IStorage {
   }
 
   async getSalesOrders(): Promise<SalesOrder[]> {
-    const rows = await query("SELECT * FROM sales_orders ORDER BY created_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM sales_orders WHERE tenant_id = $1 ORDER BY created_at DESC", [tenantId]);
     return rows.map(mapSalesOrder);
   }
 
   async getSalesOrder(id: string): Promise<SalesOrder | undefined> {
-    const rows = await query("SELECT * FROM sales_orders WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM sales_orders WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapSalesOrder(rows[0]) : undefined;
   }
 
   async createSalesOrder(order: InsertSalesOrder): Promise<SalesOrder> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO sales_orders (
-        id, order_number, client_id, status, order_date, requested_ship_date, fulfilled_date,
+        id, tenant_id, order_number, client_id, status, order_date, requested_ship_date, fulfilled_date,
         total_amount, currency, notes, line_items, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
       RETURNING *`,
       [
         order.id || generateId("SO"),
+        tenantId,
         order.orderNumber || `SO-${Date.now()}`,
         order.clientId || "",
         order.status || "Draft",
@@ -1827,6 +1906,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Sales order not found");
 
     const next = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE sales_orders SET
         order_number = $2,
@@ -1840,7 +1920,7 @@ export class PostgresStorage implements IStorage {
         notes = $10,
         line_items = $11,
         updated_at = $12
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $13
       RETURNING *`,
       [
         id,
@@ -1855,6 +1935,7 @@ export class PostgresStorage implements IStorage {
         next.notes || null,
         JSON.stringify(next.lineItems || []),
         next.updatedAt,
+        tenantId,
       ],
     );
 
@@ -1862,7 +1943,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteSalesOrder(id: string): Promise<void> {
-    await query("DELETE FROM sales_orders WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM sales_orders WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   private ensureBatchDateAlignedToReportWeek(batch: DistillingBatchRecord, reportMonth: string): void {
@@ -1902,14 +1984,16 @@ export class PostgresStorage implements IStorage {
       );
     }
 
+    const tenantId = getCurrentTenantId();
     const linkedRows = await query<{ id: string }>(
       `SELECT id
        FROM distilling_inventory_records
        WHERE batch_record_id = $1
          AND ($2::text IS NULL OR id <> $2)
+         AND tenant_id = $3
        ORDER BY updated_at DESC
        LIMIT 1`,
-      [batchRecordId, excludeInventoryRecordId || null],
+      [batchRecordId, excludeInventoryRecordId || null, tenantId],
     );
     if (linkedRows[0]) {
       throw new Error(`Batch ${batch.batchCode} already has inventory record ${linkedRows[0].id}.`);
@@ -1925,25 +2009,28 @@ export class PostgresStorage implements IStorage {
   }): Promise<void> {
     const { batch, inventoryRecordId, soldCases } = params;
     const workflow = computeBatchWorkflowAfterInventory(batch, soldCases);
+    const tenantId = getCurrentTenantId();
     await query(
       `UPDATE distilling_batch_records
        SET inventory_record_id = $2,
            stage = $3,
            status = $4,
            updated_at = $5
-       WHERE id = $1`,
-      [batch.id, inventoryRecordId, workflow.stage, workflow.status, new Date().toISOString()],
+       WHERE id = $1 AND tenant_id = $6`,
+      [batch.id, inventoryRecordId, workflow.stage, workflow.status, new Date().toISOString(), tenantId],
     );
   }
 
   private async clearBatchInventoryLink(batchRecordId: string, inventoryRecordId: string): Promise<void> {
+    const tenantId = getCurrentTenantId();
     await query(
       `UPDATE distilling_batch_records
        SET inventory_record_id = NULL,
            updated_at = $3
        WHERE id = $1
-         AND inventory_record_id = $2`,
-      [batchRecordId, inventoryRecordId, new Date().toISOString()],
+         AND inventory_record_id = $2
+         AND tenant_id = $4`,
+      [batchRecordId, inventoryRecordId, new Date().toISOString(), tenantId],
     );
   }
 
@@ -1973,22 +2060,24 @@ export class PostgresStorage implements IStorage {
 
     const nextCurrentVolume = roundNumber(Math.max(0, nextVolumeRaw), 2);
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     await query(
       `UPDATE barrels
        SET current_volume = $2,
            updated_at = $3
-       WHERE id = $1`,
-      [barrel.id, nextCurrentVolume, now],
+       WHERE id = $1 AND tenant_id = $4`,
+      [barrel.id, nextCurrentVolume, now, tenantId],
     );
 
     const eventType: BarrelEvent["eventType"] = deltaGallons > 0 ? "Sample" : "TopOff";
     await query(
       `INSERT INTO barrel_events (
-        id, barrel_id, event_type, event_at, volume_change, proof_at_event, ttb_operation_category,
+        id, tenant_id, barrel_id, event_type, event_at, volume_change, proof_at_event, ttb_operation_category,
         production_stage, tax_classification, from_location_id, to_location_id, notes, performed_by, metadata
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         generateId("BEVT"),
+        tenantId,
         barrel.id,
         eventType,
         now,
@@ -2058,6 +2147,7 @@ export class PostgresStorage implements IStorage {
     const periodPattern = parseWeekKey(reportMonth)
       ? "^[0-9]{4}-W[0-9]{2}$"
       : "^[0-9]{4}-[0-9]{2}$";
+    const tenantId = getCurrentTenantId();
 
     if (!excludeId) {
       const rows = await query<{ ending_month_inventory: number }>(
@@ -2065,9 +2155,10 @@ export class PostgresStorage implements IStorage {
          FROM distilling_inventory_records
          WHERE report_month < $1
            AND report_month ~ '${periodPattern}'
+           AND tenant_id = $2
          ORDER BY report_month DESC, updated_at DESC
          LIMIT 1`,
-        [reportMonth],
+        [reportMonth, tenantId],
       );
       return rows[0] ? Math.max(0, toInt(rows[0].ending_month_inventory, 0)) : 0;
     }
@@ -2078,28 +2169,32 @@ export class PostgresStorage implements IStorage {
        WHERE report_month < $1
          AND report_month ~ '${periodPattern}'
          AND id <> $2
+         AND tenant_id = $3
        ORDER BY report_month DESC, updated_at DESC
        LIMIT 1`,
-      [reportMonth, excludeId],
+      [reportMonth, excludeId, tenantId],
     );
     return rows[0] ? Math.max(0, toInt(rows[0].ending_month_inventory, 0)) : 0;
   }
 
   async getDistillingBatchRecords(): Promise<DistillingBatchRecord[]> {
-    const rows = await query("SELECT * FROM distilling_batch_records ORDER BY batch_date DESC, created_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_batch_records WHERE tenant_id = $1 ORDER BY batch_date DESC, created_at DESC", [tenantId]);
     return rows.map(mapDistillingBatchRecord);
   }
 
   async getDistillingBatchRecord(id: string): Promise<DistillingBatchRecord | undefined> {
-    const rows = await query("SELECT * FROM distilling_batch_records WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_batch_records WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapDistillingBatchRecord(rows[0]) : undefined;
   }
 
   async createDistillingBatchRecord(record: InsertDistillingBatchRecord): Promise<DistillingBatchRecord> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO distilling_batch_records (
-        id, batch_code, batch_date, stage, status,
+        id, tenant_id, batch_code, batch_date, stage, status,
         production_record_id, inventory_record_id, sales_order_id, notes,
         product_name, barrel_id, spirit_type, spirit_class,
         distillation_proof, proof_gallons_produced, still_type,
@@ -2111,10 +2206,11 @@ export class PostgresStorage implements IStorage {
         created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
+        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39
       ) RETURNING *`,
       [
         record.id || generateId("DBATCH"),
+        tenantId,
         record.batchCode || `DBATCH-${Date.now()}`,
         record.batchDate || now.slice(0, 10),
         record.stage || "planning",
@@ -2175,6 +2271,7 @@ export class PostgresStorage implements IStorage {
       updatedAt: new Date().toISOString(),
     };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE distilling_batch_records SET
         batch_code = $2, batch_date = $3, stage = $4, status = $5,
@@ -2187,7 +2284,7 @@ export class PostgresStorage implements IStorage {
         lot_number = $30, tax_class = $31, excise_tax_due = $32, distill_date = $33, fill_date = $34,
         target_dump_date = $35, amount_received_gallons = $36,
         updated_at = $37
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $38
       RETURNING *`,
       [
         id,
@@ -2201,6 +2298,7 @@ export class PostgresStorage implements IStorage {
         next.lotNumber ?? null, next.taxClass ?? null, next.exciseTaxDue ?? null, next.distillDate ?? null, next.fillDate ?? null,
         next.targetDumpDate ?? null, next.amountReceivedGallons ?? null,
         next.updatedAt,
+        tenantId,
       ],
     );
 
@@ -2208,16 +2306,19 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteDistillingBatchRecord(id: string): Promise<void> {
-    await query("DELETE FROM distilling_batch_records WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM distilling_batch_records WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getDistillingProductionRecords(): Promise<DistillingProductionRecord[]> {
-    const rows = await query("SELECT * FROM distilling_production_records ORDER BY distill_date DESC, created_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_production_records WHERE tenant_id = $1 ORDER BY distill_date DESC, created_at DESC", [tenantId]);
     return rows.map(mapDistillingProductionRecord);
   }
 
   async getDistillingProductionRecord(id: string): Promise<DistillingProductionRecord | undefined> {
-    const rows = await query("SELECT * FROM distilling_production_records WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_production_records WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapDistillingProductionRecord(rows[0]) : undefined;
   }
 
@@ -2228,14 +2329,16 @@ export class PostgresStorage implements IStorage {
     const gallonsDistilled = toFiniteNumber(record.gallonsDistilled, 0);
     const percentageDistilled = toFiniteNumber(record.percentageDistilled, 0);
     const proofOfGallons = computeProofOfGallons(gallonsDistilled, percentageDistilled);
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO distilling_production_records (
-        id, batch_record_id, mash_date, gallons_molasses, lbs_sugar, yeast_date, libertalia_yeast_packets,
+        id, tenant_id, batch_record_id, mash_date, gallons_molasses, lbs_sugar, yeast_date, libertalia_yeast_packets,
         riskey_yeast_packets, distill_date, gallons_distilled, percentage_distilled, proof_of_gallons, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       [
         record.id || generateId("DPROD"),
+        tenantId,
         record.batchRecordId || null,
         record.mashDate || now.slice(0, 10),
         toFiniteNumber(record.gallonsMolasses, 0),
@@ -2285,6 +2388,7 @@ export class PostgresStorage implements IStorage {
       updatedAt: new Date().toISOString(),
     };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE distilling_production_records SET
         batch_record_id = $2,
@@ -2300,7 +2404,7 @@ export class PostgresStorage implements IStorage {
         proof_of_gallons = $12,
         notes = $13,
         updated_at = $14
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $15
       RETURNING *`,
       [
         id,
@@ -2317,6 +2421,7 @@ export class PostgresStorage implements IStorage {
         next.proofOfGallons,
         next.notes || null,
         next.updatedAt,
+        tenantId,
       ],
     );
 
@@ -2324,16 +2429,19 @@ export class PostgresStorage implements IStorage {
   }
 
   async deleteDistillingProductionRecord(id: string): Promise<void> {
-    await query("DELETE FROM distilling_production_records WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM distilling_production_records WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getDistillingInventoryRecords(): Promise<DistillingInventoryRecord[]> {
-    const rows = await query("SELECT * FROM distilling_inventory_records ORDER BY report_month DESC, updated_at DESC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_inventory_records WHERE tenant_id = $1 ORDER BY report_month DESC, updated_at DESC", [tenantId]);
     return rows.map(mapDistillingInventoryRecord);
   }
 
   async getDistillingInventoryRecord(id: string): Promise<DistillingInventoryRecord | undefined> {
-    const rows = await query("SELECT * FROM distilling_inventory_records WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM distilling_inventory_records WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapDistillingInventoryRecord(rows[0]) : undefined;
   }
 
@@ -2374,16 +2482,18 @@ export class PostgresStorage implements IStorage {
         })
       : null;
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO distilling_inventory_records (
-        id, title, product_name, average_abv_percent, batch_record_id, linked_barrel_id, report_month,
+        id, tenant_id, title, product_name, average_abv_percent, batch_record_id, linked_barrel_id, report_month,
         cases_made, cases_to_distributors, cases_to_retail, bottles_made,
         beginning_of_month_cases, current_month_inventory, ending_month_inventory, ending_us_gallons, ending_proof_gallons,
         notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       RETURNING *`,
       [
         record.id || generateId("DINV"),
+        tenantId,
         normalizedTitle,
         normalizedProductName,
         normalizedAverageAbvPercent,
@@ -2516,6 +2626,7 @@ export class PostgresStorage implements IStorage {
       updatedAt: new Date().toISOString(),
     };
 
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE distilling_inventory_records SET
         title = $2,
@@ -2535,7 +2646,7 @@ export class PostgresStorage implements IStorage {
         ending_proof_gallons = $16,
         notes = $17,
         updated_at = $18
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $19
       RETURNING *`,
       [
         id,
@@ -2556,6 +2667,7 @@ export class PostgresStorage implements IStorage {
         next.endingProofGallons,
         next.notes || null,
         next.updatedAt,
+        tenantId,
       ],
     );
     const updatedRecord = mapDistillingInventoryRecord(rows[0]);
@@ -2592,7 +2704,8 @@ export class PostgresStorage implements IStorage {
         reportMonth: existing.reportMonth,
       });
     }
-    await query("DELETE FROM distilling_inventory_records WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM distilling_inventory_records WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
     const batchRecordId = toNullableText(existing?.batchRecordId);
     if (batchRecordId) {
       await this.clearBatchInventoryLink(batchRecordId, id);
@@ -2664,24 +2777,28 @@ export class PostgresStorage implements IStorage {
   }
 
   async getCalculatorPresets(): Promise<CalculatorPreset[]> {
-    const rows = await query("SELECT * FROM calculator_presets ORDER BY name ASC");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM calculator_presets WHERE tenant_id = $1 ORDER BY name ASC", [tenantId]);
     return rows.map(mapCalculatorPreset);
   }
 
   async getCalculatorPreset(id: string): Promise<CalculatorPreset | undefined> {
-    const rows = await query("SELECT * FROM calculator_presets WHERE id = $1 LIMIT 1", [id]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM calculator_presets WHERE id = $1 AND tenant_id = $2 LIMIT 1", [id, tenantId]);
     return rows[0] ? mapCalculatorPreset(rows[0]) : undefined;
   }
 
   async createCalculatorPreset(preset: InsertCalculatorPreset): Promise<CalculatorPreset> {
     const now = new Date().toISOString();
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO calculator_presets (
-        id, name, calculation_type, parameters, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+        id, tenant_id, name, calculation_type, parameters, notes, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *`,
       [
         preset.id || generateId("PRESET"),
+        tenantId,
         preset.name || "",
         preset.calculationType || "proof_gallons",
         preset.parameters || {},
@@ -2699,6 +2816,7 @@ export class PostgresStorage implements IStorage {
     if (!existing) throw new Error("Calculator preset not found");
 
     const next = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE calculator_presets SET
         name = $2,
@@ -2706,21 +2824,24 @@ export class PostgresStorage implements IStorage {
         parameters = $4,
         notes = $5,
         updated_at = $6
-      WHERE id = $1
+      WHERE id = $1 AND tenant_id = $7
       RETURNING *`,
-      [id, next.name, next.calculationType, next.parameters || {}, next.notes || null, next.updatedAt],
+      [id, next.name, next.calculationType, next.parameters || {}, next.notes || null, next.updatedAt, tenantId],
     );
 
     return mapCalculatorPreset(rows[0]);
   }
 
   async deleteCalculatorPreset(id: string): Promise<void> {
-    await query("DELETE FROM calculator_presets WHERE id = $1", [id]);
+    const tenantId = getCurrentTenantId();
+    await query("DELETE FROM calculator_presets WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
   }
 
   async getStats(): Promise<Stats> {
+    const tenantId = getCurrentTenantId();
     const rows = await query<{ stage: string; count: number }>(
-      `SELECT stage, COUNT(*)::int AS count FROM distilling_batch_records GROUP BY stage`,
+      `SELECT stage, COUNT(*)::int AS count FROM distilling_batch_records WHERE tenant_id = $1 GROUP BY stage`,
+      [tenantId],
     );
 
     const map = new Map(rows.map((row) => [row.stage, Number(row.count)]));
@@ -2739,7 +2860,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async getPlatformConfig(): Promise<PlatformConfig> {
-    const rows = await query("SELECT * FROM platform_config WHERE id = 1 LIMIT 1");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM platform_config WHERE tenant_id = $1 LIMIT 1", [tenantId]);
     if (!rows[0]) {
       await this.updatePlatformConfig(defaultPlatformConfig);
       return defaultPlatformConfig;
@@ -2748,20 +2870,21 @@ export class PostgresStorage implements IStorage {
   }
 
   async updatePlatformConfig(config: UpdatePlatformConfig): Promise<PlatformConfig> {
+    const tenantId = getCurrentTenantId();
     const current = await this.getPlatformConfigSafe();
     const next: PlatformConfig = { ...current, ...config };
 
     await query(
       `INSERT INTO platform_config (
-        id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
+        tenant_id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
         website, primary_address, time_zone, dsp_number, logo_data_url,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities
       ) VALUES (
-        1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
       )
-      ON CONFLICT (id) DO UPDATE SET
+      ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
         organization_name_override = EXCLUDED.organization_name_override,
         platform_tagline = EXCLUDED.platform_tagline,
@@ -2785,6 +2908,7 @@ export class PostgresStorage implements IStorage {
         requirement_statuses = EXCLUDED.requirement_statuses,
         requirement_severities = EXCLUDED.requirement_severities`,
       [
+        tenantId,
         next.organizationName,
         next.organizationNameOverride ?? null,
         next.platformTagline,
@@ -2814,13 +2938,15 @@ export class PostgresStorage implements IStorage {
   }
 
   private async getPlatformConfigSafe(): Promise<PlatformConfig> {
-    const rows = await query("SELECT * FROM platform_config WHERE id = 1 LIMIT 1");
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM platform_config WHERE tenant_id = $1 LIMIT 1", [tenantId]);
     if (!rows[0]) return defaultPlatformConfig;
     return mapPlatformConfig(rows[0]);
   }
 
   async getJobPhotos(jobId: string): Promise<JobPhoto[]> {
-    const rows = await query("SELECT * FROM job_photos WHERE job_id = $1 ORDER BY uploaded_at DESC", [jobId]);
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM job_photos WHERE job_id = $1 AND tenant_id = $2 ORDER BY uploaded_at DESC", [jobId, tenantId]);
     return rows.map((row) => ({
       id: String(row.id),
       jobId: String(row.job_id),
@@ -2841,27 +2967,30 @@ export class PostgresStorage implements IStorage {
       uploadedAt: new Date().toISOString(),
     };
 
+    const tenantId = getCurrentTenantId();
     await query(
-      `INSERT INTO job_photos (id, job_id, filename, file_path, uploaded_by, uploaded_at)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [created.id, created.jobId, created.filename, created.filePath, created.uploadedBy, created.uploadedAt],
+      `INSERT INTO job_photos (id, tenant_id, job_id, filename, file_path, uploaded_by, uploaded_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [created.id, tenantId, created.jobId, created.filename, created.filePath, created.uploadedBy, created.uploadedAt],
     );
 
     return created;
   }
 
 	async deleteJobPhoto(photoId: string): Promise<void> {
-		await query("DELETE FROM job_photos WHERE id = $1", [photoId]);
+		const tenantId = getCurrentTenantId();
+		await query("DELETE FROM job_photos WHERE id = $1 AND tenant_id = $2", [photoId, tenantId]);
 	}
 
 	async getAttachmentsForEntity(entityType: string, entityId: string): Promise<Attachment[]> {
+		const tenantId = getCurrentTenantId();
 		const rows = await query(
 			`SELECT a.*
 			 FROM attachments a
 			 INNER JOIN attachment_links l ON l.attachment_id = a.id
-			 WHERE l.entity_type = $1 AND l.entity_id = $2
+			 WHERE l.entity_type = $1 AND l.entity_id = $2 AND a.tenant_id = $3
 			 ORDER BY a.uploaded_at DESC`,
-			[entityType, entityId],
+			[entityType, entityId, tenantId],
 		);
 		return rows.map(mapAttachment);
 	}
@@ -2883,13 +3012,15 @@ export class PostgresStorage implements IStorage {
 			notes: attachment.notes ?? null,
 		};
 
+		const tenantId = getCurrentTenantId();
 		await query(
 			`INSERT INTO attachments (
-			  id, original_filename, file_path, mime_type, byte_size, sha256,
+			  id, tenant_id, original_filename, file_path, mime_type, byte_size, sha256,
 			  doc_type, effective_on, expires_on, status, uploaded_by, uploaded_at, notes
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 			[
 				created.id,
+				tenantId,
 				created.originalFilename,
 				created.filePath,
 				created.mimeType,
@@ -2919,12 +3050,14 @@ export class PostgresStorage implements IStorage {
 			linkedAt: new Date().toISOString(),
 		};
 
+		const tenantId = getCurrentTenantId();
 		await query(
 			`INSERT INTO attachment_links (
-			  id, attachment_id, entity_type, entity_id, relationship, linked_by, linked_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+			  id, tenant_id, attachment_id, entity_type, entity_id, relationship, linked_by, linked_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 			[
 				created.id,
+				tenantId,
 				created.attachmentId,
 				created.entityType,
 				created.entityId,
@@ -2943,24 +3076,27 @@ export class PostgresStorage implements IStorage {
 		docType: string,
 		excludeAttachmentId: string,
 	): Promise<void> {
+		const tenantId = getCurrentTenantId();
 		await query(
 			`UPDATE attachments
 			 SET status = 'superseded'
 			 WHERE status = 'active'
 			   AND doc_type = $3
 			   AND id <> $4
+			   AND tenant_id = $5
 			   AND id IN (
 			     SELECT attachment_id
 			     FROM attachment_links
 			     WHERE entity_type = $1 AND entity_id = $2
 			   )`,
-			[entityType, entityId, docType, excludeAttachmentId],
+			[entityType, entityId, docType, excludeAttachmentId, tenantId],
 		);
 	}
 
 	// Equipment
 	async getEquipmentList(): Promise<any[]> {
-		const rows = await query("SELECT * FROM distillery_equipment ORDER BY zone, sort_order, name");
+		const tenantId = getCurrentTenantId();
+		const rows = await query("SELECT * FROM distillery_equipment WHERE tenant_id = $1 ORDER BY zone, sort_order, name", [tenantId]);
 		return rows.map(r => ({
 			id: String((r as any).id),
 			name: String((r as any).name),
@@ -2982,25 +3118,28 @@ export class PostgresStorage implements IStorage {
 	async createEquipment(data: any): Promise<any> {
 		const now = new Date().toISOString();
 		const id = generateId("EQ");
+		const tenantId = getCurrentTenantId();
 		await query(
-			`INSERT INTO distillery_equipment (id, name, display_name, type, zone, capacity, capacity_unit, status, linked_batch_id, linked_barrel_id, notes, sort_order, created_at, updated_at)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-			[id, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now, now]
+			`INSERT INTO distillery_equipment (id, tenant_id, name, display_name, type, zone, capacity, capacity_unit, status, linked_batch_id, linked_barrel_id, notes, sort_order, created_at, updated_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+			[id, tenantId, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now, now]
 		);
 		return this.getEquipmentList().then(list => list.find(e => e.id === id)!);
 	}
 
 	async updateEquipment(id: string, data: any): Promise<any> {
 		const now = new Date().toISOString();
+		const tenantId = getCurrentTenantId();
 		await query(
-			`UPDATE distillery_equipment SET name=$2, display_name=$3, type=$4, zone=$5, capacity=$6, capacity_unit=$7, status=$8, linked_batch_id=$9, linked_barrel_id=$10, notes=$11, sort_order=$12, updated_at=$13 WHERE id=$1`,
-			[id, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now]
+			`UPDATE distillery_equipment SET name=$2, display_name=$3, type=$4, zone=$5, capacity=$6, capacity_unit=$7, status=$8, linked_batch_id=$9, linked_barrel_id=$10, notes=$11, sort_order=$12, updated_at=$13 WHERE id=$1 AND tenant_id=$14`,
+			[id, data.name, data.displayName||null, data.type||"tank", data.zone||"other", data.capacity??null, data.capacityUnit||"gallons", data.status||"empty", data.linkedBatchId||null, data.linkedBarrelId||null, data.notes||null, data.sortOrder??0, now, tenantId]
 		);
 		return this.getEquipmentList().then(list => list.find(e => e.id === id)!);
 	}
 
 	async deleteEquipment(id: string): Promise<void> {
-		await query("DELETE FROM distillery_equipment WHERE id=$1", [id]);
+		const tenantId = getCurrentTenantId();
+		await query("DELETE FROM distillery_equipment WHERE id=$1 AND tenant_id=$2", [id, tenantId]);
 	}
 }
 
@@ -3089,18 +3228,21 @@ function mapStateExciseReturn(row: Record<string, unknown>) {
 }
 
 export async function getPermits() {
-  const rows = await query("SELECT * FROM permits ORDER BY expiration_date ASC");
+  const tenantId = getCurrentTenantId();
+  const rows = await query("SELECT * FROM permits WHERE tenant_id = $1 ORDER BY expiration_date ASC", [tenantId]);
   return rows.map(mapPermit);
 }
 
 export async function createPermit(data: Record<string, unknown>) {
   const id = generateId("PRMT");
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
-    `INSERT INTO permits (id, permit_type, permit_number, issuing_authority, state, issue_date, expiration_date, reminder_days_before, status, notes, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11) RETURNING *`,
+    `INSERT INTO permits (id, tenant_id, permit_type, permit_number, issuing_authority, state, issue_date, expiration_date, reminder_days_before, status, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$11,$12) RETURNING *`,
     [
       id,
+      tenantId,
       String(data.permitType ?? ""),
       String(data.permitNumber ?? ""),
       String(data.issuingAuthority ?? ""),
@@ -3118,6 +3260,7 @@ export async function createPermit(data: Record<string, unknown>) {
 
 export async function updatePermit(id: string, data: Record<string, unknown>) {
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
     `UPDATE permits SET
        permit_type = COALESCE($2, permit_type),
@@ -3129,7 +3272,7 @@ export async function updatePermit(id: string, data: Record<string, unknown>) {
        reminder_days_before = COALESCE($8, reminder_days_before),
        notes = $9,
        updated_at = $10
-     WHERE id = $1 RETURNING *`,
+     WHERE id = $1 AND tenant_id = $11 RETURNING *`,
     [
       id,
       data.permitType != null ? String(data.permitType) : null,
@@ -3141,6 +3284,7 @@ export async function updatePermit(id: string, data: Record<string, unknown>) {
       data.reminderDaysBefore != null ? Number(data.reminderDaysBefore) : null,
       data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
       now,
+      tenantId,
     ],
   );
   if (!rows[0]) throw new Error("Permit not found");
@@ -3148,22 +3292,26 @@ export async function updatePermit(id: string, data: Record<string, unknown>) {
 }
 
 export async function deletePermit(id: string) {
-  await query("DELETE FROM permits WHERE id = $1", [id]);
+  const tenantId = getCurrentTenantId();
+  await query("DELETE FROM permits WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
 }
 
 export async function getColaRegistrations() {
-  const rows = await query("SELECT * FROM cola_registrations ORDER BY created_at DESC");
+  const tenantId = getCurrentTenantId();
+  const rows = await query("SELECT * FROM cola_registrations WHERE tenant_id = $1 ORDER BY created_at DESC", [tenantId]);
   return rows.map(mapColaRegistration);
 }
 
 export async function createColaRegistration(data: Record<string, unknown>) {
   const id = generateId("COLA");
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
-    `INSERT INTO cola_registrations (id, product_name, brand_name, class_type, formula_number, cola_number, status, applied_at, approved_at, expires_at, notes, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    `INSERT INTO cola_registrations (id, tenant_id, product_name, brand_name, class_type, formula_number, cola_number, status, applied_at, approved_at, expires_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [
       id,
+      tenantId,
       String(data.productName ?? ""),
       String(data.brandName ?? ""),
       String(data.classType ?? ""),
@@ -3183,6 +3331,7 @@ export async function createColaRegistration(data: Record<string, unknown>) {
 
 export async function updateColaRegistration(id: string, data: Record<string, unknown>) {
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
     `UPDATE cola_registrations SET
        product_name = COALESCE($2, product_name),
@@ -3196,7 +3345,7 @@ export async function updateColaRegistration(id: string, data: Record<string, un
        expires_at = $10,
        notes = $11,
        updated_at = $12
-     WHERE id = $1 RETURNING *`,
+     WHERE id = $1 AND tenant_id = $13 RETURNING *`,
     [
       id,
       data.productName != null ? String(data.productName) : null,
@@ -3210,6 +3359,7 @@ export async function updateColaRegistration(id: string, data: Record<string, un
       data.expiresAt != null && String(data.expiresAt).trim() !== "" ? String(data.expiresAt) : null,
       data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
       now,
+      tenantId,
     ],
   );
   if (!rows[0]) throw new Error("COLA registration not found");
@@ -3217,22 +3367,26 @@ export async function updateColaRegistration(id: string, data: Record<string, un
 }
 
 export async function deleteColaRegistration(id: string) {
-  await query("DELETE FROM cola_registrations WHERE id = $1", [id]);
+  const tenantId = getCurrentTenantId();
+  await query("DELETE FROM cola_registrations WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
 }
 
 export async function getLabelRecords() {
-  const rows = await query("SELECT * FROM label_records ORDER BY created_at DESC");
+  const tenantId = getCurrentTenantId();
+  const rows = await query("SELECT * FROM label_records WHERE tenant_id = $1 ORDER BY created_at DESC", [tenantId]);
   return rows.map(mapLabelRecord);
 }
 
 export async function createLabelRecord(data: Record<string, unknown>) {
   const id = generateId("LBL");
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
-    `INSERT INTO label_records (id, product_name, sku, version, cola_id, net_contents, alcohol_content, class_type, status, approved_at, notes, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    `INSERT INTO label_records (id, tenant_id, product_name, sku, version, cola_id, net_contents, alcohol_content, class_type, status, approved_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [
       id,
+      tenantId,
       String(data.productName ?? ""),
       String(data.sku ?? ""),
       String(data.version ?? "1.0"),
@@ -3252,6 +3406,7 @@ export async function createLabelRecord(data: Record<string, unknown>) {
 
 export async function updateLabelRecord(id: string, data: Record<string, unknown>) {
   const now = new Date().toISOString();
+  const tenantId = getCurrentTenantId();
   const rows = await query(
     `UPDATE label_records SET
        product_name = COALESCE($2, product_name),
@@ -3265,7 +3420,7 @@ export async function updateLabelRecord(id: string, data: Record<string, unknown
        approved_at = $10,
        notes = $11,
        updated_at = $12
-     WHERE id = $1 RETURNING *`,
+     WHERE id = $1 AND tenant_id = $13 RETURNING *`,
     [
       id,
       data.productName != null ? String(data.productName) : null,
@@ -3279,6 +3434,7 @@ export async function updateLabelRecord(id: string, data: Record<string, unknown
       data.approvedAt != null && String(data.approvedAt).trim() !== "" ? String(data.approvedAt) : null,
       data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
       now,
+      tenantId,
     ],
   );
   if (!rows[0]) throw new Error("Label record not found");
@@ -3286,11 +3442,13 @@ export async function updateLabelRecord(id: string, data: Record<string, unknown
 }
 
 export async function deleteLabelRecord(id: string) {
-  await query("DELETE FROM label_records WHERE id = $1", [id]);
+  const tenantId = getCurrentTenantId();
+  await query("DELETE FROM label_records WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
 }
 
 export async function getStateExciseReturns() {
-  const rows = await query("SELECT * FROM state_excise_returns ORDER BY period_start DESC");
+  const tenantId = getCurrentTenantId();
+  const rows = await query("SELECT * FROM state_excise_returns WHERE tenant_id = $1 ORDER BY period_start DESC", [tenantId]);
   return rows.map(mapStateExciseReturn);
 }
 
@@ -3300,11 +3458,13 @@ export async function createStateExciseReturn(data: Record<string, unknown>) {
   const proofGallons = Number(data.totalProofGallons ?? 0);
   const rate = Number(data.ratePerProofGallon ?? 0);
   const totalTax = Math.round(proofGallons * rate * 100) / 100;
+  const tenantId = getCurrentTenantId();
   const rows = await query(
-    `INSERT INTO state_excise_returns (id, state, period_start, period_end, due_date, status, total_proof_gallons, rate_per_proof_gallon, total_tax, filed_at, notes, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+    `INSERT INTO state_excise_returns (id, tenant_id, state, period_start, period_end, due_date, status, total_proof_gallons, rate_per_proof_gallon, total_tax, filed_at, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [
       id,
+      tenantId,
       String(data.state ?? ""),
       String(data.periodStart ?? ""),
       String(data.periodEnd ?? ""),
@@ -3326,6 +3486,7 @@ export async function updateStateExciseReturn(id: string, data: Record<string, u
   const now = new Date().toISOString();
   const proofGallons = data.totalProofGallons != null ? Number(data.totalProofGallons) : null;
   const rate = data.ratePerProofGallon != null ? Number(data.ratePerProofGallon) : null;
+  const tenantId = getCurrentTenantId();
   const rows = await query(
     `UPDATE state_excise_returns SET
        state = COALESCE($2, state),
@@ -3343,7 +3504,7 @@ export async function updateStateExciseReturn(id: string, data: Record<string, u
        filed_at = $9,
        notes = $10,
        updated_at = $11
-     WHERE id = $1 RETURNING *`,
+     WHERE id = $1 AND tenant_id = $12 RETURNING *`,
     [
       id,
       data.state != null ? String(data.state) : null,
@@ -3356,6 +3517,7 @@ export async function updateStateExciseReturn(id: string, data: Record<string, u
       data.filedAt != null && String(data.filedAt).trim() !== "" ? String(data.filedAt) : null,
       data.notes != null && String(data.notes).trim() !== "" ? String(data.notes) : null,
       now,
+      tenantId,
     ],
   );
   if (!rows[0]) throw new Error("State excise return not found");
@@ -3363,7 +3525,8 @@ export async function updateStateExciseReturn(id: string, data: Record<string, u
 }
 
 export async function deleteStateExciseReturn(id: string) {
-  await query("DELETE FROM state_excise_returns WHERE id = $1", [id]);
+  const tenantId = getCurrentTenantId();
+  await query("DELETE FROM state_excise_returns WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
 }
 
 export const storage: IStorage = new PostgresStorage();

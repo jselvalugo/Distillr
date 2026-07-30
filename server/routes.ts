@@ -26,6 +26,14 @@ import {
   deleteStateExciseReturn,
 } from "./storage";
 import { authStorage } from "./auth-storage";
+import {
+  getTenants,
+  getTenantById,
+  createTenant,
+  updateTenant,
+  deleteTenant,
+} from "./tenant-storage";
+import { runWithTenant } from "./tenant-context";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
 import { createCsrfToken, CSRF_HEADER_NAME, isCsrfTokenValid, shouldEnforceCsrf } from "./csrf-protection";
 import { handleAiChat } from "./ai-agent";
@@ -93,7 +101,7 @@ import {
 
 declare module "express-session" {
   interface SessionData {
-    user: SafeUser;
+    user: SafeUser & { tenantId: string };
     csrfToken?: string;
   }
 }
@@ -3889,6 +3897,94 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Protect generated and uploaded artifacts behind authentication.
   app.use("/uploads", express.static("uploads", authenticatedStaticOptions));
   app.use("/exports", express.static("exports", authenticatedStaticOptions));
+
+  // ─── Platform: Tenant Management (super-admin only) ──────────────────────
+  // Requires SUPER_ADMIN_KEY env var to be set and sent as X-Super-Admin-Key header.
+
+  function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+    const key = process.env.SUPER_ADMIN_KEY;
+    if (!key) return res.status(503).json({ error: "Super-admin not configured" });
+    if (req.headers["x-super-admin-key"] !== key) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    next();
+  }
+
+  app.get("/api/platform/tenants", requireSuperAdmin, async (_req, res) => {
+    try {
+      const tenants = await getTenants();
+      res.json(tenants);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/platform/tenants/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const tenant = await getTenantById(req.params.id);
+      if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+      res.json(tenant);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  const createTenantSchema = z.object({
+    name: z.string().trim().min(1),
+    slug: z.string().trim().min(1).regex(/^[a-z0-9-]+$/i, "Slug may only contain letters, numbers, and hyphens"),
+    plan: z.enum(["standard", "pro", "enterprise"]).optional(),
+    adminEmail: z.string().email(),
+    adminPassword: z.string().min(8),
+    adminName: z.string().trim().min(1).optional(),
+  });
+
+  app.post("/api/platform/tenants", requireSuperAdmin, async (req, res) => {
+    try {
+      const data = createTenantSchema.parse(req.body);
+      const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan });
+
+      // Create the initial admin user for the new tenant
+      await runWithTenant(tenant.id, async () => {
+        await authStorage.createUser({
+          email: data.adminEmail,
+          password: data.adminPassword,
+          name: data.adminName || data.adminEmail.split("@")[0],
+          role: "admin",
+          status: "active",
+        });
+      });
+
+      res.status(201).json(tenant);
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/platform/tenants/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        name: z.string().trim().min(1).optional(),
+        slug: z.string().trim().min(1).optional(),
+        plan: z.string().optional(),
+        status: z.enum(["active", "suspended", "cancelled"]).optional(),
+      }).parse(req.body);
+      const tenant = await updateTenant(req.params.id, data);
+      res.json(tenant);
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/platform/tenants/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      await deleteTenant(req.params.id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   return httpServer;
 }

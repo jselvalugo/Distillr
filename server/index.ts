@@ -9,6 +9,7 @@ import { seedAdminUser } from "./seed-admin";
 import { installEgressGuard } from "./egress-guard";
 import { installLocalOnlyAccessPolicy } from "./local-access";
 import { resolveSessionSecret } from "./security-config";
+import { runWithTenant } from "./tenant-context";
 
 const app = express();
 const httpServer = createServer(app);
@@ -80,6 +81,17 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Tenant context middleware — runs after session is established.
+// Wraps the rest of the request chain in the tenant's AsyncLocalStorage context.
+app.use((req, _res, next) => {
+  const tenantId = (req.session as any)?.user?.tenantId as string | undefined;
+  if (tenantId) {
+    runWithTenant(tenantId, () => next()).catch(next);
+  } else {
+    next();
+  }
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -102,7 +114,7 @@ app.use((req, res, next) => {
   }
   await initDatabase();
   if (seedDemoData) {
-    await seedInitialData();
+    await runWithTenant("default", () => seedInitialData());
   } else {
     log("skipping demo data seed (set SEED_DEMO_DATA=true to enable)", "seed");
   }
