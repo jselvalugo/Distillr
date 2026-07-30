@@ -73,9 +73,9 @@ function Check({ featured }: { featured?: boolean }) {
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 const PLANS = [
-  { name: "Starter", price: "$99", per: "/mo", desc: "For small craft producers going digital.", featured: false,
+  { name: "Starter Tier", price: "$99", per: "/mo", desc: "For small craft producers going digital.", featured: false,
     features: ["3 users", "Batch & production tracking", "Up to 50 barrels", "TTB report generation", "Email support"] },
-  { name: "Professional", price: "$299", per: "/mo", desc: "The complete platform for growing distilleries.", featured: true,
+  { name: "Professional Tier", price: "$299", per: "/mo", desc: "The complete platform for growing distilleries.", featured: true,
     features: ["15 users", "Unlimited batches & barrels", "Full TTB compliance engine", "All 50-state excise returns", "COLA & permit management", "AI operations assistant", "Priority support"] },
   { name: "Enterprise", price: "Custom", per: "", desc: "Multi-site operations and high-volume producers.", featured: false,
     features: ["Unlimited users & sites", "Multi-distillery management", "Custom integrations & API", "Dedicated account manager", "On-site onboarding & SLA"] },
@@ -244,13 +244,6 @@ export default function Landing() {
           <Waveform />
         </div>
 
-        {/* Trust strip */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, borderTop: "1px solid rgba(255,255,255,0.06)", padding: "20px 48px", display: "flex", alignItems: "center", justifyContent: "center", gap: 48 }}>
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em", textTransform: "uppercase", marginRight: 12 }}>Trusted by</span>
-          {["TTB Compliant", "PostgreSQL", "TypeScript", "Node.js", "Railway"].map((b) => (
-            <span key={b} style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.22)", letterSpacing: "0.02em" }}>{b}</span>
-          ))}
-        </div>
       </section>
 
       {/* ── FEATURES ─────────────────────────────────────────────────────────── */}
