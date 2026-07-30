@@ -2713,10 +2713,10 @@ export class PostgresStorage implements IStorage {
   }
 
   async getDistilleryControlTowerSummary(reportMonth?: string): Promise<DistilleryControlTowerSummary> {
-    // Source everything from batch records — the single source of truth
-    const [allBatches, allOrders] = await Promise.all([
+    const [allBatches, allOrders, allInventory] = await Promise.all([
       this.getDistillingBatchRecords(),
       this.getSalesOrders(),
+      this.getDistillingInventoryRecords(),
     ]);
     const batches = reportMonth
       ? allBatches.filter(b => b.batchDate.startsWith(reportMonth))
@@ -2748,11 +2748,22 @@ export class PostgresStorage implements IStorage {
       batches.reduce((sum, b) => sum + toFiniteNumber((b as any).totalCases), 0);
     const totalBottles = cases750 * 6 + cases1000 * 6 + cases1750 * 6;
 
-    // Sales orders
+    // Distributor / retail split — pulled from inventory records (most accurate source)
+    const invFiltered = reportMonth
+      ? allInventory.filter(r => r.reportMonth?.startsWith(reportMonth))
+      : allInventory;
+    const distCasesFromInv = invFiltered.reduce((sum, r) => sum + sumNumericRecord(r.casesToDistributors), 0);
+    const retailCasesFromInv = invFiltered.reduce((sum, r) => sum + sumNumericRecord(r.casesToRetail), 0);
+
+    // Sales orders (fallback for distributor cases if inventory records have no split data)
     const fulfilledOrders = salesOrders.filter(o => ["Approved", "Fulfilled"].includes(o.status));
     const lineItemCases = (order: typeof salesOrders[0]) =>
       (order.lineItems ?? []).reduce((s: number, li: any) => s + toFiniteNumber(li.quantity), 0);
-    const distCases = fulfilledOrders.reduce((sum, o) => sum + lineItemCases(o), 0);
+    const distCasesFromOrders = fulfilledOrders.reduce((sum, o) => sum + lineItemCases(o), 0);
+
+    const finalDistCases = distCasesFromInv || distCasesFromOrders;
+    const finalRetailCases = retailCasesFromInv;
+    const finalTotalSold = finalDistCases + finalRetailCases || distCasesFromOrders;
 
     return {
       asOf: new Date().toISOString(),
@@ -2768,9 +2779,9 @@ export class PostgresStorage implements IStorage {
         bottlesMade: totalBottles,
       },
       sold: {
-        distributorCases: distCases,
-        retailCases: 0,
-        totalCases: distCases,
+        distributorCases: finalDistCases,
+        retailCases: finalRetailCases,
+        totalCases: finalTotalSold,
         salesOrdersApprovedOrFulfilled: fulfilledOrders.length,
       },
       inventory: {
