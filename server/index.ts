@@ -144,5 +144,6 @@ app.use((req, res, next) => {
     const accessLabel = allowRemote ? "network-accessible" : "loopback-only";
     const egressLabel = localOnlyMode ? "egress-guard on" : "egress-guard off";
     log(`serving on ${host}:${port} (${accessLabel}, ${egressLabel})`);
+    log(`[admin] credentials configured: ${!!(process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD)}`);
   });
 })();
