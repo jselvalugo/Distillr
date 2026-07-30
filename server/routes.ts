@@ -4071,11 +4071,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (email !== adminEmail || password !== adminPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      await regenerateSession(req);
       req.session.isSuperAdmin = true;
-      res.json({ ok: true });
+      return res.json({ ok: true });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
     }
   });
 

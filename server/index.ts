@@ -1,10 +1,9 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
-import { initDatabase, pool } from "./db";
+import { initDatabase } from "./db";
 import { seedInitialData } from "./seed-data";
 import { seedAdminUser } from "./seed-admin";
 import { installEgressGuard } from "./egress-guard";
@@ -57,14 +56,8 @@ app.use(
 );
 app.use(express.urlencoded({ extended: false }));
 
-const PgSession = connectPgSimple(session);
 app.use(
   session({
-    store: new PgSession({
-      pool,
-      tableName: "sessions",
-      createTableIfMissing: true,
-    }),
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -73,7 +66,7 @@ app.use(
       secure: isProduction,
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24,
     },
   }),
 );

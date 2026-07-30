@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const CSRF_EXEMPT_PATHS = new Set(["/api/auth/login"]);
+const CSRF_EXEMPT_PATHS = new Set(["/api/auth/login", "/api/admin/login", "/api/auth/signup"]);
 
 export const CSRF_HEADER_NAME = "x-csrf-token";
 
