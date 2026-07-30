@@ -65,12 +65,30 @@ export async function initDatabase(): Promise<void> {
       plan TEXT NOT NULL DEFAULT 'standard',
       status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
+    )
+  `);
 
+  await query(`
     INSERT INTO tenants (id, name, slug, plan, status)
     VALUES ('default', 'Default', 'default', 'standard', 'active')
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT (id) DO NOTHING
+  `);
 
+  // Repair: ensure every tenant_id in users has a matching tenants row
+  await query(`
+    INSERT INTO tenants (id, name, slug, plan, status)
+    SELECT DISTINCT ON (tenant_id)
+      tenant_id,
+      tenant_id,
+      tenant_id,
+      'standard',
+      'active'
+    FROM users
+    WHERE tenant_id NOT IN (SELECT id FROM tenants)
+    ON CONFLICT (id) DO NOTHING
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL DEFAULT 'default',
