@@ -1,623 +1,497 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 
-// ─── Animated particle background ────────────────────────────────────────────
-function AnimatedBackground() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    let animId: number;
-    let w = 0, h = 0;
-    const particles: { x: number; y: number; vx: number; vy: number; r: number; alpha: number }[] = [];
-    function resize() { w = canvas!.width = canvas!.offsetWidth; h = canvas!.height = canvas!.offsetHeight; }
-    function init() {
-      resize(); particles.length = 0;
-      const count = Math.floor((w * h) / 12000);
-      for (let i = 0; i < count; i++) particles.push({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.25, vy: (Math.random() - 0.5) * 0.25, r: Math.random() * 1.5 + 0.4, alpha: Math.random() * 0.35 + 0.08 });
-    }
-    function draw() {
-      ctx!.clearRect(0, 0, w, h);
-      for (let i = 0; i < particles.length; i++) for (let j = i + 1; j < particles.length; j++) {
-        const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y, dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 130) { ctx!.beginPath(); ctx!.strokeStyle = `rgba(255,255,255,${0.1 * (1 - dist / 130)})`; ctx!.lineWidth = 0.5; ctx!.moveTo(particles[i].x, particles[i].y); ctx!.lineTo(particles[j].x, particles[j].y); ctx!.stroke(); }
-      }
-      for (const p of particles) {
-        p.x += p.vx; p.y += p.vy;
-        if (p.x < 0) p.x = w; if (p.x > w) p.x = 0; if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
-        ctx!.beginPath(); ctx!.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx!.fillStyle = `rgba(255,255,255,${p.alpha})`; ctx!.fill();
-      }
-      animId = requestAnimationFrame(draw);
-    }
-    init(); draw();
-    const ro = new ResizeObserver(init); ro.observe(canvas);
-    return () => { cancelAnimationFrame(animId); ro.disconnect(); };
-  }, []);
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ display: "block" }} />;
-}
+// ─── Colours & tokens ─────────────────────────────────────────────────────────
+const GOLD = "#c9952a";
+const GOLD_DIM = "rgba(201,149,42,0.18)";
+const GOLD_BORDER = "rgba(201,149,42,0.3)";
+const TEXT = "#f5f0e8";
+const TEXT_DIM = "rgba(245,240,232,0.45)";
+const TEXT_FAINT = "rgba(245,240,232,0.22)";
+const CARD = "rgba(255,255,255,0.04)";
+const CARD_BORDER = "rgba(255,255,255,0.08)";
 
 // ─── Logo ─────────────────────────────────────────────────────────────────────
-function Logo({ size = "md" }: { size?: "sm" | "md" }) {
-  const iconSize = size === "sm" ? 26 : 32;
-  const fontSize = size === "sm" ? "1rem" : "1.125rem";
+function Logo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="rounded-md flex items-center justify-center flex-shrink-0" style={{ width: iconSize, height: iconSize, background: "linear-gradient(135deg, #2a2a2a, #000)" }}>
-        <svg width={iconSize * 0.5} height={iconSize * 0.5} viewBox="0 0 16 16" fill="none">
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 30, height: 30, borderRadius: 7, background: "linear-gradient(135deg,#2a2a2a,#000)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
           <path d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
           <path d="M8 6V10M6 8H10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </div>
-      <span className="font-bold tracking-tight" style={{ color: "#fff", fontSize }}> Distillr</span>
+      <span style={{ fontWeight: 700, fontSize: 17, color: "#fff", letterSpacing: "-0.02em" }}>Distillr</span>
     </div>
   );
 }
 
-// ─── Fake product UI mockups ──────────────────────────────────────────────────
-function MockupTTB() {
+// ─── Faithful recreation of the actual Distillr dashboard ─────────────────────
+function ProductMockup() {
+  const metricCards = [
+    { label: "ACTIVE BATCHES", value: "12", sub: "in pipeline", accent: true,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+    { label: "PROOF GALLONS", value: "4,821", sub: "produced",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(99,179,237,0.8)" strokeWidth="1.5"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg> },
+    { label: "CASES BOTTLED", value: "386", sub: "this period",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(104,211,145,0.8)" strokeWidth="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg> },
+    { label: "CASES SOLD", value: "214", sub: "fulfilled",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(196,181,253,0.8)" strokeWidth="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg> },
+  ];
+
+  const prodCards = [
+    { label: "GALLONS DISTILLED", value: "2,104", sub: "US gallons" },
+    { label: "PROOF GALLONS", value: "4,821", sub: "at proof" },
+    { label: "TOTAL BATCHES", value: "47", sub: "all batches" },
+    { label: "SCHEDULED BATCHES", value: "6", sub: "in planning" },
+  ];
+
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
-      <div className="px-4 py-3 flex items-center gap-2" style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: "#ff5f57" }} />
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: "#febc2e" }} />
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: "#28c840" }} />
-        <span className="ml-3 text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>TTB Report — July 2025</span>
-      </div>
-      <div className="p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Form 5110.40 · Monthly</span>
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(40,200,64,0.15)", color: "#28c840", border: "1px solid rgba(40,200,64,0.25)" }}>Auto-Generated</span>
+    <div style={{ borderRadius: 14, overflow: "hidden", boxShadow: "0 48px 120px rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.1)", maxWidth: 900, margin: "0 auto" }}>
+      {/* Browser chrome */}
+      <div style={{ background: "#1c1c1e", padding: "9px 14px", display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
+        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
+        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
+        <div style={{ margin: "0 auto", background: "rgba(255,255,255,0.07)", borderRadius: 5, padding: "2px 14px", fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.01em" }}>
+          app.distillr.io
         </div>
-        {[
-          { label: "Total Proof Gallons Produced", val: "4,821.3" },
-          { label: "On-Premises Use", val: "286.5" },
-          { label: "Tax-Determined (Bottled)", val: "3,102.7" },
-          { label: "Excise Tax Due", val: "$18,616.20" },
-        ].map((r) => (
-          <div key={r.label} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{r.label}</span>
-            <span className="text-xs font-semibold" style={{ color: "#f5f0e8" }}>{r.val}</span>
-          </div>
-        ))}
-        <button className="w-full mt-2 py-2 rounded-lg text-xs font-semibold" style={{ background: "rgba(200,136,42,0.2)", color: "#c9952a", border: "1px solid rgba(200,136,42,0.3)" }}>
-          Export to TTB PONL System →
-        </button>
       </div>
-    </div>
-  );
-}
 
-function MockupBatch() {
-  const stages = ["Mash", "Ferment", "Distill", "Proof", "Age", "Filter", "Bottle"];
-  const active = 4;
-  return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
-      <div className="px-4 py-3 flex items-center justify-between" style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <span className="text-xs font-semibold" style={{ color: "#f5f0e8" }}>Batch #WH-2025-047 · Wheat Whiskey</span>
-        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.25)" }}>In Progress</span>
+      {/* App top-bar */}
+      <div style={{ background: "#0a0a0a", padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 22, height: 22, borderRadius: 5, background: "linear-gradient(135deg,#2a2a2a,#111)", border: "1px solid rgba(201,149,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z" stroke={GOLD} strokeWidth="1.5" strokeLinejoin="round" fill="none" /></svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>Lugo's Craft Distillery</div>
+            <div style={{ fontSize: 8, color: "rgba(255,255,255,0.28)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Powered by Distillr — A Loogo Labs Software</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: "#fff" }}>CL</div>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>Christian Lugo</span>
+        </div>
       </div>
-      <div className="p-5">
-        <div className="flex items-center gap-1 mb-5">
-          {stages.map((s, i) => (
-            <div key={s} className="flex items-center gap-1 flex-1">
-              <div className="flex flex-col items-center gap-1 flex-1">
-                <div className="w-full h-1 rounded-full" style={{ background: i < active ? "#c9952a" : i === active ? "rgba(200,136,42,0.5)" : "rgba(255,255,255,0.08)" }} />
-                <span style={{ fontSize: 9, color: i <= active ? "rgba(200,136,42,0.9)" : "rgba(255,255,255,0.25)" }}>{s}</span>
+
+      {/* Dark hero section */}
+      <div style={{ background: "#0e0e0e", padding: "20px 22px 22px" }}>
+        <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 6 }}>July 2026</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", marginBottom: 3, letterSpacing: "-0.02em" }}>Operations Overview</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>Live distillery metrics — batch pipeline, production & compliance</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+          {metricCards.map((c) => (
+            <div key={c.label} style={{ background: "#1a1a1a", borderRadius: 8, padding: "12px 14px", border: c.accent ? `1px solid ${GOLD_BORDER}` : "1px solid rgba(255,255,255,0.07)", position: "relative", overflow: "hidden" }}>
+              {c.accent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${GOLD},transparent)` }} />}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.35)", textTransform: "uppercase" }}>{c.label}</span>
+                {c.icon}
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", lineHeight: 1, marginBottom: 4 }}>{c.value}</div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{c.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Light section */}
+      <div style={{ background: "#f5f5f4", padding: "16px 22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", color: "#333", textTransform: "uppercase" }}>Batch Pipeline</span>
+            <div style={{ height: 1, width: 40, background: "rgba(0,0,0,0.12)" }} />
+          </div>
+          <span style={{ fontSize: 9, color: "#888" }}>View all →</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+          {prodCards.map((c) => (
+            <div key={c.label} style={{ background: "#fff", borderRadius: 8, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,0.05)", border: "2px solid rgba(0,0,0,0.08)", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#111", lineHeight: 1 }}>{c.value}</div>
+                <div style={{ fontSize: 8, color: "#999", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.08em" }}>{c.sub}</div>
               </div>
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {[
-            { label: "Proof Gallons", val: "312.8" },
-            { label: "Still ABV", val: "71.4%" },
-            { label: "Mash Date", val: "Jul 12" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-lg p-3 text-center" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-sm font-bold" style={{ color: "#f5f0e8" }}>{s.val}</p>
-              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.label}</p>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-lg p-3" style={{ background: "rgba(200,136,42,0.06)", border: "1px solid rgba(200,136,42,0.15)" }}>
-          <p style={{ fontSize: 10, color: "rgba(200,136,42,0.85)" }}>⚡ Stage transition logged to TTB · 14 barrels allocated</p>
-        </div>
       </div>
     </div>
   );
 }
 
-function MockupBarrel() {
+// ─── Glassmorphism floating stat ──────────────────────────────────────────────
+function FloatCard({ style, label, value, trend }: { style?: React.CSSProperties; label: string; value: string; trend?: string }) {
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#0f0f0f", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)" }}>
-      <div className="px-4 py-3 flex items-center justify-between" style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <span className="text-xs font-semibold" style={{ color: "#f5f0e8" }}>Barrel #B-0441 · Bonded Warehouse A</span>
-        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,136,42,0.15)", color: "#c9952a", border: "1px solid rgba(200,136,42,0.25)" }}>Aging · 847 days</span>
-      </div>
-      <div className="p-5 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: "Fill Proof Gallons", val: "53.2" },
-            { label: "Current Est.", val: "49.8 PG" },
-            { label: "Angel's Share", val: "6.4%" },
-            { label: "Est. Dump Date", val: "Mar 2026" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <p className="text-sm font-bold" style={{ color: "#f5f0e8" }}>{s.val}</p>
-              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.label}</p>
-            </div>
-          ))}
-        </div>
-        <div>
-          <div className="flex justify-between mb-1.5">
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>Proof gallon retention</span>
-            <span style={{ fontSize: 10, color: "#c9952a" }}>93.6%</span>
-          </div>
-          <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
-            <div className="h-1.5 rounded-full" style={{ width: "93.6%", background: "linear-gradient(90deg, #c9952a, #e8b86d)" }} />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          {["Color: Deep amber, hints of caramel", "Nose: Vanilla, oak, light spice", "Sample: 62.5% — target 62.0%"].map((n) => (
-            <p key={n} style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>• {n}</p>
-          ))}
-        </div>
-      </div>
+    <div style={{
+      position: "absolute", backdropFilter: "blur(16px)",
+      background: "rgba(18,16,14,0.75)", border: "1px solid rgba(201,149,42,0.22)",
+      borderRadius: 12, padding: "12px 16px", minWidth: 150,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.4)", ...style,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", lineHeight: 1, marginBottom: trend ? 4 : 0 }}>{value}</div>
+      {trend && <div style={{ fontSize: 9, color: GOLD }}>{trend}</div>}
     </div>
   );
 }
 
-// ─── Check icon ───────────────────────────────────────────────────────────────
+// ─── Check mark ───────────────────────────────────────────────────────────────
 function Check() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="8" cy="8" r="7" fill="rgba(200,136,42,0.15)" stroke="rgba(200,136,42,0.4)" strokeWidth="1" />
-      <path d="M5 8l2 2 4-4" stroke="#c9952a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="7.5" cy="7.5" r="6.5" fill={GOLD_DIM} stroke={GOLD_BORDER} strokeWidth="1" />
+      <path d="M4.5 7.5l2 2 4-4" stroke={GOLD} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// ─── Section label ────────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <p className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: "rgba(200,136,42,0.9)" }}>
-      {children}
-    </p>
-  );
-}
-
-// ─── Pricing plans ────────────────────────────────────────────────────────────
+// ─── Plans ────────────────────────────────────────────────────────────────────
 const PLANS = [
   {
-    name: "Starter",
-    price: "$149",
-    period: "/mo",
-    desc: "Perfect for small craft distilleries getting started with digital operations.",
-    highlight: false,
-    features: [
-      "Up to 3 users",
-      "Batch & production tracking",
-      "Barrel management (up to 50 barrels)",
-      "Basic inventory tracking",
-      "TTB report generation",
-      "Email support",
-    ],
+    name: "Starter", price: "$149", per: "/mo",
+    desc: "For small craft producers getting their operations digital.",
+    cta: "Start Free Trial", highlight: false,
+    features: ["3 users", "Batch & production tracking", "Up to 50 barrels", "Basic inventory", "TTB report generation", "Email support"],
   },
   {
-    name: "Professional",
-    price: "$349",
-    period: "/mo",
-    desc: "The full platform for growing distilleries that need compliance automation and team tools.",
-    highlight: true,
-    features: [
-      "Up to 15 users",
-      "Unlimited batch & barrel tracking",
-      "Full TTB compliance engine",
-      "State excise returns (all 50 states)",
-      "COLA & permit management",
-      "Sales order & client management",
-      "Floor plan & equipment tracking",
-      "AI operations assistant",
-      "Priority support",
-    ],
+    name: "Professional", price: "$349", per: "/mo",
+    desc: "The complete platform for growing distilleries.",
+    cta: "Start Free Trial", highlight: true,
+    features: ["15 users", "Unlimited batches & barrels", "Full TTB compliance engine", "All 50-state excise returns", "COLA & permit management", "Sales order management", "Floor plan & equipment", "AI operations assistant", "Priority support"],
   },
   {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    desc: "For multi-site operations, contract distillers, and high-volume producers.",
-    highlight: false,
-    features: [
-      "Unlimited users & sites",
-      "Multi-distillery management",
-      "Custom integrations & API access",
-      "White-label options",
-      "Dedicated account manager",
-      "SLA & uptime guarantees",
-      "On-site onboarding & training",
-    ],
+    name: "Enterprise", price: "Custom", per: "",
+    desc: "Multi-site operations, contract distillers, high-volume producers.",
+    cta: "Contact Sales", highlight: false,
+    features: ["Unlimited users & sites", "Multi-distillery management", "Custom integrations & API", "White-label options", "Dedicated account manager", "SLA & uptime guarantees", "On-site onboarding"],
   },
-];
-
-const FEATURES_GRID = [
-  { icon: "🥃", title: "Batch Production", desc: "7-stage workflow from mash to bottling with proof gallon tracking, still logs, and automatic TTB operation categorization at every stage." },
-  { icon: "📋", title: "TTB Compliance Engine", desc: "Auto-generate Forms 5110.40 and 5000.24 directly from live production data. Export to the TTB PONL filing system in one click." },
-  { icon: "🛢️", title: "Barrel Intelligence", desc: "Track every barrel from fill to dump. Monitor angel's share, proof gallon retention, aging milestones, and warehouse zone locations." },
-  { icon: "📑", title: "Regulatory Automation", desc: "Manage COLA registrations, state excise returns, federal permits, and label records — with expiration alerts so nothing slips through." },
-  { icon: "📦", title: "Inventory Management", desc: "Real-time lot tracking with movement history, TTB operation categories, proof gallon accounting, and multi-location support." },
-  { icon: "💼", title: "Sales & Distribution", desc: "Manage client accounts, sales orders, line items, and fulfillment tracking from the same platform as your production data." },
-  { icon: "👥", title: "Team & Staff", desc: "Role-based access for admins, distillers, and staff. Assign crew to jobs, track shifts, and manage permissions with granularity." },
-  { icon: "📊", title: "Reports & Analytics", desc: "Month-over-month production trends, excise tax summaries, barrel aging curves, inventory valuations, and exportable TTB data." },
-  { icon: "🤖", title: "AI Assistant", desc: "Ask questions about your operation in plain English. Get instant answers about batch status, barrel inventory, compliance deadlines, and more." },
 ];
 
 const FAQS = [
-  { q: "How does Distillr handle TTB compliance?", a: "Every production action you log — mash, distillation, proofing, bottling — is automatically categorized using TTB operation codes. When it's time to file, your Forms 5110.40 and 5000.24 are pre-populated from your actual data. No manual data entry, no spreadsheet math." },
-  { q: "Can I migrate my existing data?", a: "Yes. We support CSV import for batches, barrels, and inventory. Most distilleries are fully migrated within a day. Our onboarding team can assist with more complex migrations on Professional and Enterprise plans." },
-  { q: "Is my data secure?", a: "All data is encrypted in transit and at rest. Your distillery data is fully isolated — no other tenant can access it. We use SOC 2-compliant infrastructure hosted on Supabase with daily backups." },
-  { q: "Do I need to sign a long-term contract?", a: "No. All plans are month-to-month with no lock-in. You can upgrade, downgrade, or cancel at any time. Annual billing is available at a 20% discount." },
-  { q: "What states are covered for excise returns?", a: "All 50 states plus the District of Columbia. State excise return rates are maintained by our team and updated whenever states adjust their rates." },
+  { q: "How does Distillr handle TTB compliance?", a: "Every production action — mash, distillation, proofing, bottling — is automatically tagged with TTB operation codes. When filing time comes, Forms 5110.40 and 5000.24 are pre-populated from your actual batch data. No manual entry, no spreadsheet math." },
+  { q: "Can I import my existing records?", a: "Yes. We support CSV import for batches, barrels, and inventory. Most distilleries migrate in a day. Professional and Enterprise plans include hands-on onboarding support." },
+  { q: "How is my data secured?", a: "All data is encrypted in transit and at rest. Every distillery's data is fully isolated — no cross-tenant access. We run on SOC 2-compliant infrastructure with daily backups." },
+  { q: "Is there a long-term contract?", a: "No. All plans are month-to-month with no lock-in. Annual billing is available at 20% off. Cancel anytime." },
+  { q: "Which states are covered for excise returns?", a: "All 50 states plus DC. State excise rates are maintained by our team and updated whenever states revise them." },
 ];
 
-// ─── Main Landing Page ────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Landing() {
   const [, navigate] = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  // Track scroll for nav
+  if (typeof window !== "undefined") {
+    const handler = () => setScrolled(window.scrollY > 30);
+    if (!scrolled) window.addEventListener("scroll", handler, { once: false, passive: true });
+  }
 
-  const navBtn = (label: string, path: string, primary = false) => (
-    <button
-      onClick={() => navigate(path)}
-      className="text-sm font-medium transition-all duration-200"
-      style={primary
-        ? { background: "#fff", color: "#0a0a0a", padding: "8px 20px", borderRadius: 8, fontWeight: 600, boxShadow: "0 0 20px rgba(255,255,255,0.12)" }
-        : { color: "rgba(245,240,232,0.6)", background: "none", border: "none", cursor: "pointer" }}
-      onMouseEnter={(e) => { if (!primary) e.currentTarget.style.color = "#f5f0e8"; else e.currentTarget.style.boxShadow = "0 0 32px rgba(255,255,255,0.25)"; }}
-      onMouseLeave={(e) => { if (!primary) e.currentTarget.style.color = "rgba(245,240,232,0.6)"; else e.currentTarget.style.boxShadow = "0 0 20px rgba(255,255,255,0.12)"; }}
-    >
+  const Btn = ({ label, onClick, primary }: { label: string; onClick: () => void; primary?: boolean }) => (
+    <button onClick={onClick} style={primary ? {
+      background: "#fff", color: "#0a0a0a", fontWeight: 700, fontSize: 14,
+      padding: "12px 28px", borderRadius: 9, border: "none", cursor: "pointer",
+      boxShadow: "0 0 32px rgba(255,255,255,0.15)", transition: "box-shadow 0.2s",
+    } : {
+      background: "transparent", color: TEXT, fontWeight: 500, fontSize: 14,
+      padding: "12px 24px", borderRadius: 9, border: `1px solid ${CARD_BORDER}`, cursor: "pointer",
+      transition: "border-color 0.2s, background 0.2s",
+    }}
+      onMouseEnter={(e) => { if (primary) e.currentTarget.style.boxShadow = "0 0 48px rgba(255,255,255,0.28)"; else { e.currentTarget.style.background = CARD; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; } }}
+      onMouseLeave={(e) => { if (primary) e.currentTarget.style.boxShadow = "0 0 32px rgba(255,255,255,0.15)"; else { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = CARD_BORDER; } }}>
       {label}
     </button>
   );
 
   return (
-    <div style={{ background: "#080808", color: "#f5f0e8", minHeight: "100vh", overflowX: "hidden" }}>
+    <div style={{ background: "#0a0a0a", color: TEXT, minHeight: "100vh", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", overflowX: "hidden" }}>
 
-      {/* ── Nav ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 transition-all duration-300"
-        style={{ background: scrolled ? "rgba(8,8,8,0.98)" : "rgba(8,8,8,0.7)", backdropFilter: "blur(16px)", borderBottom: scrolled ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent" }}>
-        <button onClick={() => navigate("/")} className="focus:outline-none">
+      {/* ── NAV ─────────────────────────────────────────────────────────────── */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 40px", height: 64,
+        background: scrolled ? "rgba(10,10,10,0.95)" : "rgba(10,10,10,0.6)",
+        backdropFilter: "blur(20px)",
+        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.07)" : "1px solid transparent",
+        transition: "background 0.3s, border-color 0.3s",
+      }}>
+        <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <Logo />
         </button>
-        <div className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-sm transition-colors duration-200" style={{ color: "rgba(245,240,232,0.55)", textDecoration: "none" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f0e8")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.55)")}>Features</a>
-          <a href="#pricing" className="text-sm transition-colors duration-200" style={{ color: "rgba(245,240,232,0.55)", textDecoration: "none" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f0e8")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.55)")}>Pricing</a>
-          <a href="#faq" className="text-sm transition-colors duration-200" style={{ color: "rgba(245,240,232,0.55)", textDecoration: "none" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f0e8")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.55)")}>FAQ</a>
+        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+          {[{ label: "Features", id: "features" }, { label: "Pricing", id: "pricing" }, { label: "FAQ", id: "faq" }].map((l) => (
+            <a key={l.id} href={`#${l.id}`} style={{ fontSize: 13, color: TEXT_DIM, textDecoration: "none", transition: "color 0.2s" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)} onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}>
+              {l.label}
+            </a>
+          ))}
         </div>
-        <div className="flex items-center gap-4">
-          {navBtn("Sign in", "/login")}
-          {navBtn("Get Started Free", "/signup", true)}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: TEXT_DIM, padding: "8px 14px", borderRadius: 7, transition: "color 0.2s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)} onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}>
+            Sign in
+          </button>
+          <button onClick={() => navigate("/signup")} style={{ background: "#fff", color: "#0a0a0a", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: "8px 18px", borderRadius: 7, boxShadow: "0 0 18px rgba(255,255,255,0.1)", transition: "box-shadow 0.2s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 0 28px rgba(255,255,255,0.22)")} onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 0 18px rgba(255,255,255,0.1)")}>
+            Get Started Free
+          </button>
         </div>
       </nav>
 
-      {/* ── Hero ── */}
-      <section className="relative flex flex-col items-center justify-center overflow-hidden text-center" style={{ minHeight: "100vh", paddingTop: 80 }}>
-        <AnimatedBackground />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(8,8,8,0.72) 0%, rgba(8,8,8,0.52) 40%, rgba(8,8,8,0.92) 100%)" }} />
-        <div className="absolute" style={{ width: 800, height: 800, top: "0%", left: "50%", transform: "translateX(-50%)", background: "radial-gradient(circle, rgba(200,136,42,0.06) 0%, transparent 65%)", borderRadius: "50%", filter: "blur(60px)" }} />
+      {/* ── HERO ────────────────────────────────────────────────────────────── */}
+      <section style={{ paddingTop: 140, paddingBottom: 0, position: "relative", textAlign: "center", overflow: "hidden" }}>
 
-        <div className="relative z-10 px-6 py-20 max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8 text-xs font-medium tracking-widest uppercase"
-            style={{ background: "rgba(200,136,42,0.1)", color: "#c9952a", border: "1px solid rgba(200,136,42,0.25)" }}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse inline-block" style={{ background: "#c9952a" }} />
-            Built for Craft Distilleries
+        {/* Subtle dot-grid texture */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0)`, backgroundSize: "36px 36px", pointerEvents: "none" }} />
+
+        {/* Gold glow */}
+        <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 700, height: 400, background: `radial-gradient(ellipse, ${GOLD_DIM} 0%, transparent 70%)`, filter: "blur(60px)", pointerEvents: "none" }} />
+
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 760, margin: "0 auto", padding: "0 24px" }}>
+          {/* Pill badge */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: GOLD_DIM, border: `1px solid ${GOLD_BORDER}`, borderRadius: 100, padding: "5px 14px", marginBottom: 28 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: GOLD, display: "inline-block" }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: GOLD, letterSpacing: "0.08em", textTransform: "uppercase" }}>Distillery Operations Platform</span>
           </div>
 
-          <h1 className="font-bold leading-none mb-6" style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)", letterSpacing: "-0.03em", color: "#f5f0e8" }}>
+          <h1 style={{ fontSize: "clamp(2.6rem,5.5vw,4.4rem)", fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.08, color: "#fff", margin: "0 0 22px" }}>
             Run your distillery<br />
-            <span style={{ background: "linear-gradient(90deg, #c9952a 0%, #f0c878 40%, #c9952a 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+            <span style={{ background: `linear-gradient(90deg, ${GOLD} 0%, #f0c878 45%, ${GOLD} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
               like a modern operation.
             </span>
           </h1>
 
-          <p className="text-lg md:text-xl leading-relaxed max-w-2xl mx-auto mb-10" style={{ color: "rgba(245,240,232,0.55)" }}>
-            Distillr is the all-in-one ERP platform for craft distilleries — TTB compliance, batch intelligence, barrel tracking, and regulatory automation in a single system built for how you actually work.
+          <p style={{ fontSize: 17, lineHeight: 1.65, color: TEXT_DIM, maxWidth: 580, margin: "0 auto 36px" }}>
+            Distillr is the all-in-one ERP for craft distilleries — TTB compliance, batch intelligence, barrel tracking, and regulatory automation built for how you actually work.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <button onClick={() => navigate("/signup")} className="px-8 py-4 rounded-xl text-base font-bold transition-all duration-200"
-              style={{ background: "#fff", color: "#0a0a0a", boxShadow: "0 0 40px rgba(255,255,255,0.18)", minWidth: 200 }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 0 60px rgba(255,255,255,0.3)")}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 0 40px rgba(255,255,255,0.18)")}>
-              Start Free Trial
-            </button>
-            <button onClick={() => navigate("/login")} className="px-8 py-4 rounded-xl text-base font-semibold transition-all duration-200"
-              style={{ background: "rgba(255,255,255,0.05)", color: "#f5f0e8", border: "1px solid rgba(255,255,255,0.12)", minWidth: 200 }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.09)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; }}>
-              Sign in to your account
-            </button>
+          <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+            <Btn label="Start Free Trial" onClick={() => navigate("/signup")} primary />
+            <Btn label="Sign in to your account" onClick={() => navigate("/login")} />
+          </div>
+          <p style={{ fontSize: 11, color: TEXT_FAINT, marginBottom: 64 }}>No credit card required · Setup in under 5 minutes · Cancel anytime</p>
+        </div>
+
+        {/* Product mockup with floating cards */}
+        <div style={{ position: "relative", maxWidth: 1000, margin: "0 auto", padding: "0 24px 0" }}>
+          {/* Floating cards */}
+          <FloatCard label="Proof Gallons Produced" value="4,821" trend="↑ 18% vs last month" style={{ top: 40, left: -10, zIndex: 10 }} />
+          <FloatCard label="TTB Filing" value="On Track" trend="Form 5110.40 ready" style={{ top: 50, right: -10, zIndex: 10 }} />
+          <FloatCard label="Active Barrels" value="147" trend="23 due for dump" style={{ bottom: 100, left: 20, zIndex: 10 }} />
+          <FloatCard label="Compliance Score" value="100%" style={{ bottom: 110, right: 20, zIndex: 10 }} />
+
+          {/* Dashboard */}
+          <div style={{ position: "relative", zIndex: 5 }}>
+            <ProductMockup />
           </div>
 
-          <p className="text-xs mb-10" style={{ color: "rgba(245,240,232,0.3)" }}>No credit card required · Setup in under 5 minutes · Cancel anytime</p>
-
-          {/* Stats strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl overflow-hidden mx-auto max-w-3xl" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-            {[
-              { val: "7-Stage", label: "Production Workflow" },
-              { val: "TTB Ready", label: "Forms 5110.40 + 5000.24" },
-              { val: "50 States", label: "Excise Return Coverage" },
-              { val: "Real-Time", label: "Proof Gallon Tracking" },
-            ].map((s, i, arr) => (
-              <div key={s.val} className="flex flex-col items-center py-5 px-4"
-                style={{ background: "rgba(255,255,255,0.03)", borderRight: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
-                <p className="text-sm font-bold mb-0.5" style={{ color: "#fff" }}>{s.val}</p>
-                <p className="text-[10px] text-center" style={{ color: "rgba(245,240,232,0.38)" }}>{s.label}</p>
-              </div>
-            ))}
-          </div>
+          {/* Fade-out at bottom */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 160, background: "linear-gradient(transparent, #0a0a0a)", pointerEvents: "none", zIndex: 20 }} />
         </div>
       </section>
 
-      {/* ── Proof bar ── */}
-      <div className="py-8 px-6" style={{ background: "rgba(200,136,42,0.04)", borderTop: "1px solid rgba(200,136,42,0.12)", borderBottom: "1px solid rgba(200,136,42,0.12)" }}>
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
-          {["TTB PONL Compatible", "All 50 State Excise Returns", "COLA & Label Management", "Supabase-Backed Data Security", "Real-Time Proof Gallon Accounting", "Role-Based Team Access"].map((t) => (
-            <div key={t} className="flex items-center gap-2">
+      {/* ── PROOF BAR ───────────────────────────────────────────────────────── */}
+      <div style={{ background: "rgba(201,149,42,0.04)", borderTop: `1px solid ${GOLD_BORDER}`, borderBottom: `1px solid ${GOLD_BORDER}`, padding: "20px 40px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "16px 40px" }}>
+          {["TTB PONL Compatible", "All 50-State Excise Returns", "COLA & Label Management", "Role-Based Team Access", "Real-Time Proof Gallon Accounting", "Audit-Ready Record Retention"].map((t) => (
+            <div key={t} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Check />
-              <span className="text-xs font-medium" style={{ color: "rgba(245,240,232,0.55)" }}>{t}</span>
+              <span style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500 }}>{t}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Feature Showcase 1: TTB Compliance ── */}
-      <section className="py-28 px-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
-          <div>
-            <SectionLabel>TTB Compliance Engine</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ color: "#f5f0e8", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-              Stop filing by hand.<br />
-              <span style={{ color: "rgba(245,240,232,0.45)" }}>Your data already knows the numbers.</span>
-            </h2>
-            <p className="text-base leading-relaxed mb-8" style={{ color: "rgba(245,240,232,0.5)" }}>
-              Every mash, distillation, proofing, and bottling operation you log is automatically tagged with TTB operation categories. When reporting time comes, your forms are already filled — pulled directly from the production records you've been keeping all month.
-            </p>
-            <div className="space-y-3 mb-10">
-              {[
-                "Auto-generates Forms 5110.40 and 5000.24 from live batch data",
-                "One-click export to the TTB PONL filing system",
-                "Excise tax calculation with CBMA small producer credits",
-                "Federal bonded warehouse balance tracking",
-                "Audit-ready records retained for 3+ years",
-              ].map((f) => (
-                <div key={f} className="flex items-start gap-3">
-                  <Check />
-                  <span className="text-sm" style={{ color: "rgba(245,240,232,0.65)" }}>{f}</span>
-                </div>
-              ))}
+      {/* ── FEATURES ────────────────────────────────────────────────────────── */}
+      <section id="features" style={{ padding: "120px 40px", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+
+          {/* Section header */}
+          <div style={{ marginBottom: 70 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 14 }}>Complete Platform</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 20 }}>
+              <h2 style={{ fontSize: "clamp(2rem,3.5vw,3rem)", fontWeight: 800, letterSpacing: "-0.025em", color: "#fff", lineHeight: 1.1, margin: 0, maxWidth: 500 }}>
+                Everything you need.<br /><span style={{ color: TEXT_DIM }}>Nothing you don't.</span>
+              </h2>
+              <p style={{ fontSize: 14, color: TEXT_DIM, maxWidth: 380, lineHeight: 1.7, margin: 0 }}>
+                Distillr replaces the spreadsheets, binders, and disconnected tools most distilleries rely on — with a single platform that actually talks to itself.
+              </p>
             </div>
           </div>
-          <div className="relative">
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, rgba(200,136,42,0.08) 0%, transparent 70%)", filter: "blur(40px)" }} />
-            <MockupTTB />
-          </div>
-        </div>
-      </section>
 
-      {/* ── Feature Showcase 2: Batch Production ── */}
-      <section className="py-28 px-6" style={{ background: "rgba(255,255,255,0.012)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
-          <div className="relative md:order-first order-last">
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, rgba(59,130,246,0.07) 0%, transparent 70%)", filter: "blur(40px)" }} />
-            <MockupBatch />
-          </div>
-          <div>
-            <SectionLabel>Batch Production Tracking</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ color: "#f5f0e8", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-              Every stage logged.<br />
-              <span style={{ color: "rgba(245,240,232,0.45)" }}>Every gallon accounted for.</span>
-            </h2>
-            <p className="text-base leading-relaxed mb-8" style={{ color: "rgba(245,240,232,0.5)" }}>
-              Follow each batch through your entire production cycle — from grain-in to bottle-out — with real-time proof gallon tracking at every transition. Distillr knows what stage each batch is in and what's expected next.
-            </p>
-            <div className="space-y-3 mb-10">
-              {[
-                "7-stage workflow: Mash → Ferment → Distill → Proof → Age → Filter → Bottle",
-                "Proof gallon tracking with automatic TTB operation tagging",
-                "Link batches to production records, barrels, and inventory lots",
-                "Still logs with ABV, volume, and yield calculations",
-                "Batch-level cost and yield analytics",
-              ].map((f) => (
-                <div key={f} className="flex items-start gap-3">
-                  <Check />
-                  <span className="text-sm" style={{ color: "rgba(245,240,232,0.65)" }}>{f}</span>
+          {/* Large feature rows */}
+          {[
+            {
+              tag: "TTB Compliance Engine",
+              title: "Stop filing by hand. Your data already knows the numbers.",
+              body: "Every mash, distillation, and bottling operation you log is automatically tagged with TTB operation codes. When reporting time comes, Forms 5110.40 and 5000.24 are pre-filled from your actual batch data — ready to export to the TTB PONL system in one click.",
+              bullets: ["Auto-generates Forms 5110.40 and 5000.24", "One-click export to TTB PONL filing system", "CBMA small-producer excise tax credits", "Federal bonded warehouse balance tracking", "Audit-ready records retained 3+ years"],
+              stat: { val: "0", label: "Manual data entry required" },
+            },
+            {
+              tag: "Batch Production Tracking",
+              title: "Every stage logged. Every proof gallon accounted for.",
+              body: "Follow each batch through a 7-stage production cycle — grain-in to bottle-out — with real-time proof gallon tracking at every transition. Distillr knows what stage each batch is in, what's expected next, and automatically logs the move to TTB.",
+              bullets: ["7-stage workflow: Mash → Ferment → Distill → Proof → Age → Filter → Bottle", "Proof gallon tracking with automatic TTB tagging", "Link batches to barrels, inventory lots, and sales orders", "Still logs with ABV, volume, and yield calculations"],
+              stat: { val: "7", label: "Production stages tracked" },
+            },
+            {
+              tag: "Barrel Intelligence",
+              title: "Your warehouse, mapped and monitored.",
+              body: "Know exactly what's in every barrel, where it sits, and when to dump it. Distillr tracks angel's share evaporation, calculates proof gallon retention, alerts you to aging milestones, and maintains your TTB bonded warehouse balance automatically.",
+              bullets: ["Per-barrel tracking from fill to dump", "Angel's share and proof gallon retention", "Warehouse zone, rack, and location management", "Tasting notes, color, and sample records", "Automated bonded warehouse balance for TTB"],
+              stat: { val: "100%", label: "Barrel accountability" },
+            },
+          ].map((f, i) => (
+            <div key={f.tag} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "center", marginBottom: i < 2 ? 100 : 0, direction: i === 1 ? "rtl" : "ltr" }}>
+              <div style={{ direction: "ltr" }}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 14 }}>{f.tag}</p>
+                <h3 style={{ fontSize: "clamp(1.5rem,2.5vw,2.1rem)", fontWeight: 800, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1.15, marginBottom: 18 }}>{f.title}</h3>
+                <p style={{ fontSize: 14, lineHeight: 1.75, color: TEXT_DIM, marginBottom: 24 }}>{f.body}</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {f.bullets.map((b) => (
+                    <div key={b} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <Check />
+                      <span style={{ fontSize: 13, color: "rgba(245,240,232,0.65)" }}>{b}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Feature Showcase 3: Barrel Intelligence ── */}
-      <section className="py-28 px-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
-          <div>
-            <SectionLabel>Barrel Intelligence</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ color: "#f5f0e8", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-              Your warehouse,<br />
-              <span style={{ color: "rgba(245,240,232,0.45)" }}>mapped and monitored.</span>
-            </h2>
-            <p className="text-base leading-relaxed mb-8" style={{ color: "rgba(245,240,232,0.5)" }}>
-              Know exactly what's in every barrel, where it is, and when to dump it. Distillr tracks angel's share evaporation, calculates proof gallon retention, and alerts you to aging milestones — so nothing gets forgotten in the warehouse.
-            </p>
-            <div className="space-y-3 mb-10">
-              {[
-                "Individual barrel tracking from fill to dump",
-                "Angel's share and proof gallon retention calculations",
-                "Warehouse zone and rack location management",
-                "Tasting notes, color, and sample records per barrel",
-                "Batch and lot linkage for full chain-of-custody",
-                "Automated TTB bonded warehouse balance",
-              ].map((f) => (
-                <div key={f} className="flex items-start gap-3">
-                  <Check />
-                  <span className="text-sm" style={{ color: "rgba(245,240,232,0.65)" }}>{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="relative">
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at center, rgba(200,136,42,0.07) 0%, transparent 70%)", filter: "blur(40px)" }} />
-            <MockupBarrel />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Full Feature Grid ── */}
-      <section id="features" className="py-28 px-6" style={{ background: "rgba(255,255,255,0.012)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <SectionLabel>Complete Platform</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: "#f5f0e8", letterSpacing: "-0.02em" }}>
-              Everything you need, nothing you don't
-            </h2>
-            <p className="text-base max-w-xl mx-auto" style={{ color: "rgba(245,240,232,0.45)" }}>
-              Distillr replaces the patchwork of spreadsheets, binders, and disconnected tools most distilleries rely on today.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES_GRID.map((f) => (
-              <div key={f.title} className="rounded-xl p-6 transition-all duration-300"
-                style={{ background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.07)" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.065)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.13)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.035)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)"; }}>
-                <div className="text-2xl mb-3">{f.icon}</div>
-                <h3 className="text-sm font-bold mb-1.5" style={{ color: "#f5f0e8" }}>{f.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: "rgba(245,240,232,0.45)" }}>{f.desc}</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* ── How It Works ── */}
-      <section className="py-28 px-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <SectionLabel>Getting Started</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold" style={{ color: "#f5f0e8", letterSpacing: "-0.02em" }}>
-              Up and running in minutes
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+              {/* Stat card */}
+              <div style={{ direction: "ltr", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: "100%", maxWidth: 380, borderRadius: 20, background: "rgba(255,255,255,0.025)", border: `1px solid ${CARD_BORDER}`, padding: 40, textAlign: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize: "5rem", fontWeight: 900, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1, marginBottom: 8 }}>{f.stat.val}</div>
+                  <div style={{ fontSize: 13, color: TEXT_DIM }}>{f.stat.label}</div>
+                  <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${GOLD_BORDER}, transparent)`, margin: "24px 0" }} />
+                  <div style={{ fontSize: 11, color: TEXT_FAINT, fontStyle: "italic" }}>Built for the TTB. Loved by distillers.</div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Feature grid */}
+          <div style={{ marginTop: 80, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {[
-              { num: "01", title: "Create your account", desc: "Sign up with your distillery name and email. No credit card, no long onboarding form. Your operations dashboard is ready immediately." },
-              { num: "02", title: "Configure your distillery", desc: "Enter your DSP number, products, equipment, and team. Import existing batch or barrel data via CSV. Most distilleries are live the same day." },
-              { num: "03", title: "Track, file, and grow", desc: "Log production in real time. Generate TTB reports with one click. Manage compliance deadlines automatically. Let Distillr handle the paperwork." },
-            ].map((step, i) => (
-              <div key={step.num} className="relative">
-                {i < 2 && <div className="hidden md:block absolute top-6 h-px" style={{ left: "calc(3.5rem + 8px)", right: "-50%", background: "linear-gradient(90deg, rgba(200,136,42,0.25) 0%, rgba(200,136,42,0.03) 100%)" }} />}
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 flex-shrink-0"
-                  style={{ background: "rgba(200,136,42,0.1)", border: "1px solid rgba(200,136,42,0.25)" }}>
-                  <span className="text-sm font-bold" style={{ color: "#c9952a" }}>{step.num}</span>
-                </div>
-                <h3 className="text-lg font-bold mb-2" style={{ color: "#f5f0e8" }}>{step.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: "rgba(245,240,232,0.45)" }}>{step.desc}</p>
+              { e: "📦", t: "Inventory Management", d: "Real-time lot tracking with movement history, TTB operation categories, and multi-location warehouse support." },
+              { e: "💼", t: "Sales & Distribution", d: "Manage client accounts, sales orders, line items, and fulfillment tracking alongside your production data." },
+              { e: "📑", t: "Regulatory Automation", d: "COLA registrations, state excise returns, permit renewals — all tracked with deadline alerts so nothing lapses." },
+              { e: "👥", t: "Team Management", d: "Role-based access for admins, distillers, and staff. Assign crew, manage permissions with full granularity." },
+              { e: "📊", t: "Reports & Analytics", d: "Production trends, excise summaries, barrel aging curves, inventory valuations, and exportable TTB data." },
+              { e: "🤖", t: "AI Assistant", d: "Ask about batch status, barrel inventory, or compliance deadlines in plain English. Get instant, data-backed answers." },
+            ].map((f) => (
+              <div key={f.t} style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 14, padding: "24px 22px", transition: "border-color 0.2s, background 0.2s" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.14)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = CARD; (e.currentTarget as HTMLElement).style.borderColor = CARD_BORDER; }}>
+                <div style={{ fontSize: 24, marginBottom: 12 }}>{f.e}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{f.t}</div>
+                <div style={{ fontSize: 12, lineHeight: 1.65, color: TEXT_DIM }}>{f.d}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Pricing ── */}
-      <section id="pricing" className="py-28 px-6" style={{ background: "rgba(255,255,255,0.012)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <SectionLabel>Pricing</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: "#f5f0e8", letterSpacing: "-0.02em" }}>
-              Simple, transparent pricing
-            </h2>
-            <p className="text-base max-w-lg mx-auto" style={{ color: "rgba(245,240,232,0.45)" }}>
-              Month-to-month, no lock-in. Start free and upgrade when you're ready to scale.
-            </p>
+      {/* ── HOW IT WORKS ────────────────────────────────────────────────────── */}
+      <section style={{ padding: "120px 40px", background: "rgba(255,255,255,0.012)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 14, textAlign: "center" }}>Getting Started</p>
+          <h2 style={{ fontSize: "clamp(2rem,3vw,2.8rem)", fontWeight: 800, letterSpacing: "-0.025em", color: "#fff", textAlign: "center", marginBottom: 64 }}>
+            Up and running in minutes
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 48, position: "relative" }}>
+            {[
+              { n: "01", t: "Create your account", d: "Sign up with your distillery name and email. No credit card, no lengthy form. Your operations dashboard is ready immediately." },
+              { n: "02", t: "Configure your distillery", d: "Enter your DSP number, products, equipment, and team. Import existing data via CSV. Most distilleries are live the same day." },
+              { n: "03", t: "Track, file, and grow", d: "Log production in real time. Generate TTB reports in one click. Let Distillr handle compliance so you can focus on craft." },
+            ].map((s, i) => (
+              <div key={s.n} style={{ position: "relative" }}>
+                {i < 2 && <div style={{ position: "absolute", top: 22, left: "calc(3rem + 10px)", right: "-50%", height: 1, background: `linear-gradient(90deg, ${GOLD_BORDER}, transparent)` }} />}
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: GOLD_DIM, border: `1px solid ${GOLD_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: GOLD }}>{s.n}</span>
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 10 }}>{s.t}</h3>
+                <p style={{ fontSize: 13, lineHeight: 1.7, color: TEXT_DIM }}>{s.d}</p>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            {PLANS.map((plan) => (
-              <div key={plan.name} className="rounded-2xl p-8 relative transition-all duration-300"
-                style={{
-                  background: plan.highlight ? "rgba(200,136,42,0.07)" : "rgba(255,255,255,0.03)",
-                  border: plan.highlight ? "1px solid rgba(200,136,42,0.35)" : "1px solid rgba(255,255,255,0.08)",
-                  boxShadow: plan.highlight ? "0 0 60px rgba(200,136,42,0.1)" : "none",
-                }}>
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="text-xs font-bold px-4 py-1 rounded-full" style={{ background: "#c9952a", color: "#000" }}>Most Popular</span>
+      {/* ── PRICING ─────────────────────────────────────────────────────────── */}
+      <section id="pricing" style={{ padding: "120px 40px", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 14, textAlign: "center" }}>Pricing</p>
+          <h2 style={{ fontSize: "clamp(2rem,3vw,2.8rem)", fontWeight: 800, letterSpacing: "-0.025em", color: "#fff", textAlign: "center", marginBottom: 16 }}>
+            Simple, transparent pricing
+          </h2>
+          <p style={{ fontSize: 14, color: TEXT_DIM, textAlign: "center", marginBottom: 64, maxWidth: 440, margin: "0 auto 64px" }}>
+            Month-to-month, no lock-in. Start free and upgrade when you're ready to scale.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20, alignItems: "start" }}>
+            {PLANS.map((p) => (
+              <div key={p.name} style={{
+                borderRadius: 18, padding: "36px 32px", position: "relative",
+                background: p.highlight ? `linear-gradient(160deg, rgba(201,149,42,0.1), rgba(201,149,42,0.03))` : CARD,
+                border: p.highlight ? `1px solid ${GOLD_BORDER}` : `1px solid ${CARD_BORDER}`,
+                boxShadow: p.highlight ? `0 0 60px rgba(201,149,42,0.1)` : "none",
+              }}>
+                {p.highlight && (
+                  <div style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: GOLD, color: "#000", fontSize: 10, fontWeight: 800, padding: "4px 14px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                    Most Popular
                   </div>
                 )}
-                <p className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: plan.highlight ? "#c9952a" : "rgba(245,240,232,0.4)" }}>{plan.name}</p>
-                <div className="flex items-end gap-1 mb-2">
-                  <span className="font-bold" style={{ fontSize: "2.5rem", color: "#f5f0e8", lineHeight: 1 }}>{plan.price}</span>
-                  {plan.period && <span className="text-sm mb-1" style={{ color: "rgba(245,240,232,0.4)" }}>{plan.period}</span>}
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: p.highlight ? GOLD : TEXT_DIM, marginBottom: 12 }}>{p.name}</p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 10 }}>
+                  <span style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>{p.price}</span>
+                  {p.per && <span style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 6 }}>{p.per}</span>}
                 </div>
-                <p className="text-xs mb-6" style={{ color: "rgba(245,240,232,0.45)", lineHeight: 1.6 }}>{plan.desc}</p>
-                <button onClick={() => navigate("/signup")} className="w-full py-3 rounded-xl text-sm font-bold mb-6 transition-all duration-200"
-                  style={plan.highlight
-                    ? { background: "#c9952a", color: "#000", boxShadow: "0 0 28px rgba(200,136,42,0.35)" }
-                    : { background: "rgba(255,255,255,0.07)", color: "#f5f0e8", border: "1px solid rgba(255,255,255,0.12)" }}
-                  onMouseEnter={(e) => { if (plan.highlight) e.currentTarget.style.boxShadow = "0 0 40px rgba(200,136,42,0.55)"; else e.currentTarget.style.background = "rgba(255,255,255,0.12)"; }}
-                  onMouseLeave={(e) => { if (plan.highlight) e.currentTarget.style.boxShadow = "0 0 28px rgba(200,136,42,0.35)"; else e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}>
-                  {plan.price === "Custom" ? "Contact Sales" : "Start Free Trial"}
+                <p style={{ fontSize: 12, color: TEXT_DIM, lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
+                <button onClick={() => navigate("/signup")} style={{
+                  width: "100%", padding: "12px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 28, transition: "all 0.2s",
+                  background: p.highlight ? GOLD : "transparent",
+                  color: p.highlight ? "#000" : TEXT,
+                  border: p.highlight ? "none" : `1px solid ${CARD_BORDER}`,
+                  boxShadow: p.highlight ? `0 0 28px rgba(201,149,42,0.35)` : "none",
+                }}
+                  onMouseEnter={(e) => { if (p.highlight) e.currentTarget.style.boxShadow = `0 0 44px rgba(201,149,42,0.55)`; else { e.currentTarget.style.background = CARD; e.currentTarget.style.borderColor = "rgba(255,255,255,0.18)"; } }}
+                  onMouseLeave={(e) => { if (p.highlight) e.currentTarget.style.boxShadow = `0 0 28px rgba(201,149,42,0.35)`; else { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = CARD_BORDER; } }}>
+                  {p.cta}
                 </button>
-                <div className="space-y-2.5">
-                  {plan.features.map((f) => (
-                    <div key={f} className="flex items-start gap-2.5">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {p.features.map((f) => (
+                    <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
                       <Check />
-                      <span className="text-xs" style={{ color: "rgba(245,240,232,0.6)" }}>{f}</span>
+                      <span style={{ fontSize: 12, color: "rgba(245,240,232,0.6)" }}>{f}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-center text-xs mt-8" style={{ color: "rgba(245,240,232,0.3)" }}>
+          <p style={{ textAlign: "center", fontSize: 11, color: TEXT_FAINT, marginTop: 28 }}>
             All plans include a 14-day free trial. Annual billing available at 20% off.
           </p>
         </div>
       </section>
 
-      {/* ── FAQ ── */}
-      <section id="faq" className="py-28 px-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-16">
-            <SectionLabel>FAQ</SectionLabel>
-            <h2 className="text-4xl md:text-5xl font-bold" style={{ color: "#f5f0e8", letterSpacing: "-0.02em" }}>
-              Common questions
-            </h2>
-          </div>
-          <div className="space-y-3">
+      {/* ── FAQ ─────────────────────────────────────────────────────────────── */}
+      <section id="faq" style={{ padding: "120px 40px", background: "rgba(255,255,255,0.012)", borderBottom: `1px solid ${CARD_BORDER}` }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 14, textAlign: "center" }}>FAQ</p>
+          <h2 style={{ fontSize: "clamp(2rem,3vw,2.8rem)", fontWeight: 800, letterSpacing: "-0.025em", color: "#fff", textAlign: "center", marginBottom: 56 }}>Common questions</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {FAQS.map((faq, i) => (
-              <div key={i} className="rounded-xl overflow-hidden transition-all duration-200"
-                style={{ background: openFaq === i ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <button className="w-full text-left px-6 py-5 flex items-center justify-between gap-4 focus:outline-none"
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}>
-                  <span className="text-sm font-semibold" style={{ color: "#f5f0e8" }}>{faq.q}</span>
-                  <span className="text-lg flex-shrink-0 transition-transform duration-200" style={{ color: "rgba(245,240,232,0.4)", transform: openFaq === i ? "rotate(45deg)" : "rotate(0)" }}>+</span>
+              <div key={i} style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${openFaq === i ? GOLD_BORDER : CARD_BORDER}`, background: openFaq === i ? "rgba(201,149,42,0.04)" : CARD, transition: "border-color 0.2s, background 0.2s" }}>
+                <button onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ width: "100%", textAlign: "left", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, background: "none", border: "none", cursor: "pointer" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{faq.q}</span>
+                  <span style={{ fontSize: 20, color: TEXT_DIM, flexShrink: 0, transition: "transform 0.2s", transform: openFaq === i ? "rotate(45deg)" : "none", display: "block", lineHeight: 1 }}>+</span>
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-5">
-                    <p className="text-sm leading-relaxed" style={{ color: "rgba(245,240,232,0.5)" }}>{faq.a}</p>
+                  <div style={{ padding: "0 22px 20px" }}>
+                    <p style={{ fontSize: 13, lineHeight: 1.75, color: TEXT_DIM, margin: 0 }}>{faq.a}</p>
                   </div>
                 )}
               </div>
@@ -626,70 +500,63 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Final CTA ── */}
-      <section className="py-28 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="relative rounded-3xl p-16 text-center overflow-hidden"
-            style={{ background: "linear-gradient(135deg, rgba(200,136,42,0.12) 0%, rgba(180,120,30,0.06) 50%, rgba(200,136,42,0.1) 100%)", border: "1px solid rgba(200,136,42,0.22)" }}>
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at 50% -20%, rgba(200,136,42,0.15) 0%, transparent 60%)" }} />
-            <div className="relative z-10">
-              <p className="text-xs font-semibold tracking-widest uppercase mb-6" style={{ color: "rgba(200,136,42,0.8)" }}>Start Today</p>
-              <h2 className="text-4xl md:text-6xl font-bold mb-4" style={{ color: "#f5f0e8", letterSpacing: "-0.03em", lineHeight: 1.05 }}>
+      {/* ── FINAL CTA ───────────────────────────────────────────────────────── */}
+      <section style={{ padding: "120px 40px" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto" }}>
+          <div style={{ borderRadius: 24, padding: "80px 60px", textAlign: "center", position: "relative", overflow: "hidden", background: `linear-gradient(135deg, rgba(201,149,42,0.1), rgba(201,149,42,0.04) 50%, rgba(201,149,42,0.09))`, border: `1px solid ${GOLD_BORDER}` }}>
+            <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 600, height: 200, background: `radial-gradient(ellipse, rgba(201,149,42,0.12) 0%, transparent 70%)`, filter: "blur(40px)", pointerEvents: "none" }} />
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GOLD, textTransform: "uppercase", marginBottom: 20 }}>Start Today</p>
+              <h2 style={{ fontSize: "clamp(2rem,4vw,3.2rem)", fontWeight: 900, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1.08, marginBottom: 20 }}>
                 Your distillery deserves<br />better than spreadsheets.
               </h2>
-              <p className="text-base mb-10 max-w-lg mx-auto" style={{ color: "rgba(245,240,232,0.5)" }}>
-                Join craft distilleries that have replaced manual TTB filings, lost barrel records, and disconnected spreadsheets with a single platform built for how they operate.
+              <p style={{ fontSize: 15, color: TEXT_DIM, maxWidth: 460, margin: "0 auto 40px", lineHeight: 1.7 }}>
+                Join craft distilleries that have replaced manual TTB filings, lost barrel records, and disconnected spreadsheets with a single platform.
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button onClick={() => navigate("/signup")} className="px-10 py-4 rounded-xl text-base font-bold transition-all duration-200"
-                  style={{ background: "#fff", color: "#0a0a0a", boxShadow: "0 0 48px rgba(255,255,255,0.18)", minWidth: 200 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 0 64px rgba(255,255,255,0.32)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 0 48px rgba(255,255,255,0.18)")}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+                <button onClick={() => navigate("/signup")} style={{ background: "#fff", color: "#0a0a0a", fontSize: 15, fontWeight: 700, padding: "14px 36px", borderRadius: 10, border: "none", cursor: "pointer", boxShadow: "0 0 48px rgba(255,255,255,0.18)", transition: "box-shadow 0.2s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 0 64px rgba(255,255,255,0.32)")} onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 0 48px rgba(255,255,255,0.18)")}>
                   Start Free Trial
                 </button>
-                <p className="text-xs" style={{ color: "rgba(245,240,232,0.35)" }}>No credit card · 14-day trial · Cancel anytime</p>
               </div>
+              <p style={{ fontSize: 11, color: TEXT_FAINT }}>No credit card · 14-day trial · Cancel anytime</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="py-12 px-8" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-start justify-between gap-10 mb-10">
-            <div className="max-w-xs">
-              <div className="mb-4"><Logo /></div>
-              <p className="text-xs leading-relaxed" style={{ color: "rgba(245,240,232,0.35)" }}>
-                The complete ERP platform for craft distilleries — from grain to glass, from batch to barrel, from production to TTB filing.
-              </p>
+      {/* ── FOOTER ──────────────────────────────────────────────────────────── */}
+      <footer style={{ borderTop: `1px solid ${CARD_BORDER}`, padding: "48px 40px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 40, marginBottom: 40 }}>
+            <div style={{ maxWidth: 280 }}>
+              <div style={{ marginBottom: 14 }}><Logo /></div>
+              <p style={{ fontSize: 12, lineHeight: 1.7, color: TEXT_FAINT }}>The complete ERP platform for craft distilleries — from grain to glass, from batch to barrel, from production to TTB filing.</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-8 text-xs">
+            <div style={{ display: "flex", gap: 60, flexWrap: "wrap" }}>
               {[
-                { heading: "Product", links: [{ label: "Features", href: "#features" }, { label: "Pricing", href: "#pricing" }, { label: "FAQ", href: "#faq" }] },
-                { heading: "Account", links: [{ label: "Sign in", path: "/login" }, { label: "Get Started", path: "/signup" }] },
-                { heading: "Compliance", links: [{ label: "TTB Forms", href: "#features" }, { label: "State Excise", href: "#features" }, { label: "COLA & Permits", href: "#features" }] },
+                { heading: "Product", items: [{ l: "Features", h: "#features" }, { l: "Pricing", h: "#pricing" }, { l: "FAQ", h: "#faq" }] },
+                { heading: "Account", items: [{ l: "Sign in", p: "/login" }, { l: "Get Started", p: "/signup" }] },
+                { heading: "Compliance", items: [{ l: "TTB Forms", h: "#features" }, { l: "State Excise", h: "#features" }, { l: "COLA & Permits", h: "#features" }] },
               ].map((col) => (
                 <div key={col.heading}>
-                  <p className="font-semibold mb-3" style={{ color: "rgba(245,240,232,0.55)" }}>{col.heading}</p>
-                  <div className="space-y-2">
-                    {col.links.map((link) => (
-                      "path" in link
-                        ? <button key={link.label} onClick={() => navigate(link.path!)} className="block transition-colors duration-200" style={{ color: "rgba(245,240,232,0.3)" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.7)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.3)")}>{link.label}</button>
-                        : <a key={link.label} href={link.href} className="block transition-colors duration-200" style={{ color: "rgba(245,240,232,0.3)", textDecoration: "none" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.7)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.3)")}>{link.label}</a>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(245,240,232,0.55)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16 }}>{col.heading}</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {col.items.map((item) => (
+                      "p" in item
+                        ? <button key={item.l} onClick={() => navigate(item.p!)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: TEXT_FAINT, textAlign: "left", transition: "color 0.2s" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = TEXT_DIM)} onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_FAINT)}>{item.l}</button>
+                        : <a key={item.l} href={item.h} style={{ fontSize: 13, color: TEXT_FAINT, textDecoration: "none", transition: "color 0.2s" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = TEXT_DIM)} onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_FAINT)}>{item.l}</a>
                     ))}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <p className="text-[10px]" style={{ color: "rgba(245,240,232,0.2)" }}>&copy; {new Date().getFullYear()} Distillr. Built for craft distillers.</p>
-            <p className="text-[10px]" style={{ color: "rgba(245,240,232,0.2)" }}>All data encrypted · SOC 2-compliant infrastructure</p>
+          <div style={{ borderTop: `1px solid ${CARD_BORDER}`, paddingTop: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <p style={{ fontSize: 11, color: TEXT_FAINT }}>&copy; {new Date().getFullYear()} Distillr. Built for craft distillers.</p>
+            <p style={{ fontSize: 11, color: TEXT_FAINT }}>All data encrypted · SOC 2-compliant infrastructure</p>
           </div>
         </div>
       </footer>
