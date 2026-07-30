@@ -555,34 +555,31 @@ export default function Dashboard() {
               </div>
 
               {/* Distributor vs Retail split */}
-              {(distCases > 0 || retailCases > 0) && (
-                <div className="bg-white border border-[#e5e5e5] rounded-xl p-5">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0] mb-4">Distribution Channel</p>
-                  <div className="grid grid-cols-2 gap-6 mb-4">
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-[#0369a1]" />
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Distributor</p>
-                      </div>
-                      <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums">{fmtNum(distCases, 0)}</p>
-                      <p className="text-[10px] text-[#c0c0c0]">cases</p>
+              <div className="bg-white border border-[#e5e5e5] rounded-xl p-5">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-[#b0b0b0] mb-4">Distribution Channel</p>
+                <div className="grid grid-cols-2 gap-6 mb-4">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-[#0369a1]" />
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Distributor</p>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-[#f472b6]" />
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Retail</p>
-                      </div>
-                      <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums">{fmtNum(retailCases, 0)}</p>
-                      <p className="text-[10px] text-[#c0c0c0]">cases</p>
-                    </div>
+                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
+                    <p className="text-[10px] text-[#c0c0c0]">cases</p>
                   </div>
-                  <SplitBar
-                    a={distCases} b={retailCases}
-                    colorA="#0369a1" colorB="#f472b6"
-                    labelA="Distributor" labelB="Retail"
-                  />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-[#f472b6]" />
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#b0b0b0]">Retail</p>
+                    </div>
+                    <p className="text-2xl font-bold text-[#0a0a0a] tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
+                    <p className="text-[10px] text-[#c0c0c0]">cases</p>
+                  </div>
                 </div>
-              )}
+                {(distCases > 0 || retailCases > 0)
+                  ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" />
+                  : <div className="h-2 rounded-full bg-[#f0f0f0]" />
+                }
+              </div>
 
               {/* Orders fulfilled + proof/gallons */}
               <div className="grid grid-cols-2 gap-3">

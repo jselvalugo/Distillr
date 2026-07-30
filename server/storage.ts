@@ -2858,7 +2858,7 @@ export class PostgresStorage implements IStorage {
   async getStats(): Promise<Stats> {
     const tenantId = getCurrentTenantId();
     const rows = await query<{ stage: string; count: number }>(
-      `SELECT stage, COUNT(*)::int AS count FROM distilling_batch_records WHERE tenant_id = $1 GROUP BY stage`,
+      `SELECT stage, COUNT(*)::int AS count FROM distilling_batch_records WHERE tenant_id = $1 AND status != 'Closed' GROUP BY stage`,
       [tenantId],
     );
 
