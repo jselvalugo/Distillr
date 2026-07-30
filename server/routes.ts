@@ -3829,7 +3829,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Import — accepts multipart xlsx upload
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-  app.post("/api/import", upload.single("file"), async (req: any, res) => {
+  app.post("/api/import", requireAdmin, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     try {
       const XLSX = await import("xlsx");

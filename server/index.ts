@@ -86,7 +86,7 @@ export function log(message: string, source = "express") {
 app.use((req, _res, next) => {
   const tenantId = (req.session as any)?.user?.tenantId as string | undefined;
   if (tenantId) {
-    runWithTenant(tenantId, () => next()).catch(next);
+    runWithTenant(tenantId, () => next());
   } else {
     next();
   }
