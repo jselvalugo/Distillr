@@ -103,7 +103,7 @@ function GeneralTab({ config }: { config: PlatformConfig | undefined }) {
   );
 
   return (
-    <div className="p-8 max-w-xl space-y-8">
+    <div className="p-4 sm:p-8 max-w-xl space-y-8">
       <div>
         <h2 className="text-base font-semibold text-[#0a0a0a]">General Settings</h2>
         <p className="text-sm text-[#737373] mt-0.5">
@@ -201,7 +201,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
   const currentLogo = config?.logoDataUrl;
 
   return (
-    <div className="p-8 max-w-xl space-y-8">
+    <div className="p-4 sm:p-8 max-w-xl space-y-8">
       <div>
         <h2 className="text-base font-semibold text-[#0a0a0a]">Branding</h2>
         <p className="text-sm text-[#737373] mt-0.5">
@@ -318,7 +318,7 @@ function ExportTab() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-start justify-between max-w-4xl">
         <div>
           <h2 className="text-base font-semibold text-[#0a0a0a]">Data Export</h2>
@@ -576,7 +576,7 @@ function ImportTab() {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
+    <div className="p-4 sm:p-8 space-y-6 max-w-3xl">
       <div>
         <h2 className="text-base font-semibold text-[#0a0a0a]">Data Import</h2>
         <p className="text-sm text-[#737373] mt-0.5">
@@ -701,7 +701,7 @@ function DangerTab() {
   const PHRASE = "delete all data";
 
   return (
-    <div className="p-8 max-w-lg space-y-6">
+    <div className="p-4 sm:p-8 max-w-lg space-y-6">
       <div>
         <h2 className="text-base font-semibold text-red-600">Danger Zone</h2>
         <p className="text-sm text-[#737373] mt-0.5">

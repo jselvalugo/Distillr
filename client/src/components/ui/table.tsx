@@ -25,7 +25,7 @@ export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
   return (
     <th
       className={cn(
-        "px-3 py-2.5 text-left text-xs font-semibold text-[#737373] uppercase tracking-wide whitespace-nowrap",
+        "px-3 py-2.5 text-left text-xs font-semibold text-[#737373] uppercase tracking-wide",
         className
       )}
       {...props}
@@ -34,5 +34,5 @@ export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
 }
 
 export function Td({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-3 py-2.5 text-sm text-[#0a0a0a] whitespace-nowrap", className)} {...props} />;
+  return <td className={cn("px-3 py-2.5 text-sm text-[#0a0a0a]", className)} {...props} />;
 }

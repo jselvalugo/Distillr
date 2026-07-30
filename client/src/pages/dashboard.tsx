@@ -399,9 +399,9 @@ export default function Dashboard() {
       <div className="min-h-screen bg-[#f7f7f7]">
 
         {/* ── Hero ── */}
-        <div className="bg-[#0a0a0a] px-8 pt-8 pb-10">
+        <div className="bg-[#0a0a0a] px-4 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Operations Overview</p>
                 <h1 className="text-3xl font-bold text-white leading-none">
@@ -447,7 +447,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto px-8 py-8 space-y-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-10">
 
           {/* ── Batch Pipeline ── */}
           <section>
@@ -471,7 +471,7 @@ export default function Dashboard() {
           {/* ── Production ── */}
           <section>
             <SectionLabel>Production</SectionLabel>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={AMBER} />
               <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
               <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
@@ -500,7 +500,7 @@ export default function Dashboard() {
           {/* ── Bottling & Inventory ── */}
           <section>
             <SectionLabel>Bottling & Inventory</SectionLabel>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={AMBER} />
               <MetricCard label="Bottles Made" value={fmtNum(bottles, 0)} sub="units" pct={relPct(bottles / 12, casesProduced)} icon={Package2} color="#818cf8" />
               <MetricCard label="Inventory Records" value={invRecords || "—"} sub="lot records" pct={relPct(invRecords, inProgress, scheduled)} icon={Archive} color="#34d399" />

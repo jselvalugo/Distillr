@@ -175,13 +175,13 @@ export default function SalesOrders() {
             <Thead>
               <Tr>
                 <Th>Order #</Th>
-                <Th>Client</Th>
+                <Th className="hidden md:table-cell">Client</Th>
                 <Th>Status</Th>
-                <Th>Order Date</Th>
-                <Th>Ship Date</Th>
-                <Th>Fulfilled</Th>
+                <Th className="hidden md:table-cell">Order Date</Th>
+                <Th className="hidden md:table-cell">Ship Date</Th>
+                <Th className="hidden md:table-cell">Fulfilled</Th>
                 <Th>Amount</Th>
-                <Th>Currency</Th>
+                <Th className="hidden md:table-cell">Currency</Th>
                 <Th></Th>
               </Tr>
             </Thead>
@@ -200,13 +200,13 @@ export default function SalesOrders() {
                     onClick={() => setViewTarget(o)}
                   >
                     <Td className="font-mono font-medium text-[#0a0a0a]">{o.orderNumber}</Td>
-                    <Td className="text-[#737373]">{clientMap[o.clientId] ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{clientMap[o.clientId] ?? "—"}</Td>
                     <Td>{statusBadge(o.status)}</Td>
-                    <Td className="text-[#737373]">{fmt(o.orderDate)}</Td>
-                    <Td className="text-[#737373]">{fmt(o.requestedShipDate) ?? "—"}</Td>
-                    <Td className="text-[#737373]">{fmt(o.fulfilledDate) ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{fmt(o.orderDate)}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{fmt(o.requestedShipDate) ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{fmt(o.fulfilledDate) ?? "—"}</Td>
                     <Td className="text-[#737373]">{o.totalAmount != null ? `$${fmtNum(o.totalAmount)}` : "—"}</Td>
-                    <Td className="text-[#737373]">{o.currency}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{o.currency}</Td>
                     <Td>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                         <button

@@ -17,6 +17,7 @@ import {
   X,
   ChevronDown,
   LogOut,
+  Menu,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
@@ -94,7 +95,7 @@ function AppLauncher() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-2 z-50 w-[400px] bg-white rounded-xl shadow-2xl border border-[#e5e5e5] overflow-hidden">
+          <div className="absolute left-0 top-full mt-2 z-50 w-[min(400px,calc(100vw-24px))] bg-white rounded-xl shadow-2xl border border-[#e5e5e5] overflow-hidden">
 
             {/* Groups */}
             <div className="p-3 space-y-0.5 max-h-[80vh] overflow-y-auto">
@@ -223,8 +224,67 @@ function UserMenu() {
   );
 }
 
+function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [location] = useLocation();
+  const [, navigate] = useLocation();
+
+  useEffect(() => { if (open) onClose(); }, [location]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={onClose} />
+      <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#0a0a0a] flex flex-col md:hidden overflow-y-auto">
+        <div className="flex items-center justify-between px-4 h-12 border-b border-white/10 shrink-0">
+          <span className="text-white text-sm font-bold tracking-tight">Menu</span>
+          <button onClick={onClose} className="text-white/60 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-3 space-y-0.5 flex-1">
+          {APP_GROUPS.map((group, gi) => (
+            <div key={group.label}>
+              <p className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#b0b0b0]">
+                {group.label}
+              </p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = location === item.href;
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => { navigate(item.href); onClose(); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      isActive ? "bg-white/15 text-white" : "text-white/70 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? "bg-white/20" : "bg-white/8"
+                    }`}>
+                      <Icon size={14} className={isActive ? "text-white" : "text-white/60"} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold leading-none mb-0.5">{item.label}</p>
+                      <p className="text-[10px] leading-none truncate text-white/40">{item.sub}</p>
+                    </div>
+                  </button>
+                );
+              })}
+              {gi < APP_GROUPS.length - 1 && (
+                <div className="mt-2 border-t border-white/8" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function TopNav() {
   const [location] = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: config } = useQuery<PlatformConfig>({
     queryKey: ["/api/platform-config"],
     queryFn: () => apiRequest<PlatformConfig>("/api/platform-config"),
@@ -234,39 +294,52 @@ function TopNav() {
   const orgName = config?.organizationNameOverride || config?.organizationName;
 
   return (
-    <header className="h-12 bg-[#0a0a0a] flex items-center px-4 gap-3 shrink-0 border-b border-white/10">
-      <AppLauncher />
+    <>
+      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <header className="h-12 bg-[#0a0a0a] flex items-center px-4 gap-3 shrink-0 border-b border-white/10">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="md:hidden p-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Open navigation"
+        >
+          <Menu size={18} />
+        </button>
 
-      <Link
-        href="/"
-        className={`p-2 rounded-md transition-colors ${location === "/" ? "text-white bg-white/15" : "text-white/40 hover:text-white hover:bg-white/10"}`}
-        title="Dashboard"
-      >
-        <BarChart3 size={15} />
-      </Link>
-
-      <div className="w-px h-4 bg-white/10" />
-
-      <div className="flex items-center gap-2.5">
-        {config?.logoDataUrl && (
-          <img src={config.logoDataUrl} alt="Logo" className="h-6 object-contain" />
-        )}
-        <div className="flex flex-col leading-none">
-          {orgName ? (
-            <>
-              <span className="text-white text-sm font-bold tracking-tight">{orgName}</span>
-              <span className="text-white/35 text-[9px] tracking-widest uppercase">Powered by Distillr — A Loogo Labs Software</span>
-            </>
-          ) : (
-            <span className="text-white text-sm font-bold tracking-tight">Distillr</span>
-          )}
+        {/* App launcher — desktop only */}
+        <div className="hidden md:block">
+          <AppLauncher />
         </div>
-      </div>
 
-      <div className="flex-1" />
+        <Link
+          href="/"
+          className={`p-2 rounded-md transition-colors ${location === "/" ? "text-white bg-white/15" : "text-white/40 hover:text-white hover:bg-white/10"}`}
+          title="Dashboard"
+        >
+          <BarChart3 size={15} />
+        </Link>
 
-      <UserMenu />
-    </header>
+        <div className="w-px h-4 bg-white/10" />
+
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {config?.logoDataUrl && (
+            <img src={config.logoDataUrl} alt="Logo" className="h-6 object-contain shrink-0" />
+          )}
+          <div className="flex flex-col leading-none min-w-0">
+            {orgName ? (
+              <>
+                <span className="text-white text-sm font-bold tracking-tight truncate">{orgName}</span>
+                <span className="text-white/35 text-[9px] tracking-widest uppercase hidden sm:block">Powered by Distillr — A Loogo Labs Software</span>
+              </>
+            ) : (
+              <span className="text-white text-sm font-bold tracking-tight">Distillr</span>
+            )}
+          </div>
+        </div>
+
+        <UserMenu />
+      </header>
+    </>
   );
 }
 
@@ -290,12 +363,12 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between px-6 py-5 bg-white border-b border-[#e5e5e5]">
+    <div className="flex flex-wrap items-start justify-between gap-y-2 px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-[#e5e5e5]">
       <div>
         <h2 className="text-base font-semibold text-[#0a0a0a]">{title}</h2>
         {subtitle && <p className="text-xs text-[#737373] mt-0.5">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

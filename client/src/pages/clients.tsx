@@ -155,13 +155,13 @@ export default function Clients() {
             <Thead>
               <Tr>
                 <Th>Name</Th>
-                <Th>Type</Th>
+                <Th className="hidden md:table-cell">Type</Th>
                 <Th>Status</Th>
-                <Th>Contact</Th>
-                <Th>Email</Th>
-                <Th>Phone</Th>
-                <Th>Tier</Th>
-                <Th>Segment</Th>
+                <Th className="hidden md:table-cell">Contact</Th>
+                <Th className="hidden md:table-cell">Email</Th>
+                <Th className="hidden md:table-cell">Phone</Th>
+                <Th className="hidden md:table-cell">Tier</Th>
+                <Th className="hidden md:table-cell">Segment</Th>
                 <Th></Th>
               </Tr>
             </Thead>
@@ -180,13 +180,13 @@ export default function Clients() {
                     onClick={() => setViewTarget(c)}
                   >
                     <Td className="font-medium text-[#0a0a0a]">{c.name}</Td>
-                    <Td className="text-[#737373]">{c.type}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{c.type}</Td>
                     <Td>{statusBadge(c.status)}</Td>
-                    <Td className="text-[#737373]">{c.contact}</Td>
-                    <Td className="text-[#737373]">{c.contactEmail ?? "—"}</Td>
-                    <Td className="text-[#737373]">{c.contactPhone ?? "—"}</Td>
-                    <Td className="text-[#737373]">{(c as any).accountTier ?? "—"}</Td>
-                    <Td className="text-[#737373]">{(c as any).industrySegment ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{c.contact}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{c.contactEmail ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{c.contactPhone ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{(c as any).accountTier ?? "—"}</Td>
+                    <Td className="text-[#737373] hidden md:table-cell">{(c as any).industrySegment ?? "—"}</Td>
                     <Td>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                         <button

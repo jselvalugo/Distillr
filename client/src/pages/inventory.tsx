@@ -193,7 +193,7 @@ export default function Inventory() {
 
       <Dialog open={openItem} onClose={() => setOpenItem(false)} title="Add Inventory Item">
         <form onSubmit={(e) => { e.preventDefault(); createItem.mutate(itemForm); }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1">Name *</label>
               <Input value={itemForm.name} onChange={(e) => setItemForm((f) => ({ ...f, name: e.target.value }))} required />
@@ -220,7 +220,7 @@ export default function Inventory() {
 
       <Dialog open={openLot} onClose={() => setOpenLot(false)} title="Add Lot">
         <form onSubmit={(e) => { e.preventDefault(); createLot.mutate(lotForm); }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1">Item *</label>
               <Select value={lotForm.itemId} onChange={(e) => setLotForm((f) => ({ ...f, itemId: e.target.value }))} required>

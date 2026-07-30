@@ -156,14 +156,14 @@ export default function Barrels() {
                   <Th>Serial #</Th>
                   <Th>Product</Th>
                   <Th>Status</Th>
-                  <Th>Fill Date</Th>
-                  <Th>Fill Proof</Th>
-                  <Th>Fill Vol.</Th>
-                  <Th>Proof Gal.</Th>
-                  <Th>Curr. Vol.</Th>
-                  <Th>Zone</Th>
-                  <Th>Char</Th>
-                  <Th>Aging Days</Th>
+                  <Th className="hidden md:table-cell">Fill Date</Th>
+                  <Th className="hidden md:table-cell">Fill Proof</Th>
+                  <Th className="hidden md:table-cell">Fill Vol.</Th>
+                  <Th className="hidden md:table-cell">Proof Gal.</Th>
+                  <Th className="hidden md:table-cell">Curr. Vol.</Th>
+                  <Th className="hidden md:table-cell">Zone</Th>
+                  <Th className="hidden md:table-cell">Char</Th>
+                  <Th className="hidden md:table-cell">Aging Days</Th>
                   <Th></Th>
                 </Tr>
               </Thead>
@@ -184,14 +184,14 @@ export default function Barrels() {
                       <Td className="font-mono font-medium text-[#0a0a0a]">{b.serialNumber}</Td>
                       <Td className="text-[#737373]">{b.productName ?? "—"}</Td>
                       <Td>{statusBadge(b.status)}</Td>
-                      <Td className="text-[#737373]">{fmt(b.fillDate)}</Td>
-                      <Td className="text-[#737373]">{fmtNum(b.fillProof)}</Td>
-                      <Td className="text-[#737373]">{fmtNum(b.fillVolume)}</Td>
-                      <Td className="text-[#737373]">{fmtNum(b.fillProofGallons)}</Td>
-                      <Td className="text-[#737373]">{fmtNum(b.currentVolume)}</Td>
-                      <Td className="text-[#737373]">{b.warehouseZone ?? "—"}</Td>
-                      <Td className="text-[#737373]">{b.charLevel ?? "—"}</Td>
-                      <Td className="text-[#737373]">{b.totalAgingDays ?? "—"}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{fmt(b.fillDate)}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{fmtNum(b.fillProof)}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{fmtNum(b.fillVolume)}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{fmtNum(b.fillProofGallons)}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{fmtNum(b.currentVolume)}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{b.warehouseZone ?? "—"}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{b.charLevel ?? "—"}</Td>
+                      <Td className="text-[#737373] hidden md:table-cell">{b.totalAgingDays ?? "—"}</Td>
                       <Td>
                         <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                           <button
