@@ -4148,5 +4148,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.get("/api/admin/tenants/:id/users", requireAdminSession, async (req, res) => {
+    try {
+      const users = await runWithTenant(req.params.id, () => authStorage.getUsers());
+      const safe = users.map(({ id, email, name, role, status, createdAt, tenantId }) => ({
+        id, email, name, role, status, createdAt, tenantId,
+      }));
+      res.json(safe);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:id/users/:userId", requireAdminSession, async (req, res) => {
+    try {
+      const data = z.object({
+        name: z.string().trim().min(1).optional(),
+        email: z.string().email().optional(),
+        role: z.enum(["admin", "manager", "operator", "viewer"]).optional(),
+        status: z.enum(["active", "inactive"]).optional(),
+      }).parse(req.body);
+      const updated = await runWithTenant(req.params.id, () =>
+        authStorage.updateUser(req.params.userId, data)
+      );
+      res.json(updated);
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/tenants/:id/users/:userId/reset-password", requireAdminSession, async (req, res) => {
+    try {
+      const { password } = z.object({ password: z.string().min(8) }).parse(req.body);
+      await runWithTenant(req.params.id, () =>
+        authStorage.resetPassword(req.params.userId, password)
+      );
+      res.json({ ok: true });
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return httpServer;
 }
