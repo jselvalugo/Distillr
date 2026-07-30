@@ -1,9 +1,10 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
-import { initDatabase } from "./db";
+import { initDatabase, pool } from "./db";
 import { seedInitialData } from "./seed-data";
 import { seedAdminUser } from "./seed-admin";
 import { installEgressGuard } from "./egress-guard";
@@ -56,8 +57,14 @@ app.use(
 );
 app.use(express.urlencoded({ extended: false }));
 
+const PgSession = connectPgSimple(session);
 app.use(
   session({
+    store: new PgSession({
+      pool,
+      tableName: "sessions",
+      createTableIfMissing: true,
+    }),
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -66,7 +73,7 @@ app.use(
       secure: isProduction,
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 24,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   }),
 );
@@ -144,6 +151,5 @@ app.use((req, res, next) => {
     const accessLabel = allowRemote ? "network-accessible" : "loopback-only";
     const egressLabel = localOnlyMode ? "egress-guard on" : "egress-guard off";
     log(`serving on ${host}:${port} (${accessLabel}, ${egressLabel})`);
-    log(`[admin] credentials configured: ${!!(process.env.SUPER_ADMIN_EMAIL && process.env.SUPER_ADMIN_PASSWORD)}`);
   });
 })();
