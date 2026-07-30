@@ -4098,7 +4098,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         GROUP BY t.id
         ORDER BY t.created_at DESC
       `);
-      res.json(result.rows);
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
