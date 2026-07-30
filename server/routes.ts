@@ -2058,22 +2058,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/platform-config", async (_req, res) => {
+  app.get("/api/platform-config", requireAuth, async (_req, res) => {
     try {
       const config = await storage.getPlatformConfig();
       res.json(config);
-    } catch {
-      res.status(500).json({ error: "Failed to fetch platform configuration" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to fetch platform configuration" });
     }
   });
 
-  app.patch("/api/platform-config", async (req, res) => {
+  app.patch("/api/platform-config", requireAdmin, async (req, res) => {
     try {
       const payload = updatePlatformConfigSchema.parse(req.body);
       const config = await storage.updatePlatformConfig(payload);
       res.json(config);
-    } catch {
-      res.status(400).json({ error: "Failed to update platform configuration" });
+    } catch (err: any) {
+      if (err?.name === "ZodError") {
+        return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
+      }
+      res.status(500).json({ error: err.message || "Failed to update platform configuration" });
     }
   });
 
@@ -2081,8 +2084,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const config = await storage.updatePlatformConfig({ logoDataUrl: null });
       res.json({ success: true, config });
-    } catch {
-      res.status(500).json({ error: "Failed to remove logo" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to remove logo" });
     }
   });
 

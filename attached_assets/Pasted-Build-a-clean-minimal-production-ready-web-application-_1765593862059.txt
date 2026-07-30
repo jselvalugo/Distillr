@@ -1,0 +1,479 @@
+Build a clean, minimal, production-ready web application called SiteClean Pro for cleaning companies in Florida. This is an operations + compliance + proof-of-service system that helps owners answer three daily questions:
+
+Who is scheduled to clean today?
+
+Are they cleared/allowed to be on site?
+
+Was the job completed—and can we prove it?
+
+The product must feel calm, professional, and “boringly reliable.”
+
+Design & UX Principles (Non-Negotiable)
+
+Visual style: clean, minimal, professional
+
+Primary palette: white background with orange accents
+
+Buttons: white fill with thin orange gradient outline (subtle, modern), not heavy fills
+
+Use orange gradient lines sparingly for:
+
+button outlines
+
+dividers / section separators
+
+focus states
+
+Typography: modern and readable (e.g., Inter)
+
+No clutter, no excessive widgets, no noisy dashboards
+
+Pages should be tablet-friendly and fast
+
+Prefer simple pages over modals; use modals only when essential
+
+Every action must clearly confirm success/failure
+
+Core MVP Modules (Simple System)
+1) Authentication + Roles
+
+Email/password login
+
+Single company (“Organization”) per account for MVP
+
+Roles:
+
+Admin
+
+Dispatcher/Manager
+
+Supervisor
+
+View-only
+
+User record fields:
+
+Full name
+
+Email
+
+Phone (optional)
+
+Role
+
+Status (Active/Disabled)
+
+Assigned regions (optional)
+
+Last login timestamp
+
+Created/updated timestamps
+
+2) Company Profile (Organization)
+
+Capture:
+
+Company name (legal)
+
+DBA (optional)
+
+EIN (optional, masked)
+
+Primary address
+
+Service areas (counties/cities)
+
+Time zone (default America/New_York)
+
+Primary contact name / email / phone
+
+Business hours
+
+Default expiration warning window (e.g., 30 days)
+
+Default photo requirements (none / before-after / after only)
+
+Default checklist template (select)
+
+Notes (internal)
+
+Created/updated timestamps
+
+3) Clients (Customers)
+
+Clients can be HOAs, condos, STR hosts, property managers, offices, medical, retail, etc.
+
+Client fields:
+
+Client name
+
+Client type (HOA/Condo, STR, Office, Medical, Retail, Other)
+
+Billing email (optional)
+
+Primary contact name / email / phone
+
+Preferred communication method (email/text)
+
+Default service instructions (internal)
+
+COI required? (yes/no)
+
+Additional insured required? (yes/no)
+
+Required insurance limits (text field)
+
+Access rules summary (text)
+
+Created/updated timestamps
+
+4) Properties / Sites (Where cleaning happens)
+
+A client can have multiple properties.
+
+Property fields:
+
+Property/site name
+
+Property type (Condo, Single-family, Office, Medical, Retail, Hotel, Other)
+
+Address (street, city, state, zip)
+
+County (important for Florida ops)
+
+Onsite contact name / phone (optional)
+
+Access method (keys, lockbox, front desk, code, concierge, gate)
+
+Access codes (store securely; restrict by role)
+
+Parking instructions
+
+Building rules (quiet hours, elevator rules, waste disposal)
+
+Supplies onsite? (yes/no)
+
+Linen handling rules (if STR/hospitality)
+
+Pet notes / allergy notes
+
+Special hazards notes
+
+Default checklist template (override company default)
+
+Photo requirements override (none/before-after/after)
+
+Status (Active/Inactive)
+
+Created/updated timestamps
+
+5) Workers / Staff (Crew Members)
+
+Worker fields:
+
+First name / last name
+
+Phone
+
+Email (optional)
+
+Preferred language (English/Spanish)
+
+Role (Cleaner, Lead, Supervisor)
+
+Employment type (W2/1099)
+
+Availability (days of week + time windows)
+
+Skill tags (deep clean, turnover, floor care, medical-ready, etc.)
+
+Background check date (optional)
+
+Training completed (multi-select)
+
+Status (Active/Inactive)
+
+Notes (internal)
+
+Created/updated timestamps
+
+6) Vendors (Optional MVP-light)
+
+For subcontracted cleaners or partner crews.
+
+Vendor fields:
+
+Vendor/company name
+
+Contact name / email / phone
+
+Service type
+
+Insurance required? (yes/no)
+
+Status (Active/Inactive)
+
+Notes
+
+Created/updated timestamps
+
+7) Compliance + Insurance Tracking (Company + Vendor + Worker-level light)
+
+Track documents and expirations. Do not “verify” content—only store, track dates, and manage statuses.
+
+Document types:
+
+Company COI
+
+Vendor/Subcontractor COI
+
+Business license (if applicable)
+
+Worker ID (optional)
+
+Any custom doc types
+
+Document record fields:
+
+Entity type (Company, Vendor, Worker)
+
+Entity reference
+
+Document type
+
+Document title / identifier
+
+Provider/issuer (free-text)
+
+Policy/license number (optional)
+
+Effective date (optional)
+
+Expiration date (optional)
+
+Status (Pending, Approved, Rejected)
+
+Rejection reason (required if rejected)
+
+File upload + version history (retain prior uploads)
+
+Uploaded by + timestamp
+
+Approved by + timestamp
+
+Derived clearance status:
+
+Cleared / Expiring Soon / Blocked
+
+Explainable reason shown inline
+
+8) Services Catalog (What you sell)
+
+Service fields:
+
+Service name (e.g., Standard Clean, Deep Clean, Turnover, Post-Construction)
+
+Default duration estimate
+
+Default checklist template
+
+Default photo requirement
+
+Base price (optional, for later invoicing)
+
+Status (Active/Inactive)
+
+9) Job Scheduling (Core)
+
+Jobs are scheduled cleanings for a property.
+
+Job fields:
+
+Job ID (auto)
+
+Property reference
+
+Client reference (derived)
+
+Service type (from catalog)
+
+Scheduled date
+
+Time window (start/end)
+
+Priority (Low/Normal/High)
+
+Assigned crew:
+
+primary worker(s)
+
+lead (optional)
+
+Recurrence (none, weekly, biweekly, monthly) — keep simple
+
+Access instructions (auto from property, editable per job)
+
+Supplies needed (checkboxes + notes)
+
+Special instructions
+
+Status:
+
+Scheduled
+
+In Progress
+
+Completed
+
+Blocked
+
+Canceled
+
+Block reason (required if blocked)
+
+Created/updated timestamps
+
+A job is Blocked if assigned crew/vendor is not Cleared (based on required docs).
+
+10) Proof of Service (The Sticky Feature)
+
+For each job completion, capture:
+
+Completion fields:
+
+Start time (optional)
+
+End time (required on completion)
+
+Checklist completion (template-based)
+
+Photos:
+
+allow multiple uploads
+
+label as “before/after/issue”
+
+Issues found (text + optional photos)
+
+Supplies used (optional)
+
+Customer note (optional)
+
+Supervisor approval (optional for MVP)
+
+Completion signature (optional: simple checkbox “I confirm completion”)
+
+Completed by (worker)
+
+Completed timestamp
+
+Generate a simple “Job Report” view:
+
+Property, service, date, crew, checklist, photos, notes
+
+11) Primary Screens (Keep UI Clean)
+
+Today Board (Home)
+
+Today’s jobs
+
+Status color coding
+
+Crew assignments
+
+Blocked reasons inline
+
+Filters: status, crew, county, client type
+
+Job Detail
+
+All job fields + proof of service section
+
+Clear action buttons: Start, Complete, Cancel
+
+Clients / Properties
+
+Workers
+
+Compliance
+
+Settings (templates, service catalog, alert windows)
+
+No heavy analytics for MVP.
+
+12) Notifications (Email Only for MVP)
+
+Configurable email alerts:
+
+Document expiring in X days
+
+Job blocked due to compliance
+
+Job completed (optional client-facing)
+
+Job canceled/rescheduled
+
+13) Audit Trail (Light but Real)
+
+Log:
+
+Job creation/updates/status changes
+
+Document uploads and approvals/rejections
+
+User actions (key events only)
+
+Audit fields:
+
+Timestamp
+
+User
+
+Action
+
+Related record IDs
+
+Technical Expectations (Replit-Friendly)
+
+Frontend: React (clean component structure)
+
+Backend: Node.js + Express (or FastAPI if you prefer Python)
+
+DB: SQLite for MVP (upgrade path to Postgres)
+
+Auth: session/JWT
+
+File storage:
+
+local storage for MVP
+
+design storage abstraction so it can move to S3 later
+
+Use environment variables for secrets
+
+Keep code readable and boring (good boring)
+
+Guardrails / Positioning
+
+Use language like: “track,” “monitor,” “status,” “records.”
+Avoid: “certify,” “guarantee,” “verify.”
+
+Include footer disclaimer:
+“This system provides administrative visibility only. Final compliance and access decisions remain the responsibility of the customer.”
+
+MVP Success Criteria
+
+Owner can see “Who’s working today?” in under 5 seconds
+
+Dispatcher can schedule jobs without confusion
+
+Completion reports reduce disputes with clients/HOAs/STR hosts
+
+Compliance reminders reduce last-minute jobsite denials
+
+UI feels calm, clean, and trustworthy in orange/white
+
+Final Instruction
+
+Bias toward clarity over cleverness, restraint over features, and trust over theatrics.
+Expand the data model, not the visual noise. Keep the UI minimal and elegant with orange gradient outlines around buttons.
