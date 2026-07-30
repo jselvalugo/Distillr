@@ -7,6 +7,13 @@ const STYLES = `
   @keyframes drift { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-7px)} }
   @keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:.8} }
   @keyframes fadein { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  .nav-link { font-size:13px; color:rgba(255,255,255,0.5); text-decoration:none; transition:color .15s; }
+  .nav-link:hover { color:#fff; }
+  .btn-ghost:hover { background:rgba(255,255,255,0.09) !important; color:#fff !important; }
+  .btn-primary:hover { box-shadow:0 0 32px rgba(255,255,255,0.22) !important; opacity:0.93 !important; }
+  .btn-outline:hover { background:rgba(255,255,255,0.09) !important; border-color:rgba(255,255,255,0.28) !important; color:#fff !important; }
+  .feature-card:hover { background:rgba(255,255,255,0.09) !important; border-color:rgba(255,255,255,0.16) !important; }
+  .faq-item { transition:all .2s; }
 `;
 
 // ─── Floating data node ───────────────────────────────────────────────────────
@@ -49,26 +56,26 @@ function Logo() {
           <path d="M5.5 8.5L7 10L10.5 6.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-      <span style={{ fontWeight: 700, fontSize: 16, color: "#fff", letterSpacing: "-0.02em" }}>Distillr</span>
+      <span style={{ fontWeight: 700, fontSize: 15, color: "#fff", letterSpacing: "-0.02em" }}>Distillr</span>
     </div>
   );
 }
 
 // ─── Check ────────────────────────────────────────────────────────────────────
-function Check() {
+function Check({ featured }: { featured?: boolean }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="7" cy="7" r="6.5" stroke="rgba(255,255,255,0.2)" />
-      <path d="M4 7l2 2 4-4" stroke="rgba(255,255,255,0.7)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+      <circle cx="7.5" cy="7.5" r="7" fill={featured ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)"} />
+      <path d="M4.5 7.5l2 2 4-4" stroke={featured ? "#fff" : "rgba(255,255,255,0.55)"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 const PLANS = [
-  { name: "Starter", price: "$149", per: "/mo", desc: "For small craft producers going digital.", featured: false,
+  { name: "Starter", price: "$99", per: "/mo", desc: "For small craft producers going digital.", featured: false,
     features: ["3 users", "Batch & production tracking", "Up to 50 barrels", "TTB report generation", "Email support"] },
-  { name: "Professional", price: "$349", per: "/mo", desc: "The complete platform for growing distilleries.", featured: true,
+  { name: "Professional", price: "$299", per: "/mo", desc: "The complete platform for growing distilleries.", featured: true,
     features: ["15 users", "Unlimited batches & barrels", "Full TTB compliance engine", "All 50-state excise returns", "COLA & permit management", "AI operations assistant", "Priority support"] },
   { name: "Enterprise", price: "Custom", per: "", desc: "Multi-site operations and high-volume producers.", featured: false,
     features: ["Unlimited users & sites", "Multi-distillery management", "Custom integrations & API", "Dedicated account manager", "On-site onboarding & SLA"] },
@@ -88,13 +95,13 @@ export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 40);
+    const fn = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", fn, { passive: true });
     return () => window.removeEventListener("scroll", fn);
   }, []);
 
-  const D = "rgba(255,255,255,0.06)";
-  const DB = "rgba(255,255,255,0.1)";
+  const D = "rgba(255,255,255,0.05)";
+  const DB = "rgba(255,255,255,0.09)";
 
   return (
     <div style={{ background: "#070707", color: "#fff", minHeight: "100vh", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", overflowX: "hidden" }}>
@@ -102,26 +109,60 @@ export default function Landing() {
 
       {/* ── NAV ──────────────────────────────────────────────────────────────── */}
       <nav style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100,
+        width: "calc(100% - 64px)", maxWidth: 960,
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 48px", height: 60,
-        background: scrolled ? "rgba(7,7,7,0.92)" : "transparent",
-        backdropFilter: scrolled ? "blur(20px)" : "none",
-        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.07)" : "none",
-        transition: "all 0.3s",
+        padding: "0 6px 0 16px", height: 50,
+        background: scrolled ? "rgba(10,10,10,0.88)" : "rgba(255,255,255,0.04)",
+        backdropFilter: "blur(24px)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 14,
+        transition: "background 0.3s, box-shadow 0.3s",
+        boxShadow: scrolled ? "0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.07)" : "0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)",
       }}>
-        <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}><Logo /></button>
-        <div style={{ display: "flex", gap: 36 }}>
+        {/* Logo */}
+        <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 24 }}>
+          <Logo />
+        </button>
+
+        {/* Nav links — center */}
+        <div style={{ display: "flex", gap: 4, flex: 1 }}>
           {[{ l: "Features", h: "#features" }, { l: "Pricing", h: "#pricing" }, { l: "FAQ", h: "#faq" }].map((n) => (
-            <a key={n.l} href={n.h} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none", transition: "color .15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}>{n.l}</a>
+            <a key={n.l} href={n.h} className="nav-link" style={{ padding: "6px 12px", borderRadius: 8 }}>{n.l}</a>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.5)", padding: "8px 14px", borderRadius: 8, transition: "color .15s" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}>Sign in</button>
-          <button onClick={() => navigate("/signup")} style={{ background: "#fff", color: "#070707", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: "8px 20px", borderRadius: 8, transition: "opacity .15s" }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")} onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>Create Account</button>
+
+        {/* CTA buttons — right */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button
+            onClick={() => navigate("/login")}
+            className="btn-ghost"
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.1)",
+              cursor: "pointer", fontSize: 13, fontWeight: 500,
+              color: "rgba(255,255,255,0.65)",
+              padding: "7px 16px", borderRadius: 9,
+              transition: "all .15s", lineHeight: 1,
+            }}
+          >
+            Sign in
+          </button>
+          <button
+            onClick={() => navigate("/signup")}
+            className="btn-primary"
+            style={{
+              background: "#ffffff",
+              color: "#070707",
+              border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 700,
+              padding: "8px 18px", borderRadius: 9,
+              transition: "all .2s", lineHeight: 1,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08), 0 0 16px rgba(255,255,255,0.06)",
+            }}
+          >
+            Get Started Free
+          </button>
         </div>
       </nav>
 
@@ -160,27 +201,53 @@ export default function Landing() {
 
           <h1 style={{ fontSize: "clamp(2.8rem,5vw,4.2rem)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.1, color: "#fff", margin: "0 0 20px" }}>
             One system for every<br />
-            <span style={{ color: "rgba(255,255,255,0.45)" }}>stage of production.</span>
+            <span style={{ color: "rgba(255,255,255,0.4)" }}>stage of production.</span>
           </h1>
 
           <p style={{ fontSize: 16, lineHeight: 1.7, color: "rgba(255,255,255,0.45)", margin: "0 auto 36px", maxWidth: 520 }}>
             From grain to glass — batch tracking, TTB compliance, barrel intelligence, and regulatory automation built for craft distillers.
           </p>
 
+          {/* Hero CTAs */}
           <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 56 }}>
-            <button onClick={() => navigate("/signup")} style={{ background: "#fff", color: "#070707", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "12px 28px", borderRadius: 9, transition: "opacity .15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")} onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>Start Free Trial</button>
-            <button onClick={() => navigate("/login")} style={{ background: "rgba(255,255,255,0.06)", color: "#fff", border: "1px solid rgba(255,255,255,0.14)", cursor: "pointer", fontSize: 14, fontWeight: 500, padding: "12px 24px", borderRadius: 9, transition: "background .15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")} onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}>Sign In →</button>
+            <button
+              onClick={() => navigate("/signup")}
+              className="btn-primary"
+              style={{
+                background: "#ffffff",
+                color: "#070707",
+                border: "none", cursor: "pointer",
+                fontSize: 15, fontWeight: 700,
+                padding: "13px 32px", borderRadius: 11,
+                transition: "all .2s",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1), 0 0 24px rgba(255,255,255,0.1)",
+              }}
+            >
+              Start Free Trial
+            </button>
+            <button
+              onClick={() => navigate("/login")}
+              className="btn-outline"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                color: "rgba(255,255,255,0.75)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                cursor: "pointer", fontSize: 15, fontWeight: 500,
+                padding: "13px 28px", borderRadius: 11,
+                transition: "all .2s",
+              }}
+            >
+              Sign In →
+            </button>
           </div>
 
           <Waveform />
         </div>
 
-        {/* Logo / trust strip */}
+        {/* Trust strip */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, borderTop: "1px solid rgba(255,255,255,0.06)", padding: "20px 48px", display: "flex", alignItems: "center", justifyContent: "center", gap: 48 }}>
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em", textTransform: "uppercase", marginRight: 12 }}>Trusted by</span>
-          {["TTB Compliant", "Supabase", "Railway", "PostgreSQL", "TypeScript", "Node.js"].map((b) => (
+          {["TTB Compliant", "PostgreSQL", "TypeScript", "Node.js", "Railway"].map((b) => (
             <span key={b} style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.22)", letterSpacing: "0.02em" }}>{b}</span>
           ))}
         </div>
@@ -203,9 +270,7 @@ export default function Landing() {
               { n: "05", t: "Regulatory Automation", d: "COLA registrations, all 50-state excise returns, permit renewals — tracked with deadline alerts." },
               { n: "06", t: "AI Assistant", d: "Ask about compliance deadlines, batch status, or barrel inventory in plain English and get instant data-backed answers." },
             ].map((f) => (
-              <div key={f.n} style={{ background: D, border: `1px solid ${DB}`, borderRadius: 14, padding: "26px 24px", transition: "background .2s, border-color .2s", cursor: "default" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.09)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.16)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = D; (e.currentTarget as HTMLElement).style.borderColor = DB; }}>
+              <div key={f.n} className="feature-card" style={{ background: D, border: `1px solid ${DB}`, borderRadius: 14, padding: "26px 24px", cursor: "default" }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em", marginBottom: 12 }}>{f.n}</p>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 9 }}>{f.t}</h3>
                 <p style={{ fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.4)", margin: 0 }}>{f.d}</p>
@@ -227,26 +292,43 @@ export default function Landing() {
             {PLANS.map((p) => (
               <div key={p.name} style={{
                 borderRadius: 18, padding: "34px 28px", position: "relative",
-                background: p.featured ? "rgba(255,255,255,0.09)" : D,
-                border: p.featured ? "1px solid rgba(255,255,255,0.2)" : `1px solid ${DB}`,
-                boxShadow: p.featured ? "0 0 60px rgba(255,255,255,0.04)" : "none",
+                background: p.featured ? "rgba(255,255,255,0.08)" : D,
+                border: p.featured ? "1px solid rgba(255,255,255,0.18)" : `1px solid ${DB}`,
+                boxShadow: p.featured ? "0 0 80px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.1)" : "none",
               }}>
-                {p.featured && <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#fff", color: "#070707", fontSize: 9.5, fontWeight: 800, padding: "3px 12px", borderRadius: 100, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>Most Popular</div>}
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>{p.name}</p>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, marginBottom: 10 }}>
-                  <span style={{ fontSize: 38, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>{p.price}</span>
-                  {p.per && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 5 }}>{p.per}</span>}
+                {p.featured && (
+                  <div style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: "#fff", color: "#070707", fontSize: 9.5, fontWeight: 800, padding: "4px 14px", borderRadius: 100, letterSpacing: "0.07em", textTransform: "uppercase", whiteSpace: "nowrap", boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>
+                    Most Popular
+                  </div>
+                )}
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: p.featured ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.3)", marginBottom: 16 }}>{p.name}</p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, marginBottom: 8 }}>
+                  <span style={{ fontSize: 42, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.04em" }}>{p.price}</span>
+                  {p.per && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 6 }}>{p.per}</span>}
                 </div>
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
-                <button onClick={() => navigate("/signup")} style={{ width: "100%", padding: "11px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 24, transition: "opacity .15s", background: p.featured ? "#fff" : "rgba(255,255,255,0.07)", color: p.featured ? "#070707" : "#fff", border: p.featured ? "none" : "1px solid rgba(255,255,255,0.12)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")} onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
+
+                <button
+                  onClick={() => navigate("/signup")}
+                  className={p.featured ? "btn-primary" : "btn-outline"}
+                  style={{
+                    width: "100%", padding: "11px", borderRadius: 10,
+                    fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 24,
+                    transition: "all .2s",
+                    background: p.featured ? "#ffffff" : "transparent",
+                    color: p.featured ? "#070707" : "rgba(255,255,255,0.7)",
+                    border: p.featured ? "none" : "1px solid rgba(255,255,255,0.15)",
+                    boxShadow: p.featured ? "0 2px 8px rgba(0,0,0,0.4), 0 0 24px rgba(255,255,255,0.08)" : "none",
+                  }}
+                >
                   {p.price === "Custom" ? "Contact Sales" : "Start Free Trial"}
                 </button>
-                <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {p.features.map((f) => (
                     <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
-                      <Check />
-                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{f}</span>
+                      <Check featured={p.featured} />
+                      <span style={{ fontSize: 12.5, color: p.featured ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>{f}</span>
                     </div>
                   ))}
                 </div>
@@ -265,7 +347,7 @@ export default function Landing() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {FAQS.map((faq, i) => (
-              <div key={i} style={{ borderRadius: 12, border: `1px solid ${openFaq === i ? "rgba(255,255,255,0.16)" : DB}`, background: openFaq === i ? "rgba(255,255,255,0.06)" : D, overflow: "hidden", transition: "all .2s" }}>
+              <div key={i} className="faq-item" style={{ borderRadius: 12, border: `1px solid ${openFaq === i ? "rgba(255,255,255,0.15)" : DB}`, background: openFaq === i ? "rgba(255,255,255,0.05)" : D, overflow: "hidden" }}>
                 <button onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ width: "100%", textAlign: "left", padding: "17px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, background: "none", border: "none", cursor: "pointer" }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{faq.q}</span>
                   <span style={{ fontSize: 18, color: "rgba(255,255,255,0.35)", flexShrink: 0, transition: "transform .2s", transform: openFaq === i ? "rotate(45deg)" : "none", lineHeight: 1, display: "block" }}>+</span>
@@ -289,8 +371,18 @@ export default function Landing() {
             <p style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", maxWidth: 400, margin: "0 auto 36px", lineHeight: 1.7 }}>
               Join craft distilleries that have replaced manual TTB filings, lost barrel records, and disconnected tools with one platform.
             </p>
-            <button onClick={() => navigate("/signup")} style={{ background: "#fff", color: "#070707", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700, padding: "14px 36px", borderRadius: 10, transition: "opacity .15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")} onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}>
+            <button
+              onClick={() => navigate("/signup")}
+              className="btn-primary"
+              style={{
+                background: "#ffffff", color: "#070707",
+                border: "none", cursor: "pointer",
+                fontSize: 15, fontWeight: 700,
+                padding: "14px 40px", borderRadius: 11,
+                transition: "all .2s",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1), 0 0 32px rgba(255,255,255,0.1)",
+              }}
+            >
               Start Free Trial
             </button>
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", marginTop: 14 }}>No credit card · 14-day trial · Cancel anytime</p>
@@ -307,8 +399,7 @@ export default function Landing() {
           </div>
           <div style={{ display: "flex", gap: 28 }}>
             {[{ l: "Features", h: "#features" }, { l: "Pricing", h: "#pricing" }, { l: "FAQ", h: "#faq" }].map((lk) => (
-              <a key={lk.l} href={lk.h} style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none", transition: "color .15s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.25)")}>{lk.l}</a>
+              <a key={lk.l} href={lk.h} className="nav-link" style={{ fontSize: 12 }}>{lk.l}</a>
             ))}
             <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "rgba(255,255,255,0.25)", padding: 0, transition: "color .15s" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.25)")}>Sign in</button>
