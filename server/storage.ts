@@ -2725,20 +2725,27 @@ export class PostgresStorage implements IStorage {
       ? allOrders.filter(o => o.orderDate.startsWith(reportMonth))
       : allOrders;
 
-    // Proof gallons produced — from batches that have reached distillation+
+    // Proof gallons — prefer proofGallonsProduced (distillation), fall back to proofGallonsProcessed (bottling)
     const proofGallonsProduced = roundNumber(
-      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).proofGallonsProduced), 0), 2,
+      batches.reduce((sum, b) => {
+        const pg = toFiniteNumber((b as any).proofGallonsProduced) || toFiniteNumber((b as any).proofGallonsProcessed);
+        return sum + pg;
+      }, 0), 2,
     );
-    // Wine gallons at distillation = fill wine gallons across all barreled batches
+    // Wine gallons — prefer fillWineGallons (barreling), fall back to wineGallonsBottled
     const wineGallonsDistilled = roundNumber(
-      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).fillWineGallons), 0), 2,
+      batches.reduce((sum, b) => {
+        const wg = toFiniteNumber((b as any).fillWineGallons) || toFiniteNumber((b as any).wineGallonsBottled);
+        return sum + wg;
+      }, 0), 2,
     );
 
-    // Bottling totals — only batches that have bottling data
+    // Bottling totals — sum cases across all size formats; also accept totalCases when individual sizes are null
     const cases750  = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases750ml), 0);
     const cases1000 = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases1000ml), 0);
     const cases1750 = batches.reduce((sum, b) => sum + toFiniteNumber((b as any).cases1750ml), 0);
-    const totalCasesBottled = cases750 + cases1000 + cases1750;
+    const totalCasesBottled = cases750 + cases1000 + cases1750 ||
+      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).totalCases), 0);
     const totalBottles = cases750 * 6 + cases1000 * 6 + cases1750 * 6;
 
     // Sales orders

@@ -326,9 +326,7 @@ function MonthNavigator({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(
-    new Date().toISOString().slice(0, 7)
-  );
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   const towerUrl = selectedMonth
     ? `/api/distilling/control-tower?month=${selectedMonth}`
