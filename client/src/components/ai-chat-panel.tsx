@@ -144,8 +144,8 @@ export function AiChatPanel() {
         className="fixed bottom-6 right-6 z-50 w-13 h-13 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
         style={{
           width: 52, height: 52,
-          background: open ? "#0a0a0a" : "linear-gradient(135deg, #c9933a 0%, #a87828 100%)",
-          boxShadow: open ? "0 4px 20px rgba(10,10,10,0.3)" : "0 4px 20px rgba(201,147,58,0.4)",
+          background: open ? "#0F1B42" : "linear-gradient(135deg, #4f8ef7 0%, #1a3fa8 60%, #0F1B42 100%)",
+          boxShadow: open ? "0 4px 20px rgba(15,27,66,0.4)" : "0 4px 28px rgba(79,142,247,0.5), inset 0 1px 0 rgba(255,255,255,0.15)",
         }}
       >
         {open ? <X size={20} color="white" /> : <Bot size={20} color="white" />}
