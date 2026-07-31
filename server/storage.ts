@@ -678,6 +678,7 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     timeZone: String(row.time_zone),
     dspNumber: row.dsp_number != null ? String(row.dsp_number) : null,
     logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
+    dashboardColor: row.dashboard_color != null ? String(row.dashboard_color) : null,
     accountTypes: toStringArray(row.account_types),
     accountStatuses: toStringArray(row.account_statuses),
     accountIndustries: toStringArray(row.account_industries),
@@ -2179,8 +2180,47 @@ export class PostgresStorage implements IStorage {
 
   async getDistillingBatchRecords(): Promise<DistillingBatchRecord[]> {
     const tenantId = getCurrentTenantId();
-    const rows = await query("SELECT * FROM distilling_batch_records WHERE tenant_id = $1 ORDER BY batch_date DESC, created_at DESC", [tenantId]);
-    return rows.map(mapDistillingBatchRecord);
+    const rows = await query(`
+      SELECT b.*,
+        inv.cases_to_distributors    AS inv_cases_to_distributors,
+        inv.cases_to_retail          AS inv_cases_to_retail,
+        inv.cases_made               AS inv_cases_made,
+        inv.bottles_made             AS inv_bottles_made,
+        inv.report_month             AS inv_report_month,
+        inv.taxes_owed               AS inv_taxes_owed,
+        inv.average_abv_percent      AS inv_abv,
+        inv.ending_proof_gallons     AS inv_proof_gallons,
+        inv.ending_us_gallons        AS inv_ending_us_gallons,
+        inv.beginning_of_month_cases AS inv_beginning_cases,
+        inv.ending_month_inventory   AS inv_ending_inventory
+      FROM distilling_batch_records b
+      LEFT JOIN distilling_inventory_records inv
+        ON inv.id = b.inventory_record_id AND inv.tenant_id = b.tenant_id
+      WHERE b.tenant_id = $1
+      ORDER BY b.batch_date DESC, b.created_at DESC
+    `, [tenantId]);
+    return rows.map(row => {
+      const base = mapDistillingBatchRecord(row);
+      const parseJsonbSum = (v: unknown): number => {
+        try {
+          const obj = typeof v === "string" ? JSON.parse(v) : (v ?? {});
+          return Object.values(obj as Record<string, number>).reduce((s, n) => s + (Number(n) || 0), 0);
+        } catch { return 0; }
+      };
+      return Object.assign(base, {
+        invCasesToDistributors: parseJsonbSum(row.inv_cases_to_distributors),
+        invCasesToRetail:       parseJsonbSum(row.inv_cases_to_retail),
+        invCasesMade:           parseJsonbSum(row.inv_cases_made),
+        invBottlesMade:         parseJsonbSum(row.inv_bottles_made),
+        invReportMonth:         row.inv_report_month ?? null,
+        invTaxesOwed:           row.inv_taxes_owed != null ? Number(row.inv_taxes_owed) : null,
+        invAbv:                 row.inv_abv != null ? Number(row.inv_abv) : null,
+        invProofGallons:        row.inv_proof_gallons != null ? Number(row.inv_proof_gallons) : null,
+        invEndingUsGallons:     row.inv_ending_us_gallons != null ? Number(row.inv_ending_us_gallons) : null,
+        invBeginningCases:      row.inv_beginning_cases != null ? Number(row.inv_beginning_cases) : null,
+        invEndingInventory:     row.inv_ending_inventory != null ? Number(row.inv_ending_inventory) : null,
+      });
+    });
   }
 
   async getDistillingBatchRecord(id: string): Promise<DistillingBatchRecord | undefined> {
@@ -2895,12 +2935,12 @@ export class PostgresStorage implements IStorage {
     await query(
       `INSERT INTO platform_config (
         tenant_id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
-        website, primary_address, time_zone, dsp_number, logo_data_url,
+        website, primary_address, time_zone, dsp_number, logo_data_url, dashboard_color,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
       )
       ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
@@ -2914,6 +2954,7 @@ export class PostgresStorage implements IStorage {
         time_zone = EXCLUDED.time_zone,
         dsp_number = EXCLUDED.dsp_number,
         logo_data_url = EXCLUDED.logo_data_url,
+        dashboard_color = EXCLUDED.dashboard_color,
         account_types = EXCLUDED.account_types,
         account_statuses = EXCLUDED.account_statuses,
         account_industries = EXCLUDED.account_industries,
@@ -2938,6 +2979,7 @@ export class PostgresStorage implements IStorage {
         next.timeZone,
         next.dspNumber ?? null,
         next.logoDataUrl ?? null,
+        next.dashboardColor ?? null,
         next.accountTypes,
         next.accountStatuses,
         next.accountIndustries,

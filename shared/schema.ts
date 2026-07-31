@@ -764,6 +764,7 @@ export const platformConfigSchema = z.object({
   timeZone: z.string(),
   dspNumber: z.string().nullable().optional(),
   logoDataUrl: z.string().nullable().optional(),
+  dashboardColor: z.string().nullable().optional(),
   accountTypes: z.array(z.string()),
   accountStatuses: z.array(z.string()),
   accountIndustries: z.array(z.string()),

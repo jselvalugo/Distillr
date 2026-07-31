@@ -352,6 +352,12 @@ export default function Dashboard() {
     queryKey: ["/api/permits"],
     queryFn: () => apiRequest("/api/permits"),
   });
+  const { data: platformConfig } = useQuery<{ dashboardColor: string | null }>({
+    queryKey: ["/api/platform-config"],
+    queryFn: () => apiRequest("/api/platform-config"),
+    staleTime: 60_000,
+  });
+  const heroBg = platformConfig?.dashboardColor ?? "#0F1B42";
 
   // Filter batches for pipeline/stage display by selected month
   const batches = selectedMonth
@@ -401,7 +407,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-[#f7f7f7]">
 
         {/* ── Hero ── */}
-        <div className="px-4 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10" style={{ background: "#0F1B42" }}>
+        <div className="px-4 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10" style={{ background: heroBg }}>
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
               <div>

@@ -27,6 +27,7 @@ type PlatformConfig = {
   organizationName: string;
   organizationNameOverride: string | null;
   logoDataUrl: string | null;
+  dashboardColor: string | null;
 };
 
 const APP_GROUPS = [
@@ -224,10 +225,11 @@ function UserMenu() {
   );
 }
 
-function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function MobileDrawer({ open, onClose, navColor }: { open: boolean; onClose: () => void; navColor?: string }) {
   const [location] = useLocation();
   const [, navigate] = useLocation();
   const isDashboard = location === "/";
+  const drawerBg = isDashboard ? (navColor ?? NAVY) : "#0a0a0a";
 
   useEffect(() => { if (open) onClose(); }, [location]);
 
@@ -236,7 +238,7 @@ function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={onClose} />
-      <div className="fixed inset-y-0 left-0 z-50 w-72 flex flex-col md:hidden overflow-y-auto" style={{ background: isDashboard ? NAVY : "#0a0a0a" }}>
+      <div className="fixed inset-y-0 left-0 z-50 w-72 flex flex-col md:hidden overflow-y-auto" style={{ background: drawerBg }}>
         <div className="flex items-center justify-between px-4 h-12 border-b border-white/10 shrink-0">
           <span className="text-white text-sm font-bold tracking-tight">Menu</span>
           <button onClick={onClose} className="text-white/60 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors">
@@ -296,11 +298,12 @@ function TopNav() {
   });
 
   const orgName = config?.organizationNameOverride || config?.organizationName;
+  const dashColor = config?.dashboardColor ?? NAVY;
 
   return (
     <>
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-      <header className="h-12 flex items-center px-4 gap-3 shrink-0 border-b border-white/10" style={{ background: isDashboard ? NAVY : "#0a0a0a" }}>
+      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} navColor={dashColor} />
+      <header className="h-12 flex items-center px-4 gap-3 shrink-0 border-b border-white/10" style={{ background: isDashboard ? dashColor : "#0a0a0a" }}>
         {/* Hamburger — mobile only */}
         <button
           onClick={() => setDrawerOpen(true)}
