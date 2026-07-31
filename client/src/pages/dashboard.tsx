@@ -650,6 +650,8 @@ const NAV_DOT: Record<string, string> = {
 };
 
 function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId: string }) {
+  const [expanded, setExpanded] = useState(false);
+
   function scrollTo(id: string) {
     const el = document.getElementById(id);
     const main = document.querySelector("main");
@@ -660,41 +662,59 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
 
   return (
     <div
-      className="hidden lg:flex fixed left-4 top-1/2 z-[9999] flex-col gap-1 p-2.5 rounded-2xl"
+      className="hidden lg:flex fixed left-4 top-1/2 z-[9999] flex-col gap-1 rounded-2xl"
       style={{
         transform: "translateY(-50%)",
         background: "rgba(255,255,255,0.08)",
         border: "1px solid rgba(255,255,255,0.14)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
+        width: expanded ? 156 : 44,
+        padding: expanded ? 10 : "10px 6px",
+        transition: "width 0.25s cubic-bezier(0.4,0,0.2,1), padding 0.2s ease",
+        overflow: "hidden",
       }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
     >
       {widgetOrder.map(id => {
         const isActive = id === activeId;
+        const dotColor = NAV_DOT[id] ?? "white";
         return (
           <button
             key={id}
             onClick={() => scrollTo(id)}
-            title={SECTION_LABELS[id]}
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-all duration-200 group"
+            title={expanded ? undefined : SECTION_LABELS[id]}
+            className="flex items-center rounded-xl shrink-0 w-full transition-colors duration-150"
             style={{
+              gap: expanded ? 10 : 0,
+              justifyContent: expanded ? "flex-start" : "center",
+              padding: expanded ? "7px 8px" : "8px 0",
               background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
             }}
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = isActive ? "rgba(255,255,255,0.12)" : "transparent"; }}
           >
+            {/* dot — always visible */}
             <div
-              className="shrink-0 rounded-full transition-all duration-200"
+              className="shrink-0 rounded-full"
               style={{
                 width: isActive ? 8 : 6,
                 height: isActive ? 8 : 6,
-                background: isActive ? NAV_DOT[id] ?? "white" : "rgba(255,255,255,0.25)",
-                boxShadow: isActive ? `0 0 8px ${NAV_DOT[id] ?? "white"}80` : "none",
+                background: isActive ? dotColor : "rgba(255,255,255,0.3)",
+                boxShadow: isActive ? `0 0 8px ${dotColor}80` : "none",
+                transition: "width 0.2s ease, height 0.2s ease, box-shadow 0.2s ease",
               }}
             />
+            {/* label — fades in on expand */}
             <span
-              className="text-[9px] font-bold uppercase tracking-widest transition-colors duration-200 leading-none"
-              style={{ color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}
+              className="text-[9px] font-bold uppercase tracking-widest leading-none whitespace-nowrap"
+              style={{
+                color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
+                opacity: expanded ? 1 : 0,
+                transition: `opacity ${expanded ? "0.18s ease 0.1s" : "0.1s ease"}`,
+                pointerEvents: "none",
+              }}
             >
               {NAV_SHORT[id] ?? id}
             </span>
