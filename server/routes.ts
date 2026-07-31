@@ -4018,6 +4018,130 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Branded per-table import template
+  app.get("/api/export/template/:table", requireAuth, async (req, res) => {
+    const TABLE_COLS: Record<string, { header: string; hint: string }[]> = {
+      production: [
+        { header: "batchCode",            hint: "Required — e.g. BATCH-2024-001" },
+        { header: "stage",                hint: "planning | mash_fermentation | distillation | barreling | aging | bottling | closed" },
+        { header: "batchDate",            hint: "Required — YYYY-MM-DD" },
+        { header: "productName",          hint: "e.g. WhiskeyTech Reserve" },
+        { header: "spiritType",           hint: "e.g. rum, whiskey, bourbon" },
+        { header: "taxClass",             hint: "craft_tier1 | craft_tier2 | standard" },
+        { header: "proofGallonsProduced", hint: "numeric — decimal point, not comma" },
+        { header: "exciseTaxDue",         hint: "numeric — e.g. 123.45" },
+        { header: "notes",                hint: "free text" },
+      ],
+      barrels: [
+        { header: "serialNumber",     hint: "Required — unique barrel ID" },
+        { header: "status",           hint: "Required — Filled | Aging | Ready | Dumped | Retired" },
+        { header: "productName",      hint: "e.g. WhiskeyTech 5-Year" },
+        { header: "fillDate",         hint: "YYYY-MM-DD" },
+        { header: "fillProof",        hint: "numeric — e.g. 125.5" },
+        { header: "fillVolume",       hint: "numeric gallons" },
+        { header: "fillProofGallons", hint: "numeric" },
+        { header: "currentVolume",    hint: "numeric gallons" },
+        { header: "warehouseZone",    hint: "e.g. Rack A3" },
+        { header: "charLevel",        hint: "e.g. #3" },
+        { header: "totalAgingDays",   hint: "integer" },
+        { header: "notes",            hint: "free text" },
+      ],
+      "inventory-items": [
+        { header: "name",          hint: "Required — e.g. Raw Corn" },
+        { header: "category",      hint: "Required — e.g. Grain, Chemical" },
+        { header: "unitOfMeasure", hint: "Required — e.g. lbs, gal, cases" },
+        { header: "notes",         hint: "free text" },
+      ],
+      "inventory-lots": [
+        { header: "lotCode",       hint: "Required — unique lot identifier" },
+        { header: "itemId",        hint: "Required — ID of the inventory item" },
+        { header: "quantity",      hint: "Required — numeric" },
+        { header: "unitOfMeasure", hint: "e.g. lbs, gal" },
+        { header: "abv",           hint: "numeric percent, e.g. 40.0" },
+        { header: "proofGallons",  hint: "numeric" },
+        { header: "receivedAt",    hint: "YYYY-MM-DD" },
+        { header: "expiresAt",     hint: "YYYY-MM-DD" },
+        { header: "notes",         hint: "free text" },
+      ],
+    };
+
+    const TABLE_LABELS: Record<string, string> = {
+      production: "Production Batches",
+      barrels: "Barrels",
+      "inventory-items": "Inventory Items",
+      "inventory-lots": "Inventory Lots",
+    };
+
+    const cols = TABLE_COLS[req.params.table];
+    if (!cols) return res.status(404).json({ error: "Unknown table" });
+
+    try {
+      const config = await storage.getPlatformConfig();
+      const orgName = config.organizationNameOverride || config.organizationName || "Distillr";
+      const brandHex = (config.dashboardColor || "#0F1B42").replace("#", "");
+      const brandArgb = "FF" + brandHex.toUpperCase();
+      const lightArgb = "FF" + brandHex.toUpperCase() + "22";
+
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Distillr";
+      const sheetLabel = TABLE_LABELS[req.params.table] || req.params.table;
+      const ws = wb.addWorksheet(sheetLabel);
+
+      // Row 1 — branding banner
+      const bannerRow = ws.addRow([`${orgName} — ${sheetLabel} Import Template`]);
+      ws.mergeCells(1, 1, 1, cols.length);
+      const bannerCell = bannerRow.getCell(1);
+      bannerCell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12, name: "Calibri" };
+      bannerCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: brandArgb } };
+      bannerCell.alignment = { vertical: "middle", horizontal: "center" };
+      bannerRow.height = 28;
+
+      // Row 2 — "Powered by Distillr" sub-banner
+      const subRow = ws.addRow(["Powered by Distillr · Do not rename column headers · Dates: YYYY-MM-DD"]);
+      ws.mergeCells(2, 1, 2, cols.length);
+      const subCell = subRow.getCell(1);
+      subCell.font = { italic: true, color: { argb: "FF737373" }, size: 9, name: "Calibri" };
+      subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F5F5" } };
+      subCell.alignment = { vertical: "middle", horizontal: "center" };
+      subRow.height = 18;
+
+      // Row 3 — column headers
+      const headerRow = ws.addRow(cols.map(c => c.header));
+      headerRow.eachCell((cell, colNum) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10, name: "Calibri" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: brandArgb } };
+        cell.alignment = { vertical: "middle" };
+        cell.border = { bottom: { style: "thin", color: { argb: "33FFFFFF" } } };
+      });
+      headerRow.height = 22;
+
+      // Row 4 — hints (light bg)
+      const hintRow = ws.addRow(cols.map(c => c.hint));
+      hintRow.eachCell((cell) => {
+        cell.font = { italic: true, color: { argb: "FF9CA3AF" }, size: 9, name: "Calibri" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF9FAFB" } };
+        cell.alignment = { vertical: "middle" };
+      });
+      hintRow.height = 18;
+
+      // Set column widths
+      ws.columns = cols.map(c => ({
+        width: Math.max(c.header.length + 4, c.hint.length > 30 ? 40 : 22),
+      }));
+
+      // Freeze top 4 rows
+      ws.views = [{ state: "frozen", ySplit: 4, xSplit: 0 }];
+
+      const buf = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="distillr-${req.params.table}-template.xlsx"`);
+      res.send(Buffer.from(buf));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Template generation failed" });
+    }
+  });
+
   app.get("/api/export/:table", async (req, res) => {
     const tableName = EXPORTABLE_TABLES[req.params.table];
     if (!tableName) return res.status(400).json({ error: "Unknown table" });

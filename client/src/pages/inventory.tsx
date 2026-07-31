@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Trash2, Upload, Download } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
-import { exportToCsv, downloadCsvTemplate, parseCsv } from "../lib/csv";
+import { exportToCsv, downloadBrandedTemplate, parseImportFile } from "../lib/csv";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -157,7 +157,6 @@ export default function Inventory() {
     { header: "status",        key: "status" },
     { header: "notes",         key: "notes" },
   ] as const;
-  const ITEM_IMPORT_HEADERS = ITEM_EXPORT_COLS.map(c => c.header);
 
   const LOT_EXPORT_COLS = [
     { header: "lotCode",       key: "lotCode" },
@@ -170,14 +169,12 @@ export default function Inventory() {
     { header: "expiresAt",     key: "expiresAt" },
     { header: "notes",         key: "notes" },
   ] as const;
-  const LOT_IMPORT_HEADERS = LOT_EXPORT_COLS.map(c => c.header);
 
   async function handleImportItems() {
     if (!importFile) return;
     setImporting(true);
     try {
-      const text = await importFile.text();
-      const rows = parseCsv(text);
+      const rows = await parseImportFile(importFile);
       let ok = 0, fail = 0;
       for (const row of rows) {
         try {
@@ -208,8 +205,7 @@ export default function Inventory() {
     if (!importFile) return;
     setImporting(true);
     try {
-      const text = await importFile.text();
-      const rows = parseCsv(text);
+      const rows = await parseImportFile(importFile);
       let ok = 0, fail = 0;
       for (const row of rows) {
         try {
@@ -588,18 +584,18 @@ export default function Inventory() {
       <Dialog open={importItemOpen} onClose={() => { setImportItemOpen(false); setImportFile(null); }} title="Import Inventory Items">
         <div className="space-y-4">
           <p className="text-xs text-[#737373]">
-            Upload a CSV with columns: <span className="font-mono">{ITEM_IMPORT_HEADERS.join(", ")}</span>.
+            Upload a CSV or XLSX with columns: <span className="font-mono">name, category, unitOfMeasure, status, notes</span>.
             Required: <span className="font-mono">name, category, unitOfMeasure</span>.
           </p>
           <button
-            onClick={() => downloadCsvTemplate("inventory-items-template.csv", ITEM_IMPORT_HEADERS)}
+            onClick={() => downloadBrandedTemplate("inventory-items")}
             className="text-xs text-[#0369a1] hover:underline"
           >
-            Download blank template →
+            Download branded template (.xlsx) →
           </button>
           <input
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx"
             onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
             className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
           />
@@ -619,19 +615,19 @@ export default function Inventory() {
       <Dialog open={importLotOpen} onClose={() => { setImportLotOpen(false); setImportFile(null); }} title="Import Lots">
         <div className="space-y-4">
           <p className="text-xs text-[#737373]">
-            Upload a CSV with columns: <span className="font-mono">{LOT_IMPORT_HEADERS.join(", ")}</span>.
+            Upload a CSV or XLSX with columns: <span className="font-mono">lotCode, itemId, quantity, unitOfMeasure, abv, proofGallons, receivedAt, expiresAt, notes</span>.
             Required: <span className="font-mono">lotCode, itemId, quantity</span>.
             The <span className="font-mono">itemId</span> must match an existing item's ID.
           </p>
           <button
-            onClick={() => downloadCsvTemplate("inventory-lots-template.csv", LOT_IMPORT_HEADERS)}
+            onClick={() => downloadBrandedTemplate("inventory-lots")}
             className="text-xs text-[#0369a1] hover:underline"
           >
-            Download blank template →
+            Download branded template (.xlsx) →
           </button>
           <input
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx"
             onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
             className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
           />

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { Eye, Pencil, Trash2, Upload, Download } from "lucide-react";
-import { exportToCsv, downloadCsvTemplate, parseCsv } from "../lib/csv";
+import { exportToCsv, downloadBrandedTemplate, parseImportFile } from "../lib/csv";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
@@ -417,14 +417,12 @@ export default function Production() {
     { header: "notes",                 key: "notes" },
     { header: "status",                key: "status" },
   ] as const;
-  const IMPORT_HEADERS = EXPORT_COLS.map(c => c.header);
 
   async function handleImport() {
     if (!importFile) return;
     setImporting(true);
     try {
-      const text = await importFile.text();
-      const rows = parseCsv(text);
+      const rows = await parseImportFile(importFile);
       let ok = 0, fail = 0;
       for (const row of rows) {
         try {
@@ -618,18 +616,18 @@ export default function Production() {
       <Dialog open={importOpen} onClose={() => { setImportOpen(false); setImportFile(null); }} title="Import Batches">
         <div className="space-y-4">
           <p className="text-xs text-[#737373]">
-            Upload a CSV with columns: <span className="font-mono">{IMPORT_HEADERS.join(", ")}</span>.
+            Upload a CSV or XLSX file with columns: <span className="font-mono">batchCode, stage, batchDate</span> (required) and optional fields.
             Required: <span className="font-mono">batchCode, stage, batchDate</span>.
           </p>
           <button
-            onClick={() => downloadCsvTemplate("production-template.csv", IMPORT_HEADERS)}
+            onClick={() => downloadBrandedTemplate("production")}
             className="text-xs text-[#0369a1] hover:underline"
           >
-            Download blank template →
+            Download branded template (.xlsx) →
           </button>
           <input
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx"
             onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
             className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
           />
