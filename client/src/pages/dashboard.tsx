@@ -5,7 +5,8 @@ import {
   FlaskConical, Package, Package2, ShoppingCart,
   Activity, Calendar, CheckCircle2, Archive,
   Gauge, ClipboardList, BarChart3, ArrowRight,
-  ChevronLeft, ChevronRight, Bell,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+  Bell, SlidersHorizontal, GripVertical,
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout } from "../components/layout";
@@ -629,12 +630,93 @@ function EmbeddedCalendar({
   );
 }
 
+// ─── Widget reorder shell ─────────────────────────────────────────────────────
+const SECTION_LABELS: Record<string, string> = {
+  pipeline:        "Active Batch Pipeline",
+  production:      "Production",
+  bottling:        "Bottling & Inventory",
+  sales_compliance:"Sales & Compliance",
+  calendar:        "Distilling Calendar",
+  quickaccess:     "Quick Access",
+};
+const DEFAULT_WIDGET_ORDER = ["pipeline", "production", "bottling", "sales_compliance", "calendar", "quickaccess"];
+const WIDGET_ORDER_KEY = "distillr_widget_order";
+
+function WidgetShell({
+  id, editMode, onMove, isFirst, isLast, children,
+}: {
+  id: string; editMode: boolean;
+  onMove: (id: string, dir: -1 | 1) => void;
+  isFirst: boolean; isLast: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="relative">
+      {editMode && (
+        <div
+          className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg select-none"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+        >
+          <div className="flex items-center gap-2">
+            <GripVertical size={13} className="text-white/25" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">
+              {SECTION_LABELS[id] ?? id}
+            </span>
+          </div>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => onMove(id, -1)}
+              disabled={isFirst}
+              className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              title="Move up"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              onClick={() => onMove(id, 1)}
+              disabled={isLast}
+              className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              title="Move down"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(
     new Date().toISOString().slice(0, 7)
   );
+  const [editMode, setEditMode] = useState(false);
+  const [widgetOrder, setWidgetOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(WIDGET_ORDER_KEY);
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_WIDGET_ORDER.length) return parsed;
+      }
+    } catch {}
+    return DEFAULT_WIDGET_ORDER;
+  });
+
+  function moveWidget(id: string, dir: -1 | 1) {
+    setWidgetOrder(prev => {
+      const idx = prev.indexOf(id);
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      localStorage.setItem(WIDGET_ORDER_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
 
   const towerUrl = selectedMonth
     ? `/api/distilling/control-tower?month=${selectedMonth}`
@@ -736,6 +818,17 @@ export default function Dashboard() {
                   <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
                   <div className="w-px h-6 bg-white/15" />
                   <NotificationCenter permits={permits} colas={colas} />
+                  <div className="w-px h-6 bg-white/15" />
+                  <button
+                    onClick={() => setEditMode(v => !v)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      editMode ? "bg-white/15 text-white" : "text-white/40 hover:text-white hover:bg-white/10"
+                    }`}
+                    title="Customize layout"
+                  >
+                    <SlidersHorizontal size={12} />
+                    <span className="hidden sm:block">{editMode ? "Done" : "Customize"}</span>
+                  </button>
                 </div>
               </div>
 
@@ -776,258 +869,202 @@ export default function Dashboard() {
           </div>
 
           <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-10">
-
-            {/* ── Batch Pipeline ── */}
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">Active Batch Pipeline</span>
-                  <div className="h-px w-8" style={{ background: "rgba(255,255,255,0.08)" }} />
-                  <span className="text-[10px] text-white/25">live — not filtered by month</span>
-                </div>
-                <button
-                  onClick={() => navigate("/production")}
-                  className="text-[11px] font-semibold text-white/40 hover:text-white transition-colors flex items-center gap-1"
-                >
-                  View all <ArrowRight size={11} />
-                </button>
-              </div>
-              <StageDistribution batches={allBatches} />
-              <BatchPipeline batches={allBatches} />
-            </section>
-
-            {/* ── Production ── */}
-            <section>
-              <SectionLabel>Production</SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={CREAM_ON_DARK} />
-                <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
-                <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
-                <MetricCard label="Scheduled Batches" value={scheduled || "—"} sub="in planning" pct={relPct(scheduled, inProgress, prodRecords)} icon={Calendar} color="#60a5fa" />
-              </div>
-              {/* Proof efficiency callout */}
-              {gallons > 0 && proof > 0 && (
-                <div className="mt-3 rounded-xl px-5 py-3 flex items-center gap-4" style={GLASS}>
-                  <div className="flex-1">
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/35">Proof Efficiency</p>
-                    <p className="text-xs text-white/60 mt-0.5">
-                      <span className="font-bold text-white">{fmtNum(proof / gallons, 2)}</span> proof gallons per gallon distilled
-                    </p>
-                  </div>
-                  <div className="flex-1">
-                    <FillBar pct={Math.min((proof / gallons) * 50, 100)} color={CREAM_ON_DARK} height={6} />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-white tabular-nums">{Math.round((proof / gallons) * 100)}%</p>
-                    <p className="text-[9px] text-white/35">of yield</p>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* ── Bottling & Inventory ── */}
-            <section>
-              <SectionLabel>Bottling & Inventory</SectionLabel>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={CREAM_ON_DARK} />
-                <MetricCard label="Bottles Made" value={fmtNum(bottles, 0)} sub="units" pct={relPct(bottles / 12, casesProduced)} icon={Package2} color="#818cf8" />
-                <MetricCard label="Inventory Records" value={invRecords || "—"} sub="lot records" pct={relPct(invRecords, inProgress, scheduled)} icon={Archive} color="#34d399" />
-                <MetricCard label="Batches In Progress" value={inProgress || "—"} sub="active stages" pct={relPct(inProgress, scheduled, completed)} icon={Activity} color="#f472b6" />
-              </div>
-            </section>
-
-            {/* ── Sales + Compliance ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-              {/* Sales */}
-              <div className="lg:col-span-2 space-y-3">
-                <SectionLabel>Sales & Inventory Position</SectionLabel>
-
-                {/* Cases summary card */}
-                <div className="rounded-xl p-5" style={GLASS}>
+            {widgetOrder.map((id, idx) => (
+              <WidgetShell
+                key={id}
+                id={id}
+                editMode={editMode}
+                onMove={moveWidget}
+                isFirst={idx === 0}
+                isLast={idx === widgetOrder.length - 1}
+              >
+                {/* ── pipeline ── */}
+                {id === "pipeline" && <>
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/35">Case Summary</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 mb-4">
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Bottled</p>
-                      <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(casesProduced, 0)}</p>
-                      <p className="text-[10px] text-white/25">total cases</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">Active Batch Pipeline</span>
+                      <div className="h-px w-8" style={{ background: "rgba(255,255,255,0.08)" }} />
+                      <span className="text-[10px] text-white/25">live — not filtered by month</span>
                     </div>
-                    <div>
-                      <div className="flex items-end gap-1.5">
-                        <ShoppingCart size={13} color="#60a5fa" />
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Sold</p>
-                      </div>
-                      <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(totalSold, 0)}</p>
-                      <p className="text-[10px] text-white/25">cases on orders</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">On Hand</p>
-                      <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(Math.max(0, casesProduced - totalSold), 0)}</p>
-                      <p className="text-[10px] text-white/25">estimated remaining</p>
-                    </div>
-                  </div>
-                  <FillBar
-                    pct={casesProduced > 0 ? (totalSold / casesProduced) * 100 : 0}
-                    color="#60a5fa"
-                    height={6}
-                  />
-                  <div className="flex justify-between mt-1.5">
-                    <span className="text-[9px] text-white/25">0 cases sold</span>
-                    <span className="text-[9px] text-white/50 font-semibold">
-                      {casesProduced > 0 ? `${Math.round((totalSold / casesProduced) * 100)}% sold` : "No production yet"}
-                    </span>
-                    <span className="text-[9px] text-white/25">{fmtNum(casesProduced, 0)} bottled</span>
-                  </div>
-                </div>
-
-                {/* Distributor vs Retail split */}
-                <div className="rounded-xl p-5" style={GLASS}>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Distribution Channel</p>
-                  <div className="grid grid-cols-2 gap-6 mb-4">
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-[#0369a1]" />
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Distributor</p>
-                      </div>
-                      <p className="text-2xl font-bold text-white tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
-                      <p className="text-[10px] text-white/25">cases</p>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-[#f472b6]" />
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Retail</p>
-                      </div>
-                      <p className="text-2xl font-bold text-white tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
-                      <p className="text-[10px] text-white/25">cases</p>
-                    </div>
-                  </div>
-                  {(distCases > 0 || retailCases > 0)
-                    ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" />
-                    : <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }} />
-                  }
-                </div>
-
-                {/* Orders fulfilled + proof/gallons */}
-                <div className="grid grid-cols-2 gap-3">
-                  <MetricCard label="Orders Fulfilled" value={fulfilled || "—"} sub="approved + fulfilled" pct={relPct(fulfilled, totalSold / 10)} icon={CheckCircle2} color="#34d399" />
-                  <div className="rounded-xl p-5" style={GLASS}>
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Production Totals</p>
-                    <div className="space-y-3">
-                      {[
-                        { label: "Proof Gallons produced", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" },
-                        { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" },
-                      ].map(item => (
-                        <div key={item.label}>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-[9px] text-white/40">{item.label}</span>
-                            <span className="text-[10px] font-bold text-white tabular-nums">{item.value}</span>
-                          </div>
-                          <FillBar pct={item.pct} color={item.color} height={4} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Compliance */}
-              <div>
-                <SectionLabel>Compliance</SectionLabel>
-                <PermitAlert permits={permits} />
-
-                {/* Batch lifecycle card */}
-                <div className="rounded-xl p-5 mb-3" style={GLASS}>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Batch Lifecycle</p>
-                  <div className="flex items-center gap-4">
-                    <div className="relative shrink-0">
-                      <Ring pct={completedPct} size={64} strokeW={5} color="white" />
-                      <div className="absolute inset-0 flex items-center justify-center flex-col">
-                        <span className="text-sm font-bold text-white leading-none">{completed}</span>
-                        <span className="text-[7px] text-white/40 leading-none mt-0.5">closed</span>
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-[9px] text-white/40">Active</span>
-                          <span className="text-[10px] font-bold tabular-nums text-white">{activeBatches.length}</span>
-                        </div>
-                        <FillBar pct={totalBatches > 0 ? (activeBatches.length / totalBatches) * 100 : 0} color={CREAM_ON_DARK} height={4} />
-                      </div>
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-[9px] text-white/40">Completed</span>
-                          <span className="text-[10px] font-bold tabular-nums text-white">{completed}</span>
-                        </div>
-                        <FillBar pct={completedPct} color="white" height={4} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => navigate("/compliance-regulatory")}
-                    className="rounded-xl p-4 text-left group transition-all duration-200"
-                    style={GLASS}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
-                  >
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">Permits</p>
-                    <p className="text-2xl font-bold text-white tabular-nums">{permits.length}</p>
-                    <p className="text-[10px] text-white/25 mt-0.5">on file</p>
-                  </button>
-                  <button
-                    onClick={() => navigate("/reports")}
-                    className="rounded-xl p-4 text-left group transition-all duration-200"
-                    style={GLASS}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
-                  >
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">TTB Reports</p>
-                    <BarChart3 size={22} className="text-white/60 mb-1" />
-                    <p className="text-[10px] text-white/25">view filings</p>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Distilling Calendar ── */}
-            <section>
-              <EmbeddedCalendar batches={allBatches} permits={permits} colas={colas} excise={excise} />
-            </section>
-
-            {/* ── Quick Access ── */}
-            <section>
-              <SectionLabel>Quick Access</SectionLabel>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Production", sub: "Manage batches", href: "/production", icon: FlaskConical },
-                  { label: "Barrels", sub: "Aging & tracking", href: "/barrels", icon: Archive },
-                  { label: "Inventory", sub: "Lots & items", href: "/inventory", icon: Package },
-                  { label: "Sales Orders", sub: "Clients & orders", href: "/sales-orders", icon: ShoppingCart },
-                ].map((nav) => {
-                  const Icon = nav.icon;
-                  return (
-                    <button
-                      key={nav.href}
-                      onClick={() => navigate(nav.href)}
-                      className="rounded-xl p-4 text-left group transition-all duration-200"
-                      style={GLASS}
-                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.14)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
-                    >
-                      <Icon size={16} className="text-white/40 group-hover:text-white/60 transition-colors mb-2" />
-                      <p className="text-sm font-semibold text-white">{nav.label}</p>
-                      <p className="text-[11px] text-white/35 mt-0.5">{nav.sub}</p>
+                    <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-white/40 hover:text-white transition-colors flex items-center gap-1">
+                      View all <ArrowRight size={11} />
                     </button>
-                  );
-                })}
-              </div>
-            </section>
+                  </div>
+                  <StageDistribution batches={allBatches} />
+                  <BatchPipeline batches={allBatches} />
+                </>}
 
+                {/* ── production ── */}
+                {id === "production" && <>
+                  <SectionLabel>Production</SectionLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={CREAM_ON_DARK} />
+                    <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
+                    <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
+                    <MetricCard label="Scheduled Batches" value={scheduled || "—"} sub="in planning" pct={relPct(scheduled, inProgress, prodRecords)} icon={Calendar} color="#60a5fa" />
+                  </div>
+                  {gallons > 0 && proof > 0 && (
+                    <div className="mt-3 rounded-xl px-5 py-3 flex items-center gap-4" style={GLASS}>
+                      <div className="flex-1">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35">Proof Efficiency</p>
+                        <p className="text-xs text-white/60 mt-0.5"><span className="font-bold text-white">{fmtNum(proof / gallons, 2)}</span> proof gallons per gallon distilled</p>
+                      </div>
+                      <div className="flex-1">
+                        <FillBar pct={Math.min((proof / gallons) * 50, 100)} color={CREAM_ON_DARK} height={6} />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-white tabular-nums">{Math.round((proof / gallons) * 100)}%</p>
+                        <p className="text-[9px] text-white/35">of yield</p>
+                      </div>
+                    </div>
+                  )}
+                </>}
+
+                {/* ── bottling ── */}
+                {id === "bottling" && <>
+                  <SectionLabel>Bottling & Inventory</SectionLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={CREAM_ON_DARK} />
+                    <MetricCard label="Bottles Made" value={fmtNum(bottles, 0)} sub="units" pct={relPct(bottles / 12, casesProduced)} icon={Package2} color="#818cf8" />
+                    <MetricCard label="Inventory Records" value={invRecords || "—"} sub="lot records" pct={relPct(invRecords, inProgress, scheduled)} icon={Archive} color="#34d399" />
+                    <MetricCard label="Batches In Progress" value={inProgress || "—"} sub="active stages" pct={relPct(inProgress, scheduled, completed)} icon={Activity} color="#f472b6" />
+                  </div>
+                </>}
+
+                {/* ── sales_compliance ── */}
+                {id === "sales_compliance" && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-3">
+                      <SectionLabel>Sales & Inventory Position</SectionLabel>
+                      <div className="rounded-xl p-5" style={GLASS}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Case Summary</p>
+                        <div className="grid grid-cols-3 gap-6 mb-4">
+                          <div>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Bottled</p>
+                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(casesProduced, 0)}</p>
+                            <p className="text-[10px] text-white/25">total cases</p>
+                          </div>
+                          <div>
+                            <div className="flex items-end gap-1.5">
+                              <ShoppingCart size={13} color="#60a5fa" />
+                              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Sold</p>
+                            </div>
+                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(totalSold, 0)}</p>
+                            <p className="text-[10px] text-white/25">cases on orders</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">On Hand</p>
+                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(Math.max(0, casesProduced - totalSold), 0)}</p>
+                            <p className="text-[10px] text-white/25">estimated remaining</p>
+                          </div>
+                        </div>
+                        <FillBar pct={casesProduced > 0 ? (totalSold / casesProduced) * 100 : 0} color="#60a5fa" height={6} />
+                        <div className="flex justify-between mt-1.5">
+                          <span className="text-[9px] text-white/25">0 cases sold</span>
+                          <span className="text-[9px] text-white/50 font-semibold">{casesProduced > 0 ? `${Math.round((totalSold / casesProduced) * 100)}% sold` : "No production yet"}</span>
+                          <span className="text-[9px] text-white/25">{fmtNum(casesProduced, 0)} bottled</span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl p-5" style={GLASS}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Distribution Channel</p>
+                        <div className="grid grid-cols-2 gap-6 mb-4">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Distributor</p></div>
+                            <p className="text-2xl font-bold text-white tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
+                            <p className="text-[10px] text-white/25">cases</p>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Retail</p></div>
+                            <p className="text-2xl font-bold text-white tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
+                            <p className="text-[10px] text-white/25">cases</p>
+                          </div>
+                        </div>
+                        {(distCases > 0 || retailCases > 0) ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" /> : <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }} />}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <MetricCard label="Orders Fulfilled" value={fulfilled || "—"} sub="approved + fulfilled" pct={relPct(fulfilled, totalSold / 10)} icon={CheckCircle2} color="#34d399" />
+                        <div className="rounded-xl p-5" style={GLASS}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Production Totals</p>
+                          <div className="space-y-3">
+                            {[{ label: "Proof Gallons produced", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" }, { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" }].map(item => (
+                              <div key={item.label}>
+                                <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">{item.label}</span><span className="text-[10px] font-bold text-white tabular-nums">{item.value}</span></div>
+                                <FillBar pct={item.pct} color={item.color} height={4} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <SectionLabel>Compliance</SectionLabel>
+                      <PermitAlert permits={permits} />
+                      <div className="rounded-xl p-5 mb-3" style={GLASS}>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Batch Lifecycle</p>
+                        <div className="flex items-center gap-4">
+                          <div className="relative shrink-0">
+                            <Ring pct={completedPct} size={64} strokeW={5} color="white" />
+                            <div className="absolute inset-0 flex items-center justify-center flex-col">
+                              <span className="text-sm font-bold text-white leading-none">{completed}</span>
+                              <span className="text-[7px] text-white/40 leading-none mt-0.5">closed</span>
+                            </div>
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <div>
+                              <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">Active</span><span className="text-[10px] font-bold tabular-nums text-white">{activeBatches.length}</span></div>
+                              <FillBar pct={totalBatches > 0 ? (activeBatches.length / totalBatches) * 100 : 0} color={CREAM_ON_DARK} height={4} />
+                            </div>
+                            <div>
+                              <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">Completed</span><span className="text-[10px] font-bold tabular-nums text-white">{completed}</span></div>
+                              <FillBar pct={completedPct} color="white" height={4} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => navigate("/compliance-regulatory")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">Permits</p>
+                          <p className="text-2xl font-bold text-white tabular-nums">{permits.length}</p>
+                          <p className="text-[10px] text-white/25 mt-0.5">on file</p>
+                        </button>
+                        <button onClick={() => navigate("/reports")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">TTB Reports</p>
+                          <BarChart3 size={22} className="text-white/60 mb-1" />
+                          <p className="text-[10px] text-white/25">view filings</p>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── calendar ── */}
+                {id === "calendar" && (
+                  <EmbeddedCalendar batches={allBatches} permits={permits} colas={colas} excise={excise} />
+                )}
+
+                {/* ── quickaccess ── */}
+                {id === "quickaccess" && <>
+                  <SectionLabel>Quick Access</SectionLabel>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: "Production", sub: "Manage batches", href: "/production", icon: FlaskConical },
+                      { label: "Barrels", sub: "Aging & tracking", href: "/barrels", icon: Archive },
+                      { label: "Inventory", sub: "Lots & items", href: "/inventory", icon: Package },
+                      { label: "Sales Orders", sub: "Clients & orders", href: "/sales-orders", icon: ShoppingCart },
+                    ].map((nav) => {
+                      const Icon = nav.icon;
+                      return (
+                        <button key={nav.href} onClick={() => navigate(nav.href)} className="rounded-xl p-4 text-left group transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.14)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
+                          <Icon size={16} className="text-white/40 group-hover:text-white/60 transition-colors mb-2" />
+                          <p className="text-sm font-semibold text-white">{nav.label}</p>
+                          <p className="text-[11px] text-white/35 mt-0.5">{nav.sub}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>}
+              </WidgetShell>
+            ))}
           </div>
         </div>
       </div>
