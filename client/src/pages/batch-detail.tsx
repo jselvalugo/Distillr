@@ -1967,6 +1967,309 @@ function ClosedSummary({ data }: { data: BatchFull }) {
 }
 
 // ---------------------------------------------------------------------------
+// Closed — Full Edit Form (all stages)
+// ---------------------------------------------------------------------------
+function ClosedEditForm({ data }: { data: BatchFull }) {
+  const qc = useQueryClient();
+  const { batch, productionRecord: pr } = data;
+
+  const [form, setForm] = useState({
+    // Identity
+    batchCode:    batch.batchCode ?? "",
+    batchDate:    batch.batchDate ?? "",
+    productName:  batch.productName ?? "",
+    spiritType:   batch.spiritType ?? "",
+    spiritClass:  batch.spiritClass ?? "",
+    notes:        batch.notes ?? "",
+    // Mash / Fermentation (production record)
+    mashDate:               pr?.mashDate ?? "",
+    gallonsMolasses:        String(pr?.gallonsMolasses ?? ""),
+    lbsSugar:               String(pr?.lbsSugar ?? ""),
+    libertaliaYeastPackets: String(pr?.libertaliaYeastPackets ?? "0"),
+    riskeyYeastPackets:     String(pr?.riskeyYeastPackets ?? "0"),
+    yeastDate:              pr?.yeastDate ?? "",
+    // Distillation
+    distillDate:          (batch as any).distillDate ?? pr?.distillDate ?? "",
+    stillType:            (batch as any).stillType ?? "",
+    gallonsDistilled:     String(pr?.gallonsDistilled ?? ""),
+    distillationProof:    String((batch as any).distillationProof ?? ""),
+    proofGallonsProduced: String((batch as any).proofGallonsProduced ?? ""),
+    // Barreling
+    fillNumber:      (batch as any).fillNumber ?? "",
+    containerType:   (batch as any).containerType ?? "",
+    fillDate:        (batch as any).fillDate ?? "",
+    fillProof:       String((batch as any).fillProof ?? ""),
+    fillWineGallons: String((batch as any).fillWineGallons ?? ""),
+    fillProofGallons:String((batch as any).fillProofGallons ?? ""),
+    warehouseZone:   "",
+    charLevel:       "",
+    // Aging
+    targetDumpDate:       (batch as any).targetDumpDate ?? "",
+    amountReceivedGallons:String((batch as any).amountReceivedGallons ?? ""),
+    // Bottling
+    bottlingDate:           (batch as any).bottlingDate ?? "",
+    lotNumber:              (batch as any).lotNumber ?? "",
+    bottlingProof:          String((batch as any).bottlingProof ?? ""),
+    wineGallonsBottled:     String((batch as any).wineGallonsBottled ?? ""),
+    proofGallonsProcessed:  String((batch as any).proofGallonsProcessed ?? ""),
+    cases750ml:             String((batch as any).cases750ml ?? ""),
+    cases1000ml:            String((batch as any).cases1000ml ?? ""),
+    cases1750ml:            String((batch as any).cases1750ml ?? ""),
+    totalCases:             String((batch as any).totalCases ?? ""),
+    taxClass:               (batch as any).taxClass ?? "craft_tier1",
+    exciseTaxDue:           String((batch as any).exciseTaxDue ?? ""),
+  });
+
+  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(s => ({ ...s, [k]: e.target.value }));
+
+  // Auto-calc proof gallons produced
+  const wgDist = parseFloat(form.gallonsDistilled);
+  const pDist  = parseFloat(form.distillationProof);
+  const calcPgProduced = wgDist && pDist ? (wgDist * pDist / 100).toFixed(2) : null;
+
+  // Auto-calc fill proof gallons
+  const wgFill = parseFloat(form.fillWineGallons);
+  const pFill  = parseFloat(form.fillProof);
+  const calcFillPg = wgFill && pFill ? (wgFill * pFill / 100).toFixed(2) : null;
+
+  const save = useMutation({
+    mutationFn: async () => {
+      // 1. PATCH batch record with all batch-level fields
+      await apiRequest(`/api/distilling/batch-records/${batch.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          batchCode:            form.batchCode || undefined,
+          batchDate:            form.batchDate || undefined,
+          productName:          form.productName || null,
+          spiritType:           form.spiritType || null,
+          spiritClass:          form.spiritClass || null,
+          notes:                form.notes || null,
+          distillDate:          form.distillDate || null,
+          stillType:            form.stillType || null,
+          distillationProof:    form.distillationProof ? +form.distillationProof : null,
+          proofGallonsProduced: calcPgProduced ? +calcPgProduced : (form.proofGallonsProduced ? +form.proofGallonsProduced : null),
+          fillNumber:           form.fillNumber || null,
+          containerType:        form.containerType || null,
+          fillDate:             form.fillDate || null,
+          fillProof:            form.fillProof ? +form.fillProof : null,
+          fillWineGallons:      form.fillWineGallons ? +form.fillWineGallons : null,
+          fillProofGallons:     calcFillPg ? +calcFillPg : (form.fillProofGallons ? +form.fillProofGallons : null),
+          targetDumpDate:       form.targetDumpDate || null,
+          amountReceivedGallons:form.amountReceivedGallons ? +form.amountReceivedGallons : null,
+          bottlingDate:         form.bottlingDate || null,
+          lotNumber:            form.lotNumber || null,
+          bottlingProof:        form.bottlingProof ? +form.bottlingProof : null,
+          wineGallonsBottled:   form.wineGallonsBottled ? +form.wineGallonsBottled : null,
+          proofGallonsProcessed:form.proofGallonsProcessed ? +form.proofGallonsProcessed : null,
+          cases750ml:           form.cases750ml ? +form.cases750ml : null,
+          cases1000ml:          form.cases1000ml ? +form.cases1000ml : null,
+          cases1750ml:          form.cases1750ml ? +form.cases1750ml : null,
+          totalCases:           form.totalCases ? +form.totalCases : null,
+          taxClass:             form.taxClass || null,
+          exciseTaxDue:         form.exciseTaxDue ? +form.exciseTaxDue : null,
+        }),
+      });
+      // 2. PATCH production record (mash + distillation) if it exists
+      if (batch.productionRecordId) {
+        await apiRequest(`/api/distilling/production-records/${batch.productionRecordId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            mashDate:               form.mashDate || undefined,
+            gallonsMolasses:        form.gallonsMolasses ? +form.gallonsMolasses : 0,
+            lbsSugar:               form.lbsSugar ? +form.lbsSugar : 0,
+            libertaliaYeastPackets: form.libertaliaYeastPackets ? +form.libertaliaYeastPackets : 0,
+            riskeyYeastPackets:     form.riskeyYeastPackets ? +form.riskeyYeastPackets : 0,
+            yeastDate:              form.yeastDate || null,
+            distillDate:            form.distillDate || null,
+            gallonsDistilled:       form.gallonsDistilled ? +form.gallonsDistilled : 0,
+            percentageDistilled:    pDist ? pDist / 2 : 0,
+            proofOfGallons:         calcPgProduced ? +calcPgProduced : 0,
+          }),
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] });
+      toast.success("Batch record saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const inp = (label: string, key: keyof typeof form, opts?: { type?: string; step?: string; placeholder?: string; readonly?: boolean }) => (
+    <div>
+      <label className="block text-xs font-medium text-[#737373] mb-1">{label}</label>
+      <Input
+        type={opts?.type ?? "text"}
+        step={opts?.step}
+        placeholder={opts?.placeholder}
+        value={form[key] as string}
+        onChange={f(key)}
+        readOnly={opts?.readonly}
+        className={opts?.readonly ? "bg-[#f7f7f7] text-[#737373]" : ""}
+      />
+    </div>
+  );
+
+  const SectionTitle = ({ title }: { title: string }) => (
+    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] pb-1 border-b border-[#f0f0f0] mb-3">{title}</p>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Completion banner */}
+      <div className="bg-[#22c55e]/8 border border-[#22c55e]/20 rounded-lg px-4 py-3 flex items-center gap-2">
+        <span className="w-5 h-5 rounded-full bg-[#22c55e] text-white text-[10px] font-bold flex items-center justify-center shrink-0">✓</span>
+        <p className="text-sm font-semibold text-[#15803d]">Production Complete — all fields editable below</p>
+      </div>
+
+      {/* Identity */}
+      <div>
+        <SectionTitle title="Batch Identity" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Batch Code *", "batchCode")}
+          {inp("Batch Date *", "batchDate", { type: "date" })}
+          {inp("Product Name", "productName", { placeholder: "e.g. Libertalia Rum" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Type</label>
+            <Select value={form.spiritType} onChange={f("spiritType")}>
+              <option value="">— Select —</option>
+              {SPIRIT_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select>
+          </div>
+          {inp("Spirit Class", "spiritClass", { placeholder: "e.g. Dark Rum" })}
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={f("notes")}
+              rows={2}
+              className="w-full rounded-md border border-[#e5e5e5] bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-[#b0b0b0] focus:outline-none focus:ring-1 focus:ring-[#0a0a0a] resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Mash & Fermentation */}
+      <div>
+        <SectionTitle title="Mash & Fermentation" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Mash Date", "mashDate", { type: "date" })}
+          {inp("Yeast Pitch Date", "yeastDate", { type: "date" })}
+          {inp("Molasses (gal)", "gallonsMolasses", { type: "number", step: "0.01" })}
+          {inp("Cane Sugar (lbs)", "lbsSugar", { type: "number", step: "0.01" })}
+          {inp("Libertalia Yeast Packets", "libertaliaYeastPackets", { type: "number" })}
+          {inp("Riskey Yeast Packets", "riskeyYeastPackets", { type: "number" })}
+        </div>
+      </div>
+
+      {/* Distillation */}
+      <div>
+        <SectionTitle title="Distillation" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Distill Date", "distillDate", { type: "date" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Still Type</label>
+            <Select value={form.stillType} onChange={f("stillType")}>
+              <option value="">— Select —</option>
+              <option value="pot">Pot Still</option>
+              <option value="column">Column Still</option>
+              <option value="hybrid">Hybrid</option>
+            </Select>
+          </div>
+          {inp("Wine Gallons Distilled", "gallonsDistilled", { type: "number", step: "0.01" })}
+          {inp("Proof at Distillation °", "distillationProof", { type: "number", step: "0.1" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Proof Gallons Produced</label>
+            <div className="h-9 flex items-center px-3 rounded-md border border-[#e5e5e5] bg-[#f0f9ff] text-sm font-semibold text-[#0369a1]">
+              {calcPgProduced ?? (form.proofGallonsProduced || "—")}
+            </div>
+            <p className="text-[10px] text-[#a3a3a3] mt-0.5">= wine gal × proof / 100</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Barreling */}
+      <div>
+        <SectionTitle title="Barreling" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Fill Number", "fillNumber", { placeholder: "TTB fill number" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Container Type</label>
+            <Select value={form.containerType} onChange={f("containerType")}>
+              <option value="">— Select —</option>
+              <option value="new_oak_barrel">New Oak Barrel</option>
+              <option value="used_barrel">Used Oak Barrel</option>
+              <option value="tank">Stainless Tank</option>
+              <option value="other">Other</option>
+            </Select>
+          </div>
+          {inp("Date of Fill", "fillDate", { type: "date" })}
+          {inp("Proof at Fill °", "fillProof", { type: "number", step: "0.1" })}
+          {inp("Wine Gallons Filled", "fillWineGallons", { type: "number", step: "0.01" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Fill Proof Gallons</label>
+            <div className="h-9 flex items-center px-3 rounded-md border border-[#e5e5e5] bg-[#f0f9ff] text-sm font-semibold text-[#0369a1]">
+              {calcFillPg ?? (form.fillProofGallons || "—")}
+            </div>
+            <p className="text-[10px] text-[#a3a3a3] mt-0.5">= wine gal × fill proof / 100</p>
+          </div>
+          {inp("Warehouse Zone", "warehouseZone", { placeholder: "e.g. Zone A, Rack 3" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Char Level</label>
+            <Select value={form.charLevel} onChange={f("charLevel")}>
+              <option value="">— N/A —</option>
+              <option value="#1">#1</option>
+              <option value="#2">#2</option>
+              <option value="#3">#3</option>
+              <option value="#4">#4</option>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Aging */}
+      <div>
+        <SectionTitle title="Aging" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Target Dump Date", "targetDumpDate", { type: "date" })}
+          {inp("Amount Received (wine gal)", "amountReceivedGallons", { type: "number", step: "0.01" })}
+        </div>
+      </div>
+
+      {/* Bottling */}
+      <div>
+        <SectionTitle title="Bottling" />
+        <div className="grid grid-cols-2 gap-4">
+          {inp("Date of Bottling", "bottlingDate", { type: "date" })}
+          {inp("Lot Number", "lotNumber", { placeholder: "For label compliance" })}
+          {inp("Proof at Bottling °", "bottlingProof", { type: "number", step: "0.1" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Tax Class</label>
+            <Select value={form.taxClass} onChange={f("taxClass")}>
+              {TAX_CLASSES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </Select>
+          </div>
+          {inp("Wine Gallons Bottled", "wineGallonsBottled", { type: "number", step: "0.01" })}
+          {inp("Proof Gallons Processed", "proofGallonsProcessed", { type: "number", step: "0.001" })}
+          {inp("Cases 750 mL", "cases750ml", { type: "number" })}
+          {inp("Cases 1 L", "cases1000ml", { type: "number" })}
+          {inp("Cases 1.75 L", "cases1750ml", { type: "number" })}
+          {inp("Total Cases", "totalCases", { type: "number" })}
+          {inp("Excise Tax Due ($)", "exciseTaxDue", { type: "number", step: "0.01" })}
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-4 border-t border-[#e5e5e5]">
+        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          {save.isPending ? "Saving…" : "Save All Changes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export default function BatchDetail() {
@@ -2009,7 +2312,7 @@ export default function BatchDetail() {
       case "barreling": return <BarrelingForm data={data} />;
       case "aging": return <AgingForm data={data} />;
       case "bottling": return <BottlingForm data={data} />;
-      case "closed": return <ClosedSummary data={data} />;
+      case "closed": return <ClosedEditForm data={data} />;
       default: return null;
     }
   };
@@ -2047,7 +2350,7 @@ export default function BatchDetail() {
 
         {currentStage === "closed" && (
           <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
-            <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">Batch Summary</h2>
+            <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">Closed Batch — Full Record</h2>
             {renderCurrentForm()}
           </div>
         )}
