@@ -148,7 +148,7 @@ function StageProgressBar({ current }: { current: Stage }) {
       <div className="flex items-center justify-between px-6 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
           <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
-            isClosed ? "bg-[#22c55e] text-white" : "bg-[#0a0a0a] text-white"
+            isClosed ? "bg-[#22c55e] text-white" : "bg-[var(--brand)] text-white"
           }`}>
             {isClosed ? "✓" : currentIdx + 1}
           </span>
@@ -167,7 +167,7 @@ function StageProgressBar({ current }: { current: Stage }) {
       <div className="px-6 pb-3">
         <div className="h-1.5 bg-[#e5e5e5] rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${isClosed ? "bg-[#22c55e]" : "bg-[#0a0a0a]"}`}
+            className={`h-full rounded-full transition-all duration-500 ${isClosed ? "bg-[#22c55e]" : "bg-[var(--brand)]"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -183,7 +183,7 @@ function StageProgressBar({ current }: { current: Stage }) {
               <div key={stage} className="flex flex-col items-center gap-1 min-w-0 flex-1">
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
                   done ? "bg-[#22c55e] text-white" :
-                  active ? "bg-[#0a0a0a] text-white" :
+                  active ? "bg-[var(--brand)] text-white" :
                   "bg-[#e5e5e5] text-[#a3a3a3]"
                 }`}>
                   {done ? "✓" : i + 1}
@@ -1105,7 +1105,7 @@ function AgingForm({ data }: { data: BatchFull }) {
       <div className="flex gap-1 border-b border-[#e5e5e5]">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t.key ? "border-[#0a0a0a] text-[#0a0a0a]" : "border-transparent text-[#737373] hover:text-[#0a0a0a]"}`}>
+            className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t.key ? "border-[var(--brand)] text-[#0a0a0a]" : "border-transparent text-[#737373] hover:text-[#0a0a0a]"}`}>
             {t.label}
             {t.key === "temperature" && tempEvents.length > 0 && <span className="ml-1 text-[10px] bg-[#f0f0f0] rounded-full px-1">{tempEvents.length}</span>}
             {t.key === "gauge" && gaugeEvents.length > 0 && <span className="ml-1 text-[10px] bg-[#f0f0f0] rounded-full px-1">{gaugeEvents.length}</span>}

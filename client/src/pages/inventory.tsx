@@ -111,7 +111,7 @@ export default function Inventory() {
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
                 tab === t
-                  ? "border-[#0a0a0a] text-[#0a0a0a]"
+                  ? "border-[var(--brand)] text-[#0a0a0a]"
                   : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
               }`}
             >

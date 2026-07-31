@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: "bg-[#0a0a0a] text-white",
+  default: "bg-[var(--brand)] text-white",
   success: "bg-[#f0faf0] text-[#166534] border border-[#bbf7d0]",
   warning: "bg-[#fffbeb] text-[#92400e] border border-[#fde68a]",
   danger: "bg-[#fef2f2] text-[#991b1b] border border-[#fecaca]",

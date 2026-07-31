@@ -116,7 +116,7 @@ function AppLauncher() {
                         onClick={() => { navigate(item.href); setOpen(false); }}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors group ${
                           isActive
-                            ? "bg-[#0a0a0a] text-white"
+                            ? "bg-[var(--brand)] text-white"
                             : "hover:bg-[#f5f5f5] text-[#0a0a0a]"
                         }`}
                       >
@@ -299,6 +299,10 @@ function TopNav() {
 
   const orgName = config?.organizationNameOverride || config?.organizationName;
   const dashColor = config?.dashboardColor ?? NAVY;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--brand", dashColor);
+  }, [dashColor]);
 
   return (
     <>

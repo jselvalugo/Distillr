@@ -47,7 +47,7 @@ function StagePill({ stage }: { stage: string }) {
       isClosed ? "bg-[#22c55e]/10 text-[#16a34a]" : "bg-[#0a0a0a]/8 text-[#0a0a0a]"
     }`}>
       <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center ${
-        isClosed ? "bg-[#22c55e] text-white" : "bg-[#0a0a0a] text-white"
+        isClosed ? "bg-[#22c55e] text-white" : "bg-[var(--brand)] text-white"
       }`}>{step}</span>
       {label}
       <span className="text-[#737373] font-normal">· {step}/7</span>
@@ -414,7 +414,7 @@ export default function Production() {
             <div className="flex flex-wrap items-center gap-1 bg-white border border-[#e5e5e5] rounded-md p-0.5">
               <button
                 onClick={() => setStageFilter("all")}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === "all" ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === "all" ? "bg-[var(--brand)] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
               >
                 All
               </button>
@@ -422,7 +422,7 @@ export default function Production() {
                 <button
                   key={s}
                   onClick={() => setStageFilter(s)}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === s ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${stageFilter === s ? "bg-[var(--brand)] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
                 >
                   {STAGE_LABELS[s]}
                 </button>

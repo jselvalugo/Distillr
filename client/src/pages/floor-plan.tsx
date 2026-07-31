@@ -222,7 +222,7 @@ function EquipmentCard({ eq, onClick }: { eq: Equipment; onClick: () => void }) 
   return (
     <button
       onClick={onClick}
-      className={`group flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-[#e5e5e5] hover:border-[#0a0a0a] hover:shadow-md transition-all w-52 text-left ${sc.bg}`}
+      className={`group flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-[#e5e5e5] hover:border-[var(--brand)] hover:shadow-md transition-all w-52 text-left ${sc.bg}`}
     >
       {/* Graphic */}
       <div className="flex items-end justify-center h-28">

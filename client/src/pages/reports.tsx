@@ -255,7 +255,7 @@ function ReportDropdown({ value, onChange }: { value: ReportKey; onChange: (v: R
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2.5 pl-3.5 pr-3 py-2 bg-[#0a0a0a] text-white rounded-xl hover:bg-[#3d2512] transition-colors shadow-sm"
+        className="flex items-center gap-2.5 pl-3.5 pr-3 py-2 bg-[var(--brand)] text-white rounded-xl hover:bg-[var(--brand)] transition-colors shadow-sm"
       >
         {current && <current.Icon size={13} className="text-white/70 shrink-0" />}
         <div className="text-left min-w-0">
@@ -355,7 +355,7 @@ function PeriodPicker({ month, onChange }: { month: string; onChange: (m: string
               onClick={() => quickSelect(delta)}
               className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all border ${
                 active
-                  ? "bg-[#0a0a0a] text-white border-[#0a0a0a]"
+                  ? "bg-[var(--brand)] text-white border-[var(--brand)]"
                   : "bg-white text-[#525252] border-[#e5e5e5] hover:border-[#0a0a0a]/30 hover:text-[#0a0a0a]"
               }`}
             >
@@ -380,7 +380,7 @@ function PeriodPicker({ month, onChange }: { month: string; onChange: (m: string
         <button
           onClick={() => { setPickerYear(yr); setOpen(o => !o); }}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white text-xs font-semibold transition-all min-w-[148px] justify-center ${
-            open ? "border-[#0a0a0a] text-[#0a0a0a]" : "border-[#e5e5e5] text-[#0a0a0a] hover:border-[#0a0a0a]/40"
+            open ? "border-[var(--brand)] text-[#0a0a0a]" : "border-[#e5e5e5] text-[#0a0a0a] hover:border-[#0a0a0a]/40"
           }`}
         >
           <Calendar size={11} className="text-[#525252] shrink-0" />
@@ -420,7 +420,7 @@ function PeriodPicker({ month, onChange }: { month: string; onChange: (m: string
                     onClick={() => selectMonth(i + 1)}
                     className={`py-2 rounded-lg text-xs font-medium transition-all relative ${
                       isSelected
-                        ? "bg-[#0a0a0a] text-white shadow-sm"
+                        ? "bg-[var(--brand)] text-white shadow-sm"
                         : isCurrent
                         ? "bg-[#f3f4f6] text-[#0a0a0a] font-semibold"
                         : "hover:bg-[#f9f8f7] text-[#404040]"

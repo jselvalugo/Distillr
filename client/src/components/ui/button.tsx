@@ -13,7 +13,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           "inline-flex items-center justify-center gap-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black disabled:pointer-events-none disabled:opacity-50 cursor-pointer",
-          variant === "default" && "bg-[#0a0a0a] text-white hover:bg-[#2a2a2a]",
+          variant === "default" && "bg-[var(--brand)] text-white hover:bg-[var(--brand)]",
           variant === "outline" && "border border-[#e5e5e5] bg-white text-[#0a0a0a] hover:bg-[#f7f7f7]",
           variant === "ghost" && "text-[#0a0a0a] hover:bg-[#f7f7f7]",
           variant === "destructive" && "bg-red-600 text-white hover:bg-red-700",

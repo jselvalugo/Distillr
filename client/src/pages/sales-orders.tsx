@@ -144,7 +144,7 @@ export default function SalesOrders() {
             <div className="flex items-center gap-1 bg-white border border-[#e5e5e5] rounded-md p-0.5">
               <button
                 onClick={() => setStatusFilter("all")}
-                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${statusFilter === "all" ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${statusFilter === "all" ? "bg-[var(--brand)] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
               >
                 All
               </button>
@@ -152,7 +152,7 @@ export default function SalesOrders() {
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${statusFilter === s ? "bg-[#0a0a0a] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${statusFilter === s ? "bg-[var(--brand)] text-white" : "text-[#737373] hover:text-[#0a0a0a]"}`}
                 >
                   {s}
                 </button>

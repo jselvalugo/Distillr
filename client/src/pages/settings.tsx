@@ -791,7 +791,7 @@ function ImportTab() {
           </div>
           <div
             className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
-              dragOver ? "border-[#0a0a0a] bg-[#0a0a0a]/5" : "border-[#e5e5e5] hover:border-[#0a0a0a]/30"
+              dragOver ? "border-[var(--brand)] bg-[#0a0a0a]/5" : "border-[#e5e5e5] hover:border-[#0a0a0a]/30"
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
