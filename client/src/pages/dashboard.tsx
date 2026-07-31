@@ -7,7 +7,7 @@ import {
   Activity, Calendar, CheckCircle2, Archive,
   Gauge, ClipboardList, BarChart3, ArrowRight,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Bell, SlidersHorizontal, GripVertical,
+  Bell, SlidersHorizontal, GripVertical, LayoutList,
 } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout } from "../components/layout";
@@ -660,67 +660,82 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
     main.scrollTo({ top: elTop - 24, behavior: "smooth" });
   }
 
+  const glassBase: React.CSSProperties = {
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+  };
+
   return (
     <div
-      className="hidden lg:flex fixed left-4 top-1/2 z-[9999] flex-col gap-1 rounded-2xl"
-      style={{
-        transform: "translateY(-50%)",
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.14)",
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        width: expanded ? 156 : 44,
-        padding: expanded ? 10 : "10px 6px",
-        transition: "width 0.25s cubic-bezier(0.4,0,0.2,1), padding 0.2s ease",
-        overflow: "hidden",
-      }}
+      className="hidden lg:block fixed left-4 z-[9999]"
+      style={{ top: "50%", transform: "translateY(-50%)" }}
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
     >
-      {widgetOrder.map(id => {
-        const isActive = id === activeId;
-        const dotColor = NAV_DOT[id] ?? "white";
-        return (
-          <button
-            key={id}
-            onClick={() => scrollTo(id)}
-            title={expanded ? undefined : SECTION_LABELS[id]}
-            className="flex items-center rounded-xl shrink-0 w-full transition-colors duration-150"
-            style={{
-              gap: expanded ? 10 : 0,
-              justifyContent: expanded ? "flex-start" : "center",
-              padding: expanded ? "7px 8px" : "8px 0",
-              background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
-            }}
-            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = isActive ? "rgba(255,255,255,0.12)" : "transparent"; }}
-          >
-            {/* dot — always visible */}
-            <div
-              className="shrink-0 rounded-full"
-              style={{
-                width: isActive ? 8 : 6,
-                height: isActive ? 8 : 6,
-                background: isActive ? dotColor : "rgba(255,255,255,0.3)",
-                boxShadow: isActive ? `0 0 8px ${dotColor}80` : "none",
-                transition: "width 0.2s ease, height 0.2s ease, box-shadow 0.2s ease",
-              }}
-            />
-            {/* label — fades in on expand */}
-            <span
-              className="text-[9px] font-bold uppercase tracking-widest leading-none whitespace-nowrap"
-              style={{
-                color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)",
-                opacity: expanded ? 1 : 0,
-                transition: `opacity ${expanded ? "0.18s ease 0.1s" : "0.1s ease"}`,
-                pointerEvents: "none",
-              }}
+      {/* Collapsed button — fades out on hover */}
+      <div
+        className="absolute inset-0 flex items-center justify-center rounded-2xl"
+        style={{
+          ...glassBase,
+          opacity: expanded ? 0 : 1,
+          transition: "opacity 0.15s ease",
+          pointerEvents: expanded ? "none" : "auto",
+          width: 40,
+          height: 40,
+          top: "50%",
+          transform: "translateY(-50%)",
+        }}
+        title="Section navigator"
+      >
+        <LayoutList size={15} className="text-white/60" />
+      </div>
+
+      {/* Expanded panel — fades in on hover */}
+      <div
+        className="flex flex-col gap-1 rounded-2xl"
+        style={{
+          ...glassBase,
+          opacity: expanded ? 1 : 0,
+          pointerEvents: expanded ? "auto" : "none",
+          transition: `opacity ${expanded ? "0.2s ease 0.08s" : "0.12s ease"}`,
+          padding: 10,
+          minWidth: 156,
+        }}
+      >
+        {widgetOrder.map(id => {
+          const isActive = id === activeId;
+          const dotColor = NAV_DOT[id] ?? "white";
+          return (
+            <button
+              key={id}
+              onClick={() => scrollTo(id)}
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl w-full text-left transition-colors duration-150"
+              style={{ background: isActive ? "rgba(255,255,255,0.12)" : "transparent" }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(255,255,255,0.12)" : "transparent"; }}
             >
-              {NAV_SHORT[id] ?? id}
-            </span>
-          </button>
-        );
-      })}
+              <div
+                className="shrink-0 rounded-full"
+                style={{
+                  width: isActive ? 8 : 6,
+                  height: isActive ? 8 : 6,
+                  background: isActive ? dotColor : "rgba(255,255,255,0.3)",
+                  boxShadow: isActive ? `0 0 8px ${dotColor}80` : "none",
+                  transition: "all 0.2s ease",
+                }}
+              />
+              <span
+                className="text-[9px] font-bold uppercase tracking-widest leading-none whitespace-nowrap"
+                style={{ color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)" }}
+              >
+                {NAV_SHORT[id] ?? id}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

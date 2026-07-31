@@ -229,7 +229,7 @@ function MobileDrawer({ open, onClose, navColor }: { open: boolean; onClose: () 
   const [location] = useLocation();
   const [, navigate] = useLocation();
   const isDashboard = location === "/";
-  const drawerBg = isDashboard ? (navColor ?? NAVY) : "#0a0a0a";
+  const drawerBg = navColor ?? NAVY;
 
   useEffect(() => { if (open) onClose(); }, [location]);
 
@@ -303,7 +303,7 @@ function TopNav() {
   return (
     <>
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} navColor={dashColor} />
-      <header className="h-12 flex items-center px-4 gap-3 shrink-0 border-b border-white/10" style={{ background: isDashboard ? dashColor : "#0a0a0a" }}>
+      <header className="h-12 flex items-center px-4 gap-3 shrink-0 border-b border-white/10" style={{ background: dashColor }}>
         {/* Hamburger — mobile only */}
         <button
           onClick={() => setDrawerOpen(true)}
