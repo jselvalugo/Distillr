@@ -339,7 +339,7 @@ export default function Landing() {
                 className="lnd-btn-primary"
                 style={{ fontSize: 15, padding: "13px 32px" }}
               >
-                Start Free Trial
+                Request Access
               </button>
               <button
                 onClick={() => navigate("/login")}
@@ -618,7 +618,7 @@ export default function Landing() {
                     border: "none",
                   }}
                 >
-                  {p.price === "Custom" ? "Contact Sales" : "Start Free Trial"}
+                  {p.price === "Custom" ? "Contact Sales" : "Request Access"}
                 </button>
                 <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                   {p.features.map((f) => (
@@ -728,10 +728,10 @@ export default function Landing() {
               className="lnd-btn-primary"
               style={{ background: "#fff", color: NAVY, fontSize: 15, padding: "14px 40px", position: "relative", zIndex: 1 }}
             >
-              Start Free Trial
+              Request Access
             </button>
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 16, position: "relative", zIndex: 1 }}>
-              No credit card · 14-day trial · Cancel anytime
+              We'll reach out within 24 hours
             </p>
           </div>
         </div>

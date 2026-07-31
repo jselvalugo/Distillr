@@ -64,9 +64,23 @@ export async function initDatabase(): Promise<void> {
       slug TEXT UNIQUE NOT NULL,
       plan TEXT NOT NULL DEFAULT 'standard',
       status TEXT NOT NULL DEFAULT 'active',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_limit INTEGER NOT NULL DEFAULT 5,
+      license_expires_at TIMESTAMPTZ,
+      billing_email TEXT,
+      billing_amount NUMERIC(10,2),
+      billing_cycle TEXT DEFAULT 'monthly',
+      license_notes TEXT
     )
   `);
+
+  // Add licensing columns to existing tenants tables (safe migration)
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 5`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_expires_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_email TEXT`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_amount NUMERIC(10,2)`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_cycle TEXT DEFAULT 'monthly'`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_notes TEXT`);
 
   await query(`
     INSERT INTO tenants (id, name, slug, plan, status)
@@ -745,5 +759,15 @@ export async function initDatabase(): Promise<void> {
         ';
       END IF;
     END $$;
+
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      distillery_name TEXT,
+      state TEXT,
+      message TEXT,
+      submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 }

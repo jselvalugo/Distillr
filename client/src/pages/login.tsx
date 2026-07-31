@@ -522,12 +522,12 @@ export default function Login() {
           {/* Footer */}
           <div className="ln-4" style={{ textAlign: "center" }}>
             <p style={{ fontSize: 12.5, color: "rgba(15,27,66,0.45)" }}>
-              Don't have an account?{" "}
+              Interested in Distillr?{" "}
               <a
                 href="/signup"
                 style={{ color: NAVY, fontWeight: 700, textDecoration: "none", borderBottom: `1.5px solid ${NAVY}` }}
               >
-                Request access
+                Join the waitlist
               </a>
             </p>
             <p style={{ fontSize: 10.5, color: "rgba(15,27,66,0.25)", marginTop: 12 }}>

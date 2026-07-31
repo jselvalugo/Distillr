@@ -2165,6 +2165,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Waitlist ──────────────────────────────────────────────────────────────
+  app.post("/api/waitlist", async (req, res) => {
+    const { name, email, distilleryName, state, message } = req.body ?? {};
+    if (!name?.trim() || !email?.trim()) {
+      return res.status(400).json({ error: "Name and email are required." });
+    }
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(email.trim())) {
+      return res.status(400).json({ error: "Please enter a valid email address." });
+    }
+    try {
+      const id = `WL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await query(
+        `INSERT INTO waitlist (id, name, email, distillery_name, state, message)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING`,
+        [id, name.trim(), email.trim().toLowerCase(), distilleryName?.trim() || null, state?.trim() || null, message?.trim() || null]
+      );
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to save. Please try again." });
+    }
+  });
+
+  app.get("/api/waitlist", requireAdminSession, async (_req, res) => {
+    try {
+      const rows = await query(`SELECT * FROM waitlist ORDER BY submitted_at DESC`);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/platform-config", requireAuth, async (_req, res) => {
     try {
       const config = await storage.getPlatformConfig();

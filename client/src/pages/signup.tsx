@@ -1,129 +1,50 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "../hooks/use-auth";
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { toast } from "sonner";
+import { apiRequest } from "../lib/queryClient";
 
 const CREAM = "#FAF0E2";
 const NAVY  = "#0F1B42";
 const NAVY2 = "#162050";
 
 const STYLES = `
-  @keyframes fadeUp   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-  @keyframes barrelFloat { 0%,100%{transform:rotate(-1deg) translateY(0)} 50%{transform:rotate(1deg) translateY(-8px)} }
+  @keyframes fadeUp  { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
 
-  .sgn-input {
+  .wl-input {
     width: 100%;
     padding: 11px 14px;
     border-radius: 8px;
     font-size: 14px;
     outline: none;
     transition: border-color 0.18s, box-shadow 0.18s;
-    background: rgba(15,27,66,0.05);
-    border: 1.5px solid rgba(15,27,66,0.18);
+    background: rgba(15,27,66,0.04);
+    border: 1.5px solid rgba(15,27,66,0.16);
     color: ${NAVY};
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: inherit;
+    box-sizing: border-box;
   }
-  .sgn-input::placeholder { color: rgba(15,27,66,0.35); }
-  .sgn-input:focus {
-    border-color: rgba(15,27,66,0.55);
-    box-shadow: 0 0 0 3px rgba(15,27,66,0.08);
-    background: rgba(15,27,66,0.03);
+  .wl-input::placeholder { color: rgba(15,27,66,0.32); }
+  .wl-input:focus {
+    border-color: rgba(15,27,66,0.5);
+    box-shadow: 0 0 0 3px rgba(15,27,66,0.07);
+    background: rgba(15,27,66,0.02);
   }
-
-  .sgn-btn {
+  .wl-btn {
     width: 100%;
     padding: 13px;
     border-radius: 100px;
     font-size: 14px;
     font-weight: 700;
-    letter-spacing: -0.01em;
     border: none;
     cursor: pointer;
     background: ${NAVY};
     color: #fff;
     transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: inherit;
   }
-  .sgn-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.32); }
-  .sgn-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-
-  .sgn-check {
-    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
-  }
-
-  @media (max-width: 900px) {
-    .sgn-left  { display: none !important; }
-    .sgn-right { width: 100% !important; }
-  }
+  .wl-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.3); }
+  .wl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
-
-function BarrelIllustration() {
-  const W = 160, H = 210;
-  return (
-    <svg
-      width={W} height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      fill="none"
-      style={{ animation: "barrelFloat 7s ease-in-out infinite", display: "block" }}
-    >
-      <defs>
-        <linearGradient id="sb-body" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="#1a2d5a" />
-          <stop offset="45%"  stopColor="#253870" />
-          <stop offset="100%" stopColor="#111f46" />
-        </linearGradient>
-        <linearGradient id="sb-hoop" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"  stopColor="#8fa3d0" />
-          <stop offset="50%" stopColor="#c8d8f4" />
-          <stop offset="100%" stopColor="#6a82b8" />
-        </linearGradient>
-        <radialGradient id="sb-glow" cx="50%" cy="0%" r="60%">
-          <stop offset="0%"  stopColor="rgba(200,216,244,0.18)" />
-          <stop offset="100%" stopColor="rgba(200,216,244,0)" />
-        </radialGradient>
-      </defs>
-
-      {/* Glow */}
-      <ellipse cx={W/2} cy={H*0.42} rx={W*0.52} ry={H*0.52} fill="url(#sb-glow)" />
-
-      {/* Barrel body */}
-      <path
-        d={`M${W*0.18},${H*0.14} Q${W*0.06},${H*0.42} ${W*0.18},${H*0.78}
-           L${W*0.82},${H*0.78} Q${W*0.94},${H*0.42} ${W*0.82},${H*0.14} Z`}
-        fill="url(#sb-body)"
-      />
-
-      {/* Stave lines */}
-      {[0.34, 0.5, 0.66].map((x) => (
-        <line key={x}
-          x1={W*x} y1={H*0.16} x2={W*x} y2={H*0.76}
-          stroke="rgba(200,216,244,0.1)" strokeWidth="1"
-        />
-      ))}
-
-      {/* Top cap */}
-      <ellipse cx={W/2} cy={H*0.14} rx={W*0.32} ry={H*0.055} fill="#1e3060" stroke="#3a5090" strokeWidth="1" />
-      {/* Bottom cap */}
-      <ellipse cx={W/2} cy={H*0.78} rx={W*0.32} ry={H*0.055} fill="#182848" stroke="#2e4280" strokeWidth="1" />
-
-      {/* Hoops */}
-      {[0.25, 0.46, 0.67].map((yFrac) => (
-        <ellipse key={yFrac}
-          cx={W/2} cy={H*yFrac}
-          rx={W * (0.36 + 0.04 * Math.sin(Math.PI * (yFrac - 0.14) / 0.64))}
-          ry={H*0.028}
-          fill="url(#sb-hoop)" fillOpacity="0.85"
-          stroke="rgba(200,216,244,0.3)" strokeWidth="0.5"
-        />
-      ))}
-
-      {/* Bung */}
-      <ellipse cx={W/2} cy={H*0.46} rx={6} ry={3.5} fill="#2a4070" stroke="#7090c0" strokeWidth="0.8" />
-      <ellipse cx={W/2} cy={H*0.46} rx={2.5} ry={1.5} fill="#4070b0" />
-    </svg>
-  );
-}
 
 function WordMark({ color }: { color: string }) {
   return (
@@ -133,340 +54,233 @@ function WordMark({ color }: { color: string }) {
   );
 }
 
-function NavyCheck() {
-  return (
-    <svg className="sgn-check" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill={NAVY} />
-      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CreamCheck() {
-  return (
-    <svg className="sgn-check" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="8" fill="rgba(250,240,226,0.15)" />
-      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={CREAM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY",
+];
 
 export default function Signup() {
-  const { signup, user } = useAuth();
   const [, navigate] = useLocation();
+  const [form, setForm] = useState({ name: "", email: "", distilleryName: "", state: "", message: "" });
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
 
-  const [distilleryName, setDistilleryName] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isPending, setIsPending] = useState(false);
+  function set(field: string, value: string) {
+    setForm(f => ({ ...f, [field]: value }));
+    setError("");
+  }
 
-  useEffect(() => {
-    if (user) navigate("/");
-  }, [user, navigate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (distilleryName.trim().length < 2) {
-      toast.error("Distillery name must be at least 2 characters");
+    if (!form.name.trim() || !form.email.trim()) {
+      setError("Name and email are required.");
       return;
     }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-    setIsPending(true);
+    setLoading(true);
+    setError("");
     try {
-      await signup.mutateAsync({ distilleryName: distilleryName.trim(), adminName: adminName.trim(), email, password });
-      navigate("/");
+      await apiRequest("/api/waitlist", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      setDone(true);
     } catch (err: any) {
-      toast.error(err.message || "Failed to create account");
+      setError(err?.message || "Something went wrong. Please try again.");
     } finally {
-      setIsPending(false);
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <div style={{
-      display: "flex",
-      minHeight: "100vh",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-      overflowX: "hidden",
-    }}>
+    <>
       <style>{STYLES}</style>
 
-      {/* ── LEFT PANEL — navy ── */}
-      <div
-        className="sgn-left"
-        style={{
-          flex: "0 0 52%",
-          background: NAVY,
-          position: "relative",
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+      }}>
+
+        {/* ── Left panel (navy) ── */}
+        <div style={{
+          width: "45%",
+          background: `linear-gradient(160deg, ${NAVY2} 0%, ${NAVY} 100%)`,
           display: "flex",
           flexDirection: "column",
+          padding: "48px 52px",
+          position: "relative",
           overflow: "hidden",
-          padding: "48px 56px",
-        }}
-      >
-        {/* Stave texture overlay */}
-        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04, pointerEvents: "none" }}>
-          {Array.from({ length: 18 }).map((_, i) => (
-            <line key={i} x1={`${(i / 17) * 100}%`} y1="0" x2={`${(i / 17) * 100}%`} y2="100%"
-              stroke={CREAM} strokeWidth="1" />
-          ))}
-        </svg>
+        }} className="hidden md:flex">
 
-        {/* Subtle top-right glow */}
-        <div style={{
-          position: "absolute", top: -80, right: -80,
-          width: 340, height: 340,
-          background: "radial-gradient(circle, rgba(250,240,226,0.06) 0%, transparent 70%)",
-          borderRadius: "50%", filter: "blur(40px)", pointerEvents: "none",
-        }} />
+          {/* Subtle grid texture */}
+          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04 }} aria-hidden>
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)"/>
+          </svg>
 
-        {/* Brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: "auto", animation: "fadeIn 0.6s ease-out both" }}>
-          <WordMark color={CREAM} />
-        </div>
-
-        {/* Center content */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32, marginBottom: 40 }}>
-          {/* Barrel */}
-          <div style={{ animation: "fadeUp 0.7s ease-out 0.1s both" }}>
-            <BarrelIllustration />
+          {/* Brand */}
+          <div style={{ position: "relative", zIndex: 1, animation: "fadeIn 0.6s ease-out both" }}>
+            <WordMark color={CREAM} />
           </div>
 
-          {/* Headline */}
-          <div style={{ textAlign: "center", animation: "fadeUp 0.7s ease-out 0.2s both" }}>
-            <h1 style={{
-              fontSize: "clamp(1.7rem, 2.8vw, 2.4rem)",
-              fontWeight: 800,
-              color: CREAM,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.12,
-              marginBottom: 12,
-            }}>
-              Your distillery,<br />fully connected.
-            </h1>
-            <p style={{ fontSize: 14, color: "rgba(250,240,226,0.55)", lineHeight: 1.65, maxWidth: 340 }}>
-              From grain to glass — batch tracking, TTB compliance, and barrel intelligence in one platform.
+          {/* Center content */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", zIndex: 1 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(250,240,226,0.4)", marginBottom: 16, animation: "fadeUp 0.6s ease-out 0.1s both" }}>
+              Early Access
             </p>
-          </div>
+            <h1 style={{ fontSize: "clamp(1.8rem, 2.8vw, 2.6rem)", fontWeight: 800, color: CREAM, letterSpacing: "-0.035em", lineHeight: 1.12, marginBottom: 20, animation: "fadeUp 0.6s ease-out 0.15s both" }}>
+              Built for craft<br />distilleries.
+            </h1>
+            <p style={{ fontSize: 14, color: "rgba(250,240,226,0.55)", lineHeight: 1.75, maxWidth: 340, marginBottom: 40, animation: "fadeUp 0.6s ease-out 0.2s both" }}>
+              TTB compliance, barrel tracking, excise tax automation, and AI-powered operations — all in one platform.
+            </p>
 
-          {/* Feature list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", maxWidth: 340, animation: "fadeUp 0.7s ease-out 0.3s both" }}>
             {[
-              "7-stage batch production workflow",
-              "TTB Forms 5110.40 & 5000.24 auto-generated",
-              "Real-time proof gallon tracking",
-              "No credit card required to start",
-            ].map((item) => (
-              <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <CreamCheck />
-                <span style={{ fontSize: 13.5, color: "rgba(250,240,226,0.75)", lineHeight: 1.5 }}>{item}</span>
+              "Federal TTB reporting (5110.40 & 5000.24)",
+              "All 50-state excise tax returns",
+              "Barrel & aging intelligence",
+              "AI operations assistant with live data",
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12, animation: `fadeUp 0.6s ease-out ${0.25 + i * 0.05}s both` }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ marginTop: 1, flexShrink: 0 }}>
+                  <circle cx="8" cy="8" r="8" fill="rgba(250,240,226,0.12)"/>
+                  <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={CREAM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span style={{ fontSize: 13, color: "rgba(250,240,226,0.7)", lineHeight: 1.5 }}>{item}</span>
               </div>
             ))}
           </div>
+
+          {/* Bottom tagline */}
+          <p style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(250,240,226,0.2)", animation: "fadeIn 0.8s ease-out 0.5s both" }}>
+            A Loogo Labs Software
+          </p>
         </div>
 
-        {/* Stats strip */}
+        {/* ── Right panel (cream) ── */}
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 0,
-          borderTop: `1px solid rgba(250,240,226,0.12)`,
-          paddingTop: 24,
-          animation: "fadeUp 0.7s ease-out 0.4s both",
+          flex: 1,
+          background: CREAM,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 40px",
+          position: "relative",
+          overflowY: "auto",
         }}>
-          {[
-            { val: "7-Stage", label: "Production Workflow" },
-            { val: "50-State", label: "Excise Coverage" },
-            { val: "Real-Time", label: "Proof Gallon Calc" },
-          ].map((s, i) => (
-            <div key={s.val} style={{
-              textAlign: "center",
-              padding: "0 12px",
-              borderLeft: i > 0 ? `1px solid rgba(250,240,226,0.1)` : "none",
-            }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: CREAM, letterSpacing: "-0.02em" }}>{s.val}</div>
-              <div style={{ fontSize: 10.5, color: "rgba(250,240,226,0.4)", marginTop: 3, letterSpacing: "0.02em" }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* ── RIGHT PANEL — cream ── */}
-      <div style={{
-        flex: 1,
-        background: CREAM,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "48px 40px",
-        position: "relative",
-        minHeight: "100vh",
-      }}>
-        {/* Decorative rings top-right */}
-        <div style={{ position: "absolute", top: -60, right: -60, pointerEvents: "none" }}>
-          {[200, 280, 360].map((size) => (
-            <div key={size} style={{
-              position: "absolute",
-              width: size, height: size,
-              border: `1px solid rgba(15,27,66,${size === 200 ? 0.07 : size === 280 ? 0.05 : 0.03})`,
-              borderRadius: "50%",
-              top: "50%", left: "50%",
-              transform: "translate(-50%, -50%)",
-            }} />
-          ))}
-        </div>
-
-        <div style={{ width: "100%", maxWidth: 400, position: "relative", zIndex: 1 }}>
           {/* Mobile brand */}
-          <div className="sgn-left" style={{
-            display: "none",
-            alignItems: "center", gap: 8, marginBottom: 32,
-          }}>
+          <div className="md:hidden" style={{ marginBottom: 32 }}>
             <WordMark color={NAVY} />
           </div>
 
-          {/* Heading */}
-          <div style={{ marginBottom: 32, animation: "fadeUp 0.6s ease-out both" }}>
-            <h2 style={{
-              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
-              fontWeight: 800,
-              color: NAVY,
-              letterSpacing: "-0.035em",
-              lineHeight: 1.1,
-              marginBottom: 10,
-            }}>
-              Start your<br />free trial.
-            </h2>
-            <p style={{ fontSize: 14, color: `${NAVY}88`, lineHeight: 1.6 }}>
-              Set up your distillery in minutes — no credit card required.
-            </p>
-          </div>
+          <div style={{ width: "100%", maxWidth: 400, animation: "fadeUp 0.5s ease-out both" }}>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.6s ease-out 0.1s both" }}>
-
-            {/* Distillery name */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
-                Distillery name
-              </label>
-              <input
-                className="sgn-input"
-                type="text"
-                value={distilleryName}
-                onChange={(e) => setDistilleryName(e.target.value)}
-                placeholder="Copper Ridge Distillery"
-                required
-                minLength={2}
-                autoFocus
-              />
-            </div>
-
-            {/* Admin name */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
-                Your name
-              </label>
-              <input
-                className="sgn-input"
-                type="text"
-                value={adminName}
-                onChange={(e) => setAdminName(e.target.value)}
-                placeholder="Jane Smith"
-                required
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
-                Email address
-              </label>
-              <input
-                className="sgn-input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@distillery.com"
-                required
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
-                Password
-              </label>
-              <input
-                className="sgn-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={8}
-              />
-              <p style={{ fontSize: 11, color: `${NAVY}55`, marginTop: 5 }}>Minimum 8 characters</p>
-            </div>
-
-            <button type="submit" disabled={isPending} className="sgn-btn" style={{ marginTop: 4 }}>
-              {isPending ? "Creating account…" : "Create free account →"}
-            </button>
-          </form>
-
-          {/* Trust row */}
-          <div style={{
-            display: "flex",
-            gap: 20,
-            marginTop: 24,
-            paddingTop: 20,
-            borderTop: `1px solid rgba(15,27,66,0.1)`,
-            animation: "fadeUp 0.6s ease-out 0.2s both",
-          }}>
-            {[
-              "No credit card",
-              "14-day free trial",
-              "Cancel anytime",
-            ].map((t) => (
-              <div key={t} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <NavyCheck />
-                <span style={{ fontSize: 11.5, color: `${NAVY}99`, whiteSpace: "nowrap" }}>{t}</span>
+            {done ? (
+              /* ── Success state ── */
+              <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <div style={{ width: 64, height: 64, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <path d="M6 14l6 6 10-10" stroke={CREAM} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: NAVY, letterSpacing: "-0.03em", marginBottom: 12 }}>
+                  You're on the list.
+                </h2>
+                <p style={{ fontSize: 14, color: "rgba(15,27,66,0.55)", lineHeight: 1.7, marginBottom: 32 }}>
+                  Thanks for your interest in Distillr. We'll be in touch shortly to get you set up.
+                </p>
+                <button
+                  onClick={() => navigate("/")}
+                  style={{ fontSize: 13, color: NAVY, fontWeight: 600, background: "none", border: `1.5px solid rgba(15,27,66,0.2)`, borderRadius: 100, padding: "9px 24px", cursor: "pointer" }}
+                >
+                  ← Back to home
+                </button>
               </div>
-            ))}
+            ) : (
+              /* ── Form ── */
+              <>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(15,27,66,0.4)", marginBottom: 12 }}>
+                  Request Access
+                </p>
+                <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 800, color: NAVY, letterSpacing: "-0.035em", lineHeight: 1.1, marginBottom: 8 }}>
+                  Join the waitlist.
+                </h2>
+                <p style={{ fontSize: 13.5, color: "rgba(15,27,66,0.5)", lineHeight: 1.65, marginBottom: 32 }}>
+                  Tell us about your distillery and we'll reach out to get you started.
+                </p>
+
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Your Name *</label>
+                      <input className="wl-input" placeholder="Jane Smith" value={form.name} onChange={e => set("name", e.target.value)} required />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Email Address *</label>
+                    <input className="wl-input" type="email" placeholder="jane@distillery.com" value={form.email} onChange={e => set("email", e.target.value)} required />
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Distillery Name</label>
+                      <input className="wl-input" placeholder="Lugo's Craft Distillery" value={form.distilleryName} onChange={e => set("distilleryName", e.target.value)} />
+                    </div>
+                    <div style={{ width: 90 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>State</label>
+                      <select className="wl-input" value={form.state} onChange={e => set("state", e.target.value)} style={{ cursor: "pointer" }}>
+                        <option value="">—</option>
+                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Anything you'd like us to know?</label>
+                    <textarea
+                      className="wl-input"
+                      placeholder="Current TTB pain points, production volume, tech stack…"
+                      value={form.message}
+                      onChange={e => set("message", e.target.value)}
+                      rows={3}
+                      style={{ resize: "vertical", minHeight: 80 }}
+                    />
+                  </div>
+
+                  {error && (
+                    <p style={{ fontSize: 12.5, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", margin: 0 }}>
+                      {error}
+                    </p>
+                  )}
+
+                  <button type="submit" className="wl-btn" disabled={loading} style={{ marginTop: 4 }}>
+                    {loading ? "Sending…" : "Request Access →"}
+                  </button>
+                </form>
+
+                <div style={{ marginTop: 28, textAlign: "center" }}>
+                  <p style={{ fontSize: 12, color: "rgba(15,27,66,0.35)" }}>
+                    Already have an account?{" "}
+                    <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
+                      Sign in
+                    </button>
+                  </p>
+                </div>
+              </>
+            )}
           </div>
-
-          {/* Sign in link */}
-          <p style={{ textAlign: "center", fontSize: 13, color: `${NAVY}77`, marginTop: 32, animation: "fadeUp 0.6s ease-out 0.25s both" }}>
-            Already have an account?{" "}
-            <button
-              onClick={() => navigate("/login")}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-                color: NAVY,
-                padding: 0,
-                borderBottom: `1px solid ${NAVY}`,
-                lineHeight: 1.2,
-                fontFamily: "inherit",
-              }}
-            >
-              Sign in
-            </button>
-          </p>
-
-          <p style={{ textAlign: "center", fontSize: 11, color: `${NAVY}44`, marginTop: 20 }}>
-            &copy; {new Date().getFullYear()} Distillr — Distillery Technology Platform
-          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }
