@@ -769,8 +769,27 @@ export default function Landing() {
           </div>
           {/* Copyright */}
           <p style={{ fontSize: 12, color: "rgba(250,240,226,0.25)", margin: 0 }}>
-            &copy; {new Date().getFullYear()} Distillr
+            &copy; {new Date().getFullYear()} Distillr &middot; A Loogo Labs Software
           </p>
+        </div>
+
+        {/* Legal links row */}
+        <div style={{ maxWidth: 1060, margin: "20px auto 0", paddingTop: 20, borderTop: "1px solid rgba(250,240,226,0.07)", display: "flex", flexWrap: "wrap", gap: "8px 24px", justifyContent: "center" }}>
+          {[
+            { l: "Privacy Policy", h: "/privacy" },
+            { l: "Terms of Service", h: "/terms" },
+            { l: "Acceptable Use", h: "/acceptable-use" },
+          ].map(lk => (
+            <a
+              key={lk.l}
+              href={lk.h}
+              style={{ fontSize: 11.5, color: "rgba(250,240,226,0.28)", textDecoration: "none", transition: "color 0.15s" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgba(250,240,226,0.65)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(250,240,226,0.28)")}
+            >
+              {lk.l}
+            </a>
+          ))}
         </div>
       </footer>
     </div>

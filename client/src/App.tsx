@@ -7,6 +7,9 @@ import Signup from "./pages/signup";
 import FeaturesPage from "./pages/features";
 import PricingPage from "./pages/pricing";
 import FaqPage from "./pages/faq";
+import PrivacyPage from "./pages/privacy";
+import TermsPage from "./pages/terms";
+import AcceptableUsePage from "./pages/acceptable-use";
 import AdminLogin from "./pages/admin-login";
 import AdminDashboard from "./pages/admin-dashboard";
 import Dashboard from "./pages/dashboard";
@@ -83,6 +86,9 @@ export default function App() {
       <Route path="/features" component={FeaturesPage} />
       <Route path="/pricing" component={PricingPage} />
       <Route path="/faq" component={FaqPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/acceptable-use" component={AcceptableUsePage} />
       <Route path="/" component={RootRoute} />
       <Route>
         <AuthGuard>
