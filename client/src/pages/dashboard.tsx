@@ -630,6 +630,80 @@ function EmbeddedCalendar({
   );
 }
 
+// ─── Section navigator ────────────────────────────────────────────────────────
+const NAV_SHORT: Record<string, string> = {
+  pipeline:         "Pipeline",
+  production:       "Production",
+  bottling:         "Bottling",
+  sales_compliance: "Sales",
+  calendar:         "Calendar",
+  quickaccess:      "Quick Nav",
+};
+const NAV_DOT: Record<string, string> = {
+  pipeline:         "#818cf8",
+  production:       "#FAF0E2",
+  bottling:         "#34d399",
+  sales_compliance: "#60a5fa",
+  calendar:         "#f472b6",
+  quickaccess:      "#a78bfa",
+};
+
+function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId: string }) {
+  function scrollTo(id: string) {
+    const el = document.getElementById(id);
+    const main = document.querySelector("main");
+    if (!el || !main) return;
+    const elTop = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop;
+    main.scrollTo({ top: elTop - 24, behavior: "smooth" });
+  }
+
+  return (
+    <div
+      className="hidden xl:flex fixed left-4 top-1/2 z-30 flex-col gap-1 p-2.5 rounded-2xl"
+      style={{
+        transform: "translateY(-50%)",
+        background: "rgba(255,255,255,0.08)",
+        border: "1px solid rgba(255,255,255,0.14)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+      }}
+    >
+      {widgetOrder.map(id => {
+        const isActive = id === activeId;
+        return (
+          <button
+            key={id}
+            onClick={() => scrollTo(id)}
+            title={SECTION_LABELS[id]}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-all duration-200 group"
+            style={{
+              background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+            }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+          >
+            <div
+              className="shrink-0 rounded-full transition-all duration-200"
+              style={{
+                width: isActive ? 8 : 6,
+                height: isActive ? 8 : 6,
+                background: isActive ? NAV_DOT[id] ?? "white" : "rgba(255,255,255,0.25)",
+                boxShadow: isActive ? `0 0 8px ${NAV_DOT[id] ?? "white"}80` : "none",
+              }}
+            />
+            <span
+              className="text-[9px] font-bold uppercase tracking-widest transition-colors duration-200 leading-none"
+              style={{ color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}
+            >
+              {NAV_SHORT[id] ?? id}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Widget reorder shell ─────────────────────────────────────────────────────
 const SECTION_LABELS: Record<string, string> = {
   pipeline:        "Active Batch Pipeline",
@@ -651,7 +725,7 @@ function WidgetShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="relative">
+    <section id={id} className="relative">
       {editMode && (
         <div
           className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg select-none"
@@ -717,6 +791,36 @@ export default function Dashboard() {
       return next;
     });
   }
+
+  const [activeSection, setActiveSection] = useState<string>(widgetOrder[0] ?? "pipeline");
+
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    if (!mainEl) return;
+    const visible = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visible.set(entry.target.id, entry.boundingClientRect.top);
+          } else {
+            visible.delete(entry.target.id);
+          }
+        }
+        if (visible.size === 0) return;
+        // Pick the topmost visible section, respecting current widgetOrder
+        const topmost = widgetOrder.find(id => visible.has(id))
+          ?? Array.from(visible.entries()).sort((a, b) => a[1] - b[1])[0][0];
+        setActiveSection(topmost);
+      },
+      { root: mainEl, rootMargin: "-10% 0px -70% 0px", threshold: 0 }
+    );
+    widgetOrder.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [widgetOrder]);
 
   const towerUrl = selectedMonth
     ? `/api/distilling/control-tower?month=${selectedMonth}`
@@ -794,6 +898,7 @@ export default function Dashboard() {
 
   return (
     <Layout>
+      <SectionNav widgetOrder={widgetOrder} activeId={activeSection} />
       <div className="min-h-screen relative" style={{ background: heroBg }}>
 
         {/* ── Decorative blobs ── */}
