@@ -2198,6 +2198,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.delete("/api/waitlist/:id", requireAdminSession, async (req, res) => {
+    try {
+      await query(`DELETE FROM waitlist WHERE id = $1`, [req.params.id]);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/platform-config", requireAuth, async (_req, res) => {
     try {
       const config = await storage.getPlatformConfig();

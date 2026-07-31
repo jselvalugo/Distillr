@@ -50,9 +50,12 @@ interface InventoryRecord {
   casesToDistributors: Record<string, number> | null;
   casesToRetail: Record<string, number> | null;
   bottlesMade: Record<string, number> | null;
-  cases_cased?: number | null;
-  bottles_empty?: number | null;
-  bottlingDate?: string | null;
+  averageAbvPercent?: number | null;
+  taxesOwed?: number | null;
+  endingProofGallons?: number | null;
+  endingUsGallons?: number | null;
+  beginningOfMonthCases?: number | null;
+  endingMonthInventory?: number | null;
 }
 
 type BatchWithTTB = DistillingBatchRecord & {
@@ -1774,81 +1777,189 @@ function BottlingForm({ data }: { data: BatchFull }) {
 }
 
 // ---------------------------------------------------------------------------
-// Closed Summary
+// Closed Summary — full source-of-truth record
 // ---------------------------------------------------------------------------
-function ClosedSummary({ data }: { data: BatchFull }) {
-  const { batch, productionRecord: pr } = data;
+function sumRecord(r: Record<string, number> | null | undefined): number {
+  if (!r) return 0;
+  return Object.values(r).reduce((s, n) => s + (Number(n) || 0), 0);
+}
+
+function fmtMoney(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
   return (
-    <div className="space-y-4">
-      <div className="bg-[#22c55e]/8 border border-[#22c55e]/20 rounded-lg p-4">
-        <p className="text-sm font-semibold text-[#15803d] mb-1">Batch Complete</p>
-        <p className="text-xs text-[#737373]">This batch has been closed. All stages are complete.</p>
+    <div className="rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-1">{label}</p>
+      <p className={`text-lg font-bold leading-tight ${accent ?? "text-[#0a0a0a]"}`}>{value}</p>
+      {sub && <p className="text-[10px] text-[#737373] mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (!value && value !== 0) return null;
+  return (
+    <div className="flex justify-between items-start py-1.5 border-b border-[#f0f0f0] last:border-0">
+      <span className="text-xs text-[#737373] w-44 shrink-0">{label}</span>
+      <span className="text-xs font-medium text-[#0a0a0a] text-right">{value}</span>
+    </div>
+  );
+}
+
+function ClosedSummary({ data }: { data: BatchFull }) {
+  const { batch, productionRecord: pr, inventoryRecord: inv } = data;
+
+  // Resolve all values — prefer inventory record (most authoritative for excise imports)
+  const distCases   = sumRecord(inv?.casesToDistributors);
+  const retailCases = sumRecord(inv?.casesToRetail);
+  const casesMade   = sumRecord(inv?.casesMade) || batch.totalCases || 0;
+  const bottlesMade = sumRecord(inv?.bottlesMade) || (casesMade * 12) || 0;
+  const totalSold   = distCases + retailCases;
+  const proofGallons = inv?.endingProofGallons || batch.proofGallonsProcessed || batch.proofGallonsProduced || null;
+  const usGallons   = inv?.endingUsGallons || null;
+  const exciseTax   = inv?.taxesOwed || batch.exciseTaxDue || null;
+  const abv         = inv?.averageAbvPercent || null;
+  const proof       = batch.bottlingProof || (abv ? abv * 2 : null);
+  const perBottle   = exciseTax && bottlesMade > 0 ? exciseTax / bottlesMade : null;
+  const distPct     = totalSold > 0 ? Math.round((distCases / totalSold) * 100) : 0;
+  const retailPct   = totalSold > 0 ? 100 - distPct : 0;
+
+  const reportLabel = inv?.reportMonth
+    ? new Date(inv.reportMonth + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+
+  return (
+    <div className="space-y-5">
+
+      {/* Status banner */}
+      <div className="bg-[#22c55e]/8 border border-[#22c55e]/20 rounded-lg px-4 py-3 flex items-center gap-2">
+        <span className="w-5 h-5 rounded-full bg-[#22c55e] text-white text-[10px] font-bold flex items-center justify-center shrink-0">✓</span>
+        <div>
+          <p className="text-sm font-semibold text-[#15803d] leading-none">Production Complete</p>
+          {reportLabel && <p className="text-xs text-[#737373] mt-0.5">Report period: {reportLabel}</p>}
+        </div>
       </div>
 
+      {/* Key metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <StatCard
+          label="Total Cases"
+          value={casesMade > 0 ? casesMade.toLocaleString() : "—"}
+          sub={bottlesMade > 0 ? `${bottlesMade.toLocaleString()} bottles` : undefined}
+        />
+        <StatCard
+          label="Proof Gal (State)"
+          value={proofGallons ? Number(proofGallons).toFixed(3) : "—"}
+          sub={usGallons ? `${Number(usGallons).toFixed(3)} US gal (Federal)` : undefined}
+        />
+        <StatCard
+          label="Excise Tax"
+          value={fmtMoney(exciseTax)}
+          sub={perBottle ? `${fmtMoney(perBottle)}/bottle` : undefined}
+          accent="text-[#0369a1]"
+        />
+        <StatCard
+          label="ABV / Proof"
+          value={abv ? `${abv}% / ${proof}°` : proof ? `${proof}°` : "—"}
+        />
+      </div>
+
+      {/* Distribution channel */}
+      {(distCases > 0 || retailCases > 0) && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">Distribution Channel</p>
+          <div className="rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 py-3 space-y-2.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md bg-[#1d4ed8]/8 border border-[#1d4ed8]/20 px-3 py-2">
+                <p className="text-[10px] text-[#1d4ed8] font-semibold uppercase tracking-wide mb-0.5">Distributor</p>
+                <p className="text-xl font-bold text-[#1d4ed8]">{distCases.toLocaleString()}</p>
+                <p className="text-[10px] text-[#1d4ed8]/70">cases · {distPct}%</p>
+              </div>
+              <div className="rounded-md bg-[#be185d]/8 border border-[#be185d]/20 px-3 py-2">
+                <p className="text-[10px] text-[#be185d] font-semibold uppercase tracking-wide mb-0.5">Retail</p>
+                <p className="text-xl font-bold text-[#be185d]">{retailCases.toLocaleString()}</p>
+                <p className="text-[10px] text-[#be185d]/70">cases · {retailPct}%</p>
+              </div>
+            </div>
+            {totalSold > 0 && (
+              <div>
+                <div className="h-2.5 rounded-full bg-[#e5e7eb] overflow-hidden flex">
+                  <div className="bg-[#1d4ed8] h-full transition-all" style={{ width: `${distPct}%` }} />
+                  <div className="bg-[#db2777] h-full flex-1" />
+                </div>
+                <p className="text-[10px] text-[#737373] mt-1 text-right">{totalSold.toLocaleString()} total cases sold</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Inventory position */}
+      {(inv?.beginningOfMonthCases != null || inv?.endingMonthInventory != null) && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">Inventory Position</p>
+          <div className="rounded-lg border border-[#e5e5e5] px-3 py-1">
+            <InfoRow label="Beginning of Month" value={inv?.beginningOfMonthCases != null ? `${inv.beginningOfMonthCases} cases` : null} />
+            <InfoRow label="Cases Produced" value={casesMade > 0 ? `${casesMade} cases` : null} />
+            <InfoRow label="Cases Sold" value={totalSold > 0 ? `${totalSold} cases` : null} />
+            <InfoRow label="Ending Inventory" value={inv?.endingMonthInventory != null ? `${inv.endingMonthInventory} cases` : null} />
+          </div>
+        </div>
+      )}
+
+      {/* Cases breakdown */}
+      {(batch.cases750ml != null || batch.cases1000ml != null || batch.cases1750ml != null || casesMade > 0) && (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">Cases Produced</p>
+          <div className="rounded-lg border border-[#e5e5e5] px-3 py-1">
+            <InfoRow label="750 mL" value={batch.cases750ml ?? (casesMade > 0 ? casesMade : null)} />
+            <InfoRow label="1 L" value={batch.cases1000ml} />
+            <InfoRow label="1.75 L" value={batch.cases1750ml} />
+            <InfoRow label="Total" value={casesMade > 0 ? <span className="font-semibold">{casesMade}</span> : null} />
+            {bottlesMade > 0 && <InfoRow label="Total Bottles" value={bottlesMade.toLocaleString()} />}
+          </div>
+        </div>
+      )}
+
+      {/* TTB / production */}
       <div>
-        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wide mb-2">Batch Overview</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div><p className="text-xs text-[#737373]">Batch Code</p><p className="text-sm font-medium font-mono">{batch.batchCode}</p></div>
-          <div><p className="text-xs text-[#737373]">Product</p><p className="text-sm font-medium">{batch.productName ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">Spirit Type</p><p className="text-sm font-medium capitalize">{batch.spiritType ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">Spirit Class</p><p className="text-sm font-medium">{batch.spiritClass ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">Batch Date</p><p className="text-sm font-medium">{fmt(batch.batchDate)}</p></div>
-          {pr && <div><p className="text-xs text-[#737373]">Distill Date</p><p className="text-sm font-medium">{fmt(pr.distillDate)}</p></div>}
-          {batch.bottlingDate && <div><p className="text-xs text-[#737373]">Bottling Date</p><p className="text-sm font-medium">{fmt(batch.bottlingDate)}</p></div>}
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">TTB Production</p>
+        <div className="rounded-lg border border-[#e5e5e5] px-3 py-1">
+          <InfoRow label="Proof Gallons (State)" value={proofGallons ? `${Number(proofGallons).toFixed(3)} PG` : null} />
+          <InfoRow label="US Gallons / Wine Gal (Federal)" value={usGallons ? `${Number(usGallons).toFixed(3)} gal` : null} />
+          <InfoRow label="Proof Gallons Produced" value={batch.proofGallonsProduced ? `${fmtNum(batch.proofGallonsProduced)} PG` : null} />
+          <InfoRow label="Fill Proof Gallons" value={batch.fillProofGallons ? `${fmtNum(batch.fillProofGallons)} PG` : null} />
+          <InfoRow label="Proof Gallons Processed" value={batch.proofGallonsProcessed ? `${fmtNum(batch.proofGallonsProcessed)} PG` : null} />
+          <InfoRow label="Lot Number" value={batch.lotNumber} />
+          <InfoRow label="Excise Tax Due" value={exciseTax ? <span className="font-semibold text-[#0369a1]">{fmtMoney(exciseTax)}</span> : null} />
+          <InfoRow label="Per Bottle" value={perBottle ? fmtMoney(perBottle) : null} />
+          <InfoRow label="Tax Class" value={
+            batch.taxClass
+              ? ({ craft_tier1: "Craft Tier 1 ($2.70/PG)", craft_tier2: "Craft Tier 2 ($13.34/PG)", standard: "Standard ($13.50/PG)" }[batch.taxClass] ?? batch.taxClass)
+              : null
+          } />
         </div>
       </div>
 
-      <div className="border-t border-[#e5e5e5] pt-3">
-        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wide mb-2">TTB Production Summary</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs text-[#737373]">Proof Gallons Produced</p>
-            <p className="text-sm font-semibold text-[#0369a1]">{fmtNum(batch.proofGallonsProduced)} PG</p>
-          </div>
-          <div>
-            <p className="text-xs text-[#737373]">Fill Proof Gallons Deposited</p>
-            <p className="text-sm font-semibold text-[#0369a1]">{fmtNum(batch.fillProofGallons)} PG</p>
-          </div>
-          <div>
-            <p className="text-xs text-[#737373]">Proof Gallons Processed</p>
-            <p className="text-sm font-semibold text-[#0369a1]">{fmtNum(batch.proofGallonsProcessed)} PG</p>
-          </div>
-          <div>
-            <p className="text-xs text-[#737373]">Lot Number</p>
-            <p className="text-sm font-medium font-mono">{batch.lotNumber ?? "—"}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-[#e5e5e5] pt-3">
-        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wide mb-2">Tax Summary</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs text-[#737373]">Tax Class</p>
-            <p className="text-sm font-medium">{
-              batch.taxClass
-                ? ({ craft_tier1: "Craft Tier 1 ($2.70/PG)", craft_tier2: "Craft Tier 2 ($13.34/PG)", standard: "Standard ($13.50/PG)" }[batch.taxClass] ?? batch.taxClass)
-                : "—"
-            }</p>
-          </div>
-          <div>
-            <p className="text-xs text-[#737373]">Excise Tax Due</p>
-            <p className="text-sm font-semibold text-[#0369a1]">
-              {batch.exciseTaxDue != null
-                ? `$${batch.exciseTaxDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : "—"}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="border-t border-[#e5e5e5] pt-3">
-        <p className="text-xs font-semibold text-[#737373] uppercase tracking-wide mb-2">Cases Produced</p>
-        <div className="grid grid-cols-4 gap-3">
-          <div><p className="text-xs text-[#737373]">750 mL</p><p className="text-sm font-medium">{batch.cases750ml ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">1 L</p><p className="text-sm font-medium">{batch.cases1000ml ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">1.75 L</p><p className="text-sm font-medium">{batch.cases1750ml ?? "—"}</p></div>
-          <div><p className="text-xs text-[#737373]">Total</p><p className="text-sm font-semibold">{batch.totalCases ?? "—"}</p></div>
+      {/* Batch details */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">Batch Details</p>
+        <div className="rounded-lg border border-[#e5e5e5] px-3 py-1">
+          <InfoRow label="Batch Code" value={<span className="font-mono">{batch.batchCode}</span>} />
+          <InfoRow label="Product" value={batch.productName} />
+          <InfoRow label="Spirit Type" value={batch.spiritType} />
+          <InfoRow label="Spirit Class" value={batch.spiritClass} />
+          <InfoRow label="Batch Date" value={fmt(batch.batchDate)} />
+          {pr && <InfoRow label="Distill Date" value={fmt(pr.distillDate)} />}
+          <InfoRow label="Bottling Date" value={fmt(batch.bottlingDate)} />
+          <InfoRow label="ABV" value={abv ? `${abv}%` : null} />
+          <InfoRow label="Proof at Bottling" value={proof ? `${proof}°` : null} />
+          {pr && <InfoRow label="Gallons Molasses" value={pr.gallonsMolasses ? `${pr.gallonsMolasses} gal` : null} />}
+          {pr && <InfoRow label="Cane Sugar" value={pr.lbsSugar ? `${pr.lbsSugar} lbs` : null} />}
+          <InfoRow label="Notes" value={batch.notes} />
         </div>
       </div>
     </div>

@@ -36,9 +36,9 @@ interface TenantUser {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAN_META: Record<string, { label: string; color: string; defaultLimit: number; price: number }> = {
-  standard:   { label: "Starter",      color: "#6b7280", defaultLimit: 3,  price: 99  },
-  pro:        { label: "Professional", color: "#8b5cf6", defaultLimit: 10, price: 299 },
-  enterprise: { label: "Enterprise",   color: "#f59e0b", defaultLimit: -1, price: 0   },
+  standard:   { label: "Standard",  color: "#6b7280", defaultLimit: 1,  price: 99  },
+  pro:        { label: "Premium",   color: "#8b5cf6", defaultLimit: 15, price: 299 },
+  enterprise: { label: "Enterprise", color: "#f59e0b", defaultLimit: -1, price: 0   },
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -243,9 +243,9 @@ function EditLicenseModal({ tenant, onClose }: { tenant: Tenant; onClose: () => 
                     const def = PLAN_META[p]?.defaultLimit ?? 5;
                     setForm(f => ({ ...f, plan: p, userLimit: String(def) }));
                   }}>
-                  <option value="standard">Starter</option>
-                  <option value="pro">Professional</option>
-                  <option value="enterprise">Enterprise</option>
+                  <option value="standard">Standard — $99/mo (1 user)</option>
+                  <option value="pro">Premium — $299/mo (2–15 users)</option>
+                  <option value="enterprise">Enterprise — Custom</option>
                 </select>
               </div>
               <div>
@@ -536,6 +536,12 @@ export default function AdminDashboard() {
     onError: (e: any) => toast.error(e.message ?? "Failed"),
   });
 
+  const removeWaitlistMut = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/waitlist/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/waitlist"] }); toast.success("Removed from waitlist"); },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
+  });
+
   if (authLoading) return <div style={{ minHeight: "100vh", background: "#080808", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading…</div>;
   if (!isAdmin) { navigate("/admin/login"); return null; }
 
@@ -701,7 +707,7 @@ export default function AdminDashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                    {["Submitted", "Name", "Email", "Distillery", "State", "Message"].map(h => (
+                    {["Submitted", "Name", "Email", "Distillery", "State", "Message", ""].map(h => (
                       <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>{h}</th>
                     ))}
                   </tr>
@@ -722,6 +728,16 @@ export default function AdminDashboard() {
                         <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                           {w.message ?? "—"}
                         </span>
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        <button
+                          style={s.btn("rgba(239,68,68,0.1)", "#f87171", "rgba(239,68,68,0.25)")}
+                          onClick={() => removeWaitlistMut.mutate(w.id)}
+                          disabled={removeWaitlistMut.isPending}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.18)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.1)"; }}>
+                          Remove
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -762,8 +778,8 @@ export default function AdminDashboard() {
                       const def = PLAN_META[p]?.defaultLimit ?? 3;
                       setForm(f => ({ ...f, plan: p, userLimit: String(def) }));
                     }}>
-                    <option value="standard">Starter — $99/mo</option>
-                    <option value="pro">Professional — $299/mo</option>
+                    <option value="standard">Standard — $99/mo (1 user)</option>
+                    <option value="pro">Premium — $299/mo (2–15 users)</option>
                     <option value="enterprise">Enterprise — Custom</option>
                   </select>
                 </div>

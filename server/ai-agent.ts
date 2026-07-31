@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { query } from "./db";
+import { getCurrentTenantId } from "./tenant-context";
 
 const SYSTEM_PROMPT = `You are Distillr AI, an expert operations assistant embedded inside the Distillr distillery management platform for a licensed Distilled Spirits Plant (DSP).
 
@@ -133,112 +134,104 @@ const TOOLS: Anthropic.Tool[] = [
 
 // ── Tool execution ────────────────────────────────────────────────────────────
 
-async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
+async function executeTool(name: string, input: Record<string, unknown>, tenantId: string): Promise<string> {
   const lim = Math.min(Number(input.limit ?? 15), 50);
 
   try {
     switch (name) {
       case "get_distillery_summary": {
         const [stages, barrelCount, permits, inventory, orders] = await Promise.all([
-          query(`SELECT stage, COUNT(*)::int as count FROM distilling_batch_records GROUP BY stage ORDER BY count DESC`),
-          query(`SELECT COUNT(*)::int as total, status FROM barrels GROUP BY status`),
+          query(`SELECT stage, COUNT(*)::int as count FROM distilling_batch_records WHERE tenant_id=$1 GROUP BY stage ORDER BY count DESC`, [tenantId]),
+          query(`SELECT COUNT(*)::int as total, status FROM barrels WHERE tenant_id=$1 GROUP BY status`, [tenantId]),
           query(`SELECT id, permit_type, expiration_date, status,
                    (expiration_date::date - CURRENT_DATE) AS days_until_expiry
-                 FROM permits WHERE status != 'revoked' ORDER BY expiration_date ASC LIMIT 5`),
+                 FROM permits WHERE tenant_id=$1 AND status != 'revoked' ORDER BY expiration_date ASC LIMIT 5`, [tenantId]),
           query(`SELECT report_month, ending_proof_gallons, ending_month_inventory, ending_us_gallons
-                 FROM distilling_inventory_records ORDER BY report_month DESC LIMIT 1`),
+                 FROM distilling_inventory_records WHERE tenant_id=$1 ORDER BY report_month DESC LIMIT 1`, [tenantId]),
           query(`SELECT status, COUNT(*)::int as count, SUM(total_amount) as total
-                 FROM sales_orders GROUP BY status`),
+                 FROM sales_orders WHERE tenant_id=$1 GROUP BY status`, [tenantId]),
         ]);
         return JSON.stringify({ batchesByStage: stages, barrels: barrelCount, permitsExpiringSoon: permits, latestInventory: inventory[0] ?? null, salesOrders: orders });
       }
 
       case "get_batch_records": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.stage) { conditions.push(`stage = $${params.length + 1}`); params.push(input.stage); }
         if (input.from_date) { conditions.push(`batch_date >= $${params.length + 1}`); params.push(input.from_date); }
         if (input.to_date) { conditions.push(`batch_date <= $${params.length + 1}`); params.push(input.to_date); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
         params.push(lim);
-        const rows = await query(`SELECT id, batch_code, batch_date, stage, status, notes FROM distilling_batch_records ${where} ORDER BY batch_date DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT id, batch_code, batch_date, stage, status, notes FROM distilling_batch_records WHERE ${conditions.join(" AND ")} ORDER BY batch_date DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
       case "get_production_records": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.batch_record_id) { conditions.push(`batch_record_id = $${params.length + 1}`); params.push(input.batch_record_id); }
         if (input.from_date) { conditions.push(`distill_date >= $${params.length + 1}`); params.push(input.from_date); }
         if (input.to_date) { conditions.push(`distill_date <= $${params.length + 1}`); params.push(input.to_date); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
         params.push(lim);
-        const rows = await query(`SELECT id, batch_record_id, mash_date, distill_date, gallons_distilled, percentage_distilled, proof_of_gallons, gallons_molasses, lbs_sugar FROM distilling_production_records ${where} ORDER BY distill_date DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT id, batch_record_id, mash_date, distill_date, gallons_distilled, percentage_distilled, proof_of_gallons FROM distilling_production_records WHERE ${conditions.join(" AND ")} ORDER BY distill_date DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
       case "get_inventory_records": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.product_name) { conditions.push(`product_name ILIKE $${params.length + 1}`); params.push(`%${input.product_name}%`); }
         if (input.from_period) { conditions.push(`report_month >= $${params.length + 1}`); params.push(input.from_period); }
         if (input.to_period) { conditions.push(`report_month <= $${params.length + 1}`); params.push(input.to_period); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
         params.push(lim);
-        const rows = await query(`SELECT id, title, product_name, report_month, beginning_of_month_cases, ending_month_inventory, ending_us_gallons, ending_proof_gallons, notes FROM distilling_inventory_records ${where} ORDER BY report_month DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT id, title, product_name, report_month, beginning_of_month_cases, ending_month_inventory, ending_us_gallons, ending_proof_gallons, notes FROM distilling_inventory_records WHERE ${conditions.join(" AND ")} ORDER BY report_month DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
       case "get_barrels": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.status) { conditions.push(`status = $${params.length + 1}`); params.push(input.status); }
         if (input.min_aging_days) { conditions.push(`total_aging_days >= $${params.length + 1}`); params.push(input.min_aging_days); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
         params.push(lim);
-        const rows = await query(`SELECT id, serial_number, product_name, fill_date, fill_proof, fill_proof_gallons, current_proof_gallons, total_aging_days, status, warehouse_zone, char_level, losses_proof_gallons FROM barrels ${where} ORDER BY fill_date DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT id, serial_number, product_name, fill_date, fill_proof, fill_proof_gallons, current_proof_gallons, total_aging_days, status, warehouse_zone, char_level, losses_proof_gallons FROM barrels WHERE ${conditions.join(" AND ")} ORDER BY fill_date DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
       case "get_permits": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.status) { conditions.push(`status = $${params.length + 1}`); params.push(input.status); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-        const rows = await query(`SELECT id, permit_type, permit_number, issuing_authority, state, issue_date, expiration_date, status, notes FROM permits ${where} ORDER BY expiration_date ASC`);
+        const rows = await query(`SELECT id, permit_type, permit_number, issuing_authority, state, issue_date, expiration_date, status, notes FROM permits WHERE ${conditions.join(" AND ")} ORDER BY expiration_date ASC`, params);
         return JSON.stringify(rows);
       }
 
       case "get_sales_orders": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
-        if (input.status) { conditions.push(`status = $${params.length + 1}`); params.push(input.status); }
-        if (input.from_date) { conditions.push(`order_date >= $${params.length + 1}`); params.push(input.from_date); }
-        if (input.to_date) { conditions.push(`order_date <= $${params.length + 1}`); params.push(input.to_date); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`so.tenant_id=$1`];
+        if (input.status) { conditions.push(`so.status = $${params.length + 1}`); params.push(input.status); }
+        if (input.from_date) { conditions.push(`so.order_date >= $${params.length + 1}`); params.push(input.from_date); }
+        if (input.to_date) { conditions.push(`so.order_date <= $${params.length + 1}`); params.push(input.to_date); }
         params.push(lim);
-        const rows = await query(`SELECT so.id, so.order_number, so.status, so.order_date, so.total_amount, so.currency, c.name as client_name FROM sales_orders so LEFT JOIN clients c ON so.client_id = c.id ${where} ORDER BY so.order_date DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT so.id, so.order_number, so.status, so.order_date, so.total_amount, so.currency, c.name as client_name FROM sales_orders so LEFT JOIN clients c ON so.client_id = c.id WHERE ${conditions.join(" AND ")} ORDER BY so.order_date DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
       case "get_compliance_records": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.regulatory_area) { conditions.push(`regulatory_area ILIKE $${params.length + 1}`); params.push(`%${input.regulatory_area}%`); }
         if (input.status) { conditions.push(`status = $${params.length + 1}`); params.push(input.status); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-        const rows = await query(`SELECT id, type, regulatory_area, jurisdiction, status, expires, severity, owner FROM compliance ${where} ORDER BY expires ASC NULLS LAST LIMIT 30`);
+        const rows = await query(`SELECT id, type, regulatory_area, jurisdiction, status, expires, severity, owner FROM compliance WHERE ${conditions.join(" AND ")} ORDER BY expires ASC NULLS LAST LIMIT 30`, params);
         return JSON.stringify(rows);
       }
 
       case "get_ttb_reports": {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+        const params: unknown[] = [tenantId];
+        const conditions: string[] = [`tenant_id=$1`];
         if (input.status) { conditions.push(`status = $${params.length + 1}`); params.push(input.status); }
         if (input.from_date) { conditions.push(`report_period_start >= $${params.length + 1}`); params.push(input.from_date); }
         if (input.to_date) { conditions.push(`report_period_end <= $${params.length + 1}`); params.push(input.to_date); }
-        const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
-        const rows = await query(`SELECT id, report_period_start, report_period_end, filing_type, filing_cadence, due_date, excise_tax_due, status FROM ttb_reports ${where} ORDER BY report_period_start DESC LIMIT 20`);
+        const rows = await query(`SELECT id, report_period_start, report_period_end, filing_type, filing_cadence, due_date, excise_tax_due, status FROM ttb_reports WHERE ${conditions.join(" AND ")} ORDER BY report_period_start DESC LIMIT 20`, params);
         return JSON.stringify(rows);
       }
 
@@ -266,6 +259,14 @@ const chatSchema = z.object({
 export async function handleAiChat(req: Request, res: Response): Promise<void> {
   if (!process.env.ANTHROPIC_API_KEY) {
     res.status(503).json({ error: "AI agent not configured — add ANTHROPIC_API_KEY to environment variables." });
+    return;
+  }
+
+  let tenantId: string;
+  try {
+    tenantId = getCurrentTenantId();
+  } catch {
+    res.status(400).json({ error: "No tenant context." });
     return;
   }
 
@@ -317,7 +318,7 @@ export async function handleAiChat(req: Request, res: Response): Promise<void> {
       // Execute all tool calls in parallel
       const toolResults = await Promise.all(
         toolUseBlocks.map(async (tb) => {
-          const result = await executeTool(tb.name, tb.input as Record<string, unknown>);
+          const result = await executeTool(tb.name, tb.input as Record<string, unknown>, tenantId);
           return {
             type: "tool_result" as const,
             tool_use_id: tb.id,
