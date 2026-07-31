@@ -113,9 +113,11 @@ export async function export5110Word(data: WordOperationsData): Promise<void> {
   const THICK = { style: BorderStyle.SINGLE, size: 12, color: BLACK } as const;
   const DBL   = { style: BorderStyle.DOUBLE, size: 6,  color: BLACK } as const;
 
-  // 0.75" margins on 8.5" page → 10,080 DXA usable width
-  const MARGIN = 1080; // 0.75 inch in DXA
-  const W = 10080;
+  // US Letter: 8.5" × 11" = 12240 × 15840 DXA. 0.75" margins → 10,080 DXA usable.
+  const PAGE_W  = 12240;
+  const PAGE_H  = 15840;
+  const MARGIN  = 1080; // 0.75 inch in DXA
+  const W       = PAGE_W - MARGIN * 2; // 10080
 
   // Standard cell padding applied to every cell for readability
   const PAD = { top: 90, bottom: 90, left: 140, right: 100 };
@@ -410,7 +412,12 @@ export async function export5110Word(data: WordOperationsData): Promise<void> {
     creator: "Distillr Software",
     title: `TTB 5110.40 — ${data.proprietorName} — ${periodLabel(data.month)}`,
     sections: [{
-      properties: { page: { margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } },
+      properties: {
+        page: {
+          size: { width: PAGE_W, height: PAGE_H },
+          margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+        },
+      },
       children: doc_children,
     }],
   });
@@ -446,8 +453,10 @@ export async function export5000Word(data: WordExciseData): Promise<void> {
   const THICK = { style: BorderStyle.SINGLE, size: 12, color: BLACK } as const;
   const DBL   = { style: BorderStyle.DOUBLE, size: 6,  color: BLACK } as const;
 
+  const PAGE_W = 12240;
+  const PAGE_H = 15840;
   const MARGIN = 1080; // 0.75 inch
-  const W = 10080;
+  const W      = PAGE_W - MARGIN * 2; // 10080
   const PAD = { top: 90, bottom: 90, left: 140, right: 100 };
 
   function fixedTable(opts: ConstructorParameters<typeof Table>[0]): Table {
@@ -534,15 +543,15 @@ export async function export5000Word(data: WordExciseData): Promise<void> {
           new Paragraph({ children: [r(data.ein ?? "________________________________", false, 19)] }),
         ] }),
       ] }),
-      new TableRow({ children: [new TableCell({ columnSpan: 2, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
+      new TableRow({ children: [new TableCell({ columnSpan: 2, width: { size: W, type: WidthType.DXA }, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
         new Paragraph({ children: [r("1g.  Plant, Registry, or DSP Permit Number", false, 15, true, "555555")], spacing: { after: 20 } }),
         new Paragraph({ children: [r(data.dspNumber ?? "NOT CONFIGURED — set this in Settings", false, 19)] }),
       ] })] }),
-      new TableRow({ children: [new TableCell({ columnSpan: 2, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
+      new TableRow({ children: [new TableCell({ columnSpan: 2, width: { size: W, type: WidthType.DXA }, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
         new Paragraph({ children: [r("1h.  Name and Address of Registrant", false, 15, true, "555555")], spacing: { after: 20 } }),
         new Paragraph({ children: [r(`${data.proprietorName}${data.address ? `  ·  ${data.address}` : ""}`, false, 19)] }),
       ] })] }),
-      new TableRow({ children: [new TableCell({ columnSpan: 2, shading: { type: ShadingType.SOLID, color: LGRAY, fill: LGRAY }, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
+      new TableRow({ children: [new TableCell({ columnSpan: 2, width: { size: W, type: WidthType.DXA }, shading: { type: ShadingType.SOLID, color: LGRAY, fill: LGRAY }, borders: { top: THIN, bottom: THIN, left: THIN, right: THIN }, margins: PAD, children: [
         new Paragraph({ children: [r("☑  Original Return     ☐  Amended Return     Commodity type filed: Distilled Spirits", false, 18)] }),
       ] })] }),
     ],
@@ -701,7 +710,7 @@ export async function export5000Word(data: WordExciseData): Promise<void> {
           new TableCell({ width: { size: 3800, type: WidthType.DXA }, borders: { top: NONE, bottom: THIN, left: NONE, right: NONE }, margins: { top: 60, bottom: 90, left: 0, right: 0 }, children: [new Paragraph({ children: [r(`DSP Permit No.:  ${data.dspNumber ?? "_______________________"}`, false, 17, true, "555555")] })] }),
         ] }),
         new TableRow({ children: [
-          new TableCell({ width: { size: W, type: WidthType.DXA }, columnSpan: 3, borders: { top: NONE, bottom: THIN, left: NONE, right: NONE }, margins: { top: 60, bottom: 90, left: 0, right: 0 }, children: [new Paragraph({ children: [r(`EIN:  ${data.ein ?? "___________________________"}     ·     Telephone:  _______________________     ·     Email:  _________________________________________`, false, 17, true, "555555")] })] }),
+          new TableCell({ columnSpan: 3, width: { size: W, type: WidthType.DXA }, borders: { top: NONE, bottom: THIN, left: NONE, right: NONE }, margins: { top: 60, bottom: 90, left: 0, right: 0 }, children: [new Paragraph({ children: [r(`EIN:  ${data.ein ?? "___________________________"}     ·     Telephone:  _______________________     ·     Email:  _________________________________________`, false, 17, true, "555555")] })] }),
         ] }),
       ],
     }),
@@ -791,7 +800,12 @@ export async function export5000Word(data: WordExciseData): Promise<void> {
     creator: "Distillr Software",
     title: `TTB 5000.24 — ${data.proprietorName} — ${periodLabel(data.month)}`,
     sections: [{
-      properties: { page: { margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN } } },
+      properties: {
+        page: {
+          size: { width: PAGE_W, height: PAGE_H },
+          margin: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
+        },
+      },
       children,
     }],
   });
