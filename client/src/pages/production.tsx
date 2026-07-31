@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2, Upload, Download } from "lucide-react";
+import { exportToCsv, downloadCsvTemplate, parseCsv } from "../lib/csv";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
@@ -384,6 +385,9 @@ export default function Production() {
   const [viewTarget, setViewTarget] = useState<BatchRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BatchRow | null>(null);
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data: batches = [] } = useQuery<BatchRow[]>({
     queryKey: ["/api/distilling/batch-records"],
@@ -400,6 +404,57 @@ export default function Production() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const EXPORT_COLS = [
+    { header: "batchCode",             key: "batchCode" },
+    { header: "productName",           key: "productName" },
+    { header: "stage",                 key: "stage" },
+    { header: "batchDate",             key: "batchDate" },
+    { header: "spiritType",            key: "spiritType" },
+    { header: "taxClass",              key: "taxClass" },
+    { header: "proofGallonsProduced",  key: "proofGallonsProduced" },
+    { header: "exciseTaxDue",          key: "exciseTaxDue" },
+    { header: "notes",                 key: "notes" },
+    { header: "status",                key: "status" },
+  ] as const;
+  const IMPORT_HEADERS = EXPORT_COLS.map(c => c.header);
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const rows = parseCsv(text);
+      let ok = 0, fail = 0;
+      for (const row of rows) {
+        try {
+          await apiRequest("/api/distilling/batch-records", {
+            method: "POST",
+            body: JSON.stringify({
+              batchCode: row.batchCode,
+              stage: row.stage || "planning",
+              batchDate: row.batchDate || new Date().toISOString().split("T")[0],
+              productName: row.productName || undefined,
+              spiritType: row.spiritType || undefined,
+              taxClass: row.taxClass || undefined,
+              proofGallonsProduced: row.proofGallonsProduced ? +row.proofGallonsProduced : undefined,
+              exciseTaxDue: row.exciseTaxDue ? +row.exciseTaxDue : undefined,
+              notes: row.notes || undefined,
+            }),
+          });
+          ok++;
+        } catch { fail++; }
+      }
+      qc.invalidateQueries({ queryKey: ["/api/distilling/batch-records"] });
+      setImportOpen(false);
+      setImportFile(null);
+      toast.success(`Imported ${ok} batch${ok !== 1 ? "es" : ""}${fail ? ` (${fail} failed)` : ""}`);
+    } catch {
+      toast.error("Failed to read file");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const STAGES = ["planning", "mash_fermentation", "distillation", "barreling", "aging", "bottling", "closed"] as const;
   const filtered = stageFilter === "all" ? batches : batches.filter(b => b.stage === stageFilter);
@@ -428,6 +483,12 @@ export default function Production() {
                 </button>
               ))}
             </div>
+            <Button variant="outline" onClick={() => exportToCsv("production.csv", batches, EXPORT_COLS as any)}>
+              <Download size={13} className="mr-1.5" /> Export
+            </Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload size={13} className="mr-1.5" /> Import
+            </Button>
             <Button onClick={() => navigate("/production/new")}>+ New Batch</Button>
           </>
         }
@@ -553,6 +614,36 @@ export default function Production() {
           </div>
         </Dialog>
       )}
+      {/* Import dialog */}
+      <Dialog open={importOpen} onClose={() => { setImportOpen(false); setImportFile(null); }} title="Import Batches">
+        <div className="space-y-4">
+          <p className="text-xs text-[#737373]">
+            Upload a CSV with columns: <span className="font-mono">{IMPORT_HEADERS.join(", ")}</span>.
+            Required: <span className="font-mono">batchCode, stage, batchDate</span>.
+          </p>
+          <button
+            onClick={() => downloadCsvTemplate("production-template.csv", IMPORT_HEADERS)}
+            className="text-xs text-[#0369a1] hover:underline"
+          >
+            Download blank template →
+          </button>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
+          />
+          {importFile && (
+            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button onClick={handleImport} disabled={!importFile || importing}>
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </Layout>
   );
 }

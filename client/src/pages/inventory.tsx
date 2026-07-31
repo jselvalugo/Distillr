@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Upload, Download } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
+import { exportToCsv, downloadCsvTemplate, parseCsv } from "../lib/csv";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -39,6 +40,12 @@ export default function Inventory() {
 
   // delete confirm
   const [deleteTarget, setDeleteTarget] = useState<{ type: "item" | "lot"; id: number; name: string } | null>(null);
+
+  // import
+  const [importItemOpen, setImportItemOpen] = useState(false);
+  const [importLotOpen, setImportLotOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data: items = [] } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory/items"],
@@ -143,6 +150,97 @@ export default function Inventory() {
     });
   }
 
+  const ITEM_EXPORT_COLS = [
+    { header: "name",          key: "name" },
+    { header: "category",      key: "category" },
+    { header: "unitOfMeasure", key: "unitOfMeasure" },
+    { header: "status",        key: "status" },
+    { header: "notes",         key: "notes" },
+  ] as const;
+  const ITEM_IMPORT_HEADERS = ITEM_EXPORT_COLS.map(c => c.header);
+
+  const LOT_EXPORT_COLS = [
+    { header: "lotCode",       key: "lotCode" },
+    { header: "itemId",        key: "itemId" },
+    { header: "quantity",      key: "quantity" },
+    { header: "unitOfMeasure", key: "unitOfMeasure" },
+    { header: "abv",           key: "abv" },
+    { header: "proofGallons",  key: "proofGallons" },
+    { header: "receivedAt",    key: "receivedAt" },
+    { header: "expiresAt",     key: "expiresAt" },
+    { header: "notes",         key: "notes" },
+  ] as const;
+  const LOT_IMPORT_HEADERS = LOT_EXPORT_COLS.map(c => c.header);
+
+  async function handleImportItems() {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const rows = parseCsv(text);
+      let ok = 0, fail = 0;
+      for (const row of rows) {
+        try {
+          await apiRequest("/api/inventory/items", {
+            method: "POST",
+            body: JSON.stringify({
+              name: row.name,
+              category: row.category,
+              unitOfMeasure: row.unitOfMeasure,
+              notes: row.notes || undefined,
+            }),
+          });
+          ok++;
+        } catch { fail++; }
+      }
+      qc.invalidateQueries({ queryKey: ["/api/inventory/items"] });
+      setImportItemOpen(false);
+      setImportFile(null);
+      toast.success(`Imported ${ok} item${ok !== 1 ? "s" : ""}${fail ? ` (${fail} failed)` : ""}`);
+    } catch {
+      toast.error("Failed to read file");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleImportLots() {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const rows = parseCsv(text);
+      let ok = 0, fail = 0;
+      for (const row of rows) {
+        try {
+          await apiRequest("/api/inventory/lots", {
+            method: "POST",
+            body: JSON.stringify({
+              lotCode: row.lotCode,
+              itemId: row.itemId,
+              quantity: +row.quantity,
+              unitOfMeasure: row.unitOfMeasure || undefined,
+              abv: row.abv ? +row.abv : undefined,
+              proofGallons: row.proofGallons ? +row.proofGallons : undefined,
+              receivedAt: row.receivedAt || undefined,
+              expiresAt: row.expiresAt || undefined,
+              notes: row.notes || undefined,
+            }),
+          });
+          ok++;
+        } catch { fail++; }
+      }
+      qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
+      setImportLotOpen(false);
+      setImportFile(null);
+      toast.success(`Imported ${ok} lot${ok !== 1 ? "s" : ""}${fail ? ` (${fail} failed)` : ""}`);
+    } catch {
+      toast.error("Failed to read file");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const filteredItems = items.filter(
     (i) =>
       i.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -168,9 +266,25 @@ export default function Inventory() {
               className="w-44"
             />
             {tab === "items" ? (
-              <Button onClick={() => navigate("/inventory/items/new")}>+ Add Item</Button>
+              <>
+                <Button variant="outline" onClick={() => exportToCsv("inventory-items.csv", items, ITEM_EXPORT_COLS as any)}>
+                  <Download size={13} className="mr-1.5" /> Export
+                </Button>
+                <Button variant="outline" onClick={() => { setImportFile(null); setImportItemOpen(true); }}>
+                  <Upload size={13} className="mr-1.5" /> Import
+                </Button>
+                <Button onClick={() => navigate("/inventory/items/new")}>+ Add Item</Button>
+              </>
             ) : (
-              <Button onClick={() => navigate("/inventory/lots/new")}>+ Add Lot</Button>
+              <>
+                <Button variant="outline" onClick={() => exportToCsv("inventory-lots.csv", lots, LOT_EXPORT_COLS as any)}>
+                  <Download size={13} className="mr-1.5" /> Export
+                </Button>
+                <Button variant="outline" onClick={() => { setImportFile(null); setImportLotOpen(true); }}>
+                  <Upload size={13} className="mr-1.5" /> Import
+                </Button>
+                <Button onClick={() => navigate("/inventory/lots/new")}>+ Add Lot</Button>
+              </>
             )}
           </>
         }
@@ -467,6 +581,69 @@ export default function Inventory() {
           >
             {isDeleting ? "Deleting…" : "Delete"}
           </button>
+        </div>
+      </Dialog>
+
+      {/* Import Items */}
+      <Dialog open={importItemOpen} onClose={() => { setImportItemOpen(false); setImportFile(null); }} title="Import Inventory Items">
+        <div className="space-y-4">
+          <p className="text-xs text-[#737373]">
+            Upload a CSV with columns: <span className="font-mono">{ITEM_IMPORT_HEADERS.join(", ")}</span>.
+            Required: <span className="font-mono">name, category, unitOfMeasure</span>.
+          </p>
+          <button
+            onClick={() => downloadCsvTemplate("inventory-items-template.csv", ITEM_IMPORT_HEADERS)}
+            className="text-xs text-[#0369a1] hover:underline"
+          >
+            Download blank template →
+          </button>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
+          />
+          {importFile && (
+            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => { setImportItemOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button onClick={handleImportItems} disabled={!importFile || importing}>
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Import Lots */}
+      <Dialog open={importLotOpen} onClose={() => { setImportLotOpen(false); setImportFile(null); }} title="Import Lots">
+        <div className="space-y-4">
+          <p className="text-xs text-[#737373]">
+            Upload a CSV with columns: <span className="font-mono">{LOT_IMPORT_HEADERS.join(", ")}</span>.
+            Required: <span className="font-mono">lotCode, itemId, quantity</span>.
+            The <span className="font-mono">itemId</span> must match an existing item's ID.
+          </p>
+          <button
+            onClick={() => downloadCsvTemplate("inventory-lots-template.csv", LOT_IMPORT_HEADERS)}
+            className="text-xs text-[#0369a1] hover:underline"
+          >
+            Download blank template →
+          </button>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
+          />
+          {importFile && (
+            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => { setImportLotOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button onClick={handleImportLots} disabled={!importFile || importing}>
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
         </div>
       </Dialog>
     </Layout>

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2, Upload, Download } from "lucide-react";
+import { exportToCsv, downloadCsvTemplate, parseCsv } from "../lib/csv";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
@@ -104,6 +105,9 @@ export default function Barrels() {
   const [viewTarget, setViewTarget] = useState<Barrel | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Barrel | null>(null);
   const [search, setSearch] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data: barrels = [], isLoading } = useQuery<Barrel[]>({
     queryKey: ["/api/barrels"],
@@ -120,6 +124,62 @@ export default function Barrels() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const EXPORT_COLS = [
+    { header: "serialNumber",    key: "serialNumber" },
+    { header: "productName",     key: "productName" },
+    { header: "status",          key: "status" },
+    { header: "fillDate",        key: "fillDate" },
+    { header: "fillProof",       key: "fillProof" },
+    { header: "fillVolume",      key: "fillVolume" },
+    { header: "fillProofGallons",key: "fillProofGallons" },
+    { header: "currentVolume",   key: "currentVolume" },
+    { header: "warehouseZone",   key: "warehouseZone" },
+    { header: "charLevel",       key: "charLevel" },
+    { header: "totalAgingDays",  key: "totalAgingDays" },
+    { header: "notes",           key: "notes" },
+  ] as const;
+  const IMPORT_HEADERS = EXPORT_COLS.map(c => c.header);
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const rows = parseCsv(text);
+      let ok = 0, fail = 0;
+      for (const row of rows) {
+        try {
+          await apiRequest("/api/barrels", {
+            method: "POST",
+            body: JSON.stringify({
+              serialNumber: row.serialNumber,
+              status: (row.status as any) || "Filled",
+              productName: row.productName || undefined,
+              fillDate: row.fillDate || undefined,
+              fillProof: row.fillProof ? +row.fillProof : undefined,
+              fillVolume: row.fillVolume ? +row.fillVolume : undefined,
+              fillProofGallons: row.fillProofGallons ? +row.fillProofGallons : undefined,
+              currentVolume: row.currentVolume ? +row.currentVolume : undefined,
+              warehouseZone: row.warehouseZone || undefined,
+              charLevel: row.charLevel || undefined,
+              totalAgingDays: row.totalAgingDays ? +row.totalAgingDays : undefined,
+              notes: row.notes || undefined,
+            }),
+          });
+          ok++;
+        } catch { fail++; }
+      }
+      qc.invalidateQueries({ queryKey: ["/api/barrels"] });
+      setImportOpen(false);
+      setImportFile(null);
+      toast.success(`Imported ${ok} barrel${ok !== 1 ? "s" : ""}${fail ? ` (${fail} failed)` : ""}`);
+    } catch {
+      toast.error("Failed to read file");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const filtered = barrels.filter(
     (b) =>
@@ -140,6 +200,12 @@ export default function Barrels() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-52"
             />
+            <Button variant="outline" onClick={() => exportToCsv("barrels.csv", barrels, EXPORT_COLS as any)}>
+              <Download size={13} className="mr-1.5" /> Export
+            </Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload size={13} className="mr-1.5" /> Import
+            </Button>
             <Button onClick={() => navigate("/barrels/new")}>+ Add Barrel</Button>
           </>
         }
@@ -260,6 +326,35 @@ export default function Barrels() {
           </div>
         </Dialog>
       )}
+      <Dialog open={importOpen} onClose={() => { setImportOpen(false); setImportFile(null); }} title="Import Barrels">
+        <div className="space-y-4">
+          <p className="text-xs text-[#737373]">
+            Upload a CSV with columns: <span className="font-mono">{IMPORT_HEADERS.join(", ")}</span>.
+            Required: <span className="font-mono">serialNumber, status</span>.
+          </p>
+          <button
+            onClick={() => downloadCsvTemplate("barrels-template.csv", IMPORT_HEADERS)}
+            className="text-xs text-[#0369a1] hover:underline"
+          >
+            Download blank template →
+          </button>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
+          />
+          {importFile && (
+            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => { setImportOpen(false); setImportFile(null); }}>Cancel</Button>
+            <Button onClick={handleImport} disabled={!importFile || importing}>
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </Layout>
   );
 }
