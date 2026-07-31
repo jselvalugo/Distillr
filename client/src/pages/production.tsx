@@ -85,6 +85,18 @@ type BatchRow = DistillingBatchRecord & {
   amountReceivedGallons?: number | null;
   distillDate?: string | null;
   fillDate?: string | null;
+  // Joined from distilling_inventory_records
+  invCasesToDistributors?: number | null;
+  invCasesToRetail?: number | null;
+  invCasesMade?: number | null;
+  invBottlesMade?: number | null;
+  invReportMonth?: string | null;
+  invTaxesOwed?: number | null;
+  invAbv?: number | null;
+  invProofGallons?: number | null;
+  invEndingUsGallons?: number | null;
+  invBeginningCases?: number | null;
+  invEndingInventory?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -110,85 +122,248 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ---------------------------------------------------------------------------
-// Read-only batch detail dialog
+// Read-only batch detail dialog — full source-of-truth record
 // ---------------------------------------------------------------------------
+function fmtMoney(n: number | null | undefined) {
+  if (n == null) return null;
+  return `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function MetricCard({ label, value, sub, accent }: {
+  label: string; value: React.ReactNode; sub?: string; accent?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-1">{label}</p>
+      <p className={`text-lg font-bold leading-tight ${accent ?? "text-[#0a0a0a]"}`}>{value}</p>
+      {sub && <p className="text-[10px] text-[#737373] mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 function BatchDetailDialog({ batch, onClose, onEdit }: {
   batch: BatchRow;
   onClose: () => void;
   onEdit: () => void;
 }) {
-  const totalCases = (batch.cases750ml ?? 0) + (batch.cases1000ml ?? 0) + (batch.cases1750ml ?? 0);
+  // Fetch the full joined record — production, barrel, inventory
+  const { data: full } = useQuery<{
+    batch: any;
+    productionRecord: any;
+    barrel: any;
+    inventoryRecord: any;
+  }>({
+    queryKey: [`/api/distilling/batch-records/${batch.id}/full`],
+    queryFn: () => apiRequest(`/api/distilling/batch-records/${batch.id}/full`),
+    staleTime: 30_000,
+  });
+
+  // Merge full data over the sparse list row
+  const b: any = {
+    ...batch,
+    ...(full?.batch ?? {}),
+    // Flatten production record fields
+    distillDate: full?.productionRecord?.distillDate ?? (batch as any).distillDate,
+    distillationProof: full?.productionRecord?.percentageDistilled ?? (batch as any).distillationProof,
+    proofGallonsProduced: full?.productionRecord?.proofOfGallons ?? (batch as any).proofGallonsProduced,
+    stillType: full?.productionRecord?.stillType ?? (batch as any).stillType,
+    gallonsDistilled: full?.productionRecord?.gallonsDistilled ?? null,
+    // Flatten barrel fields
+    barrelSerialNumber: full?.barrel?.serialNumber ?? null,
+    fillProof: full?.barrel?.fillProof ?? (batch as any).fillProof,
+    fillWineGallons: full?.barrel?.fillVolume ?? (batch as any).fillWineGallons,
+    fillProofGallons: full?.barrel?.fillProofGallons ?? (batch as any).fillProofGallons,
+    warehouseZone: full?.barrel?.warehouseZone ?? null,
+    charLevel: full?.barrel?.charLevel ?? null,
+    currentProofGallons: full?.barrel?.currentProofGallons ?? null,
+    totalAgingDays: full?.barrel?.totalAgingDays ?? null,
+    barrelStatus: full?.barrel?.status ?? null,
+    // Flatten inventory record fields
+    invCasesToDistributors: full?.inventoryRecord
+      ? Object.values(full.inventoryRecord.casesToDistributors ?? {}).reduce((s: number, v: any) => s + Number(v), 0)
+      : (batch as any).invCasesToDistributors,
+    invCasesToRetail: full?.inventoryRecord
+      ? Object.values(full.inventoryRecord.casesToRetail ?? {}).reduce((s: number, v: any) => s + Number(v), 0)
+      : (batch as any).invCasesToRetail,
+    invCasesMade: full?.inventoryRecord
+      ? Object.values(full.inventoryRecord.casesMade ?? {}).reduce((s: number, v: any) => s + Number(v), 0)
+      : (batch as any).invCasesMade,
+    invBottlesMade: full?.inventoryRecord
+      ? Object.values(full.inventoryRecord.bottlesMade ?? {}).reduce((s: number, v: any) => s + Number(v), 0)
+      : (batch as any).invBottlesMade,
+    invReportMonth: full?.inventoryRecord?.reportMonth ?? (batch as any).invReportMonth,
+    invTaxesOwed: full?.inventoryRecord?.taxesOwed ?? (batch as any).invTaxesOwed,
+    invAbv: full?.inventoryRecord?.averageAbvPercent ?? (batch as any).invAbv,
+    invProofGallons: full?.inventoryRecord?.endingProofGallons ?? (batch as any).invProofGallons,
+    invEndingUsGallons: full?.inventoryRecord?.endingUsGallons ?? (batch as any).invEndingUsGallons,
+    invBeginningCases: full?.inventoryRecord?.beginningOfMonthCases ?? (batch as any).invBeginningCases,
+    invEndingInventory: full?.inventoryRecord?.endingMonthInventory ?? (batch as any).invEndingInventory,
+  };
+
+  // Resolve all values — prefer inventory record (source of truth) over batch fields
+  const distCases    = b.invCasesToDistributors ?? 0;
+  const retailCases  = b.invCasesToRetail ?? 0;
+  const totalSold    = distCases + retailCases;
+  const casesMade    = b.invCasesMade || b.totalCases || 0;
+  const bottlesMade  = b.invBottlesMade || (casesMade * 12) || 0;
+  const proofGallons = b.invProofGallons || b.proofGallonsProcessed || b.proofGallonsProduced || null;
+  const usGallons    = b.invEndingUsGallons || null;
+  const exciseTax    = b.invTaxesOwed || batch.exciseTaxDue || null;
+  const abv          = b.invAbv || null;
+  const proof        = b.bottlingProof || (abv ? abv * 2 : null);
+  const perBottle    = exciseTax && bottlesMade > 0 ? exciseTax / bottlesMade : null;
+  const distPct      = totalSold > 0 ? Math.round((distCases / totalSold) * 100) : 0;
+  const retailPct    = totalSold > 0 ? 100 - distPct : 0;
+
+  const hasDistillation = !!(b.distillationProof || b.proofGallonsProduced || b.distillDate || b.stillType || b.gallonsDistilled);
+  const hasBarreling    = !!(b.fillProof || b.fillWineGallons || b.fillDate || b.barrelSerialNumber);
+  const hasAging        = !!(b.targetDumpDate || b.amountReceivedGallons != null || b.totalAgingDays || b.currentProofGallons);
+  const hasBottling     = !!(b.bottlingDate || b.cases750ml != null || b.cases1000ml != null || b.cases1750ml != null);
+  const loading         = !full;
+
+  const reportLabel = b.invReportMonth
+    ? new Date(b.invReportMonth + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : fmt(batch.batchDate);
 
   return (
-    <Dialog open onClose={onClose} title={`${batch.batchCode} — Batch Record`}>
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    <Dialog open onClose={onClose} title="" size="lg">
+      <div className="space-y-5">
 
-        <Section title="Batch Overview">
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#e5e5e5]">
+          <div>
+            <p className="text-base font-bold text-[#0a0a0a]">{b.productName ?? batch.batchCode}</p>
+            <p className="text-xs text-[#737373] mt-0.5 font-mono">{batch.batchCode} · {reportLabel}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <StagePill stage={batch.stage} />
+            {loading && <span className="text-[10px] text-[#b0b0b0] animate-pulse">Loading…</span>}
+          </div>
+        </div>
+
+        {/* ── Key metrics grid ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <MetricCard
+            label="Total Cases"
+            value={casesMade > 0 ? casesMade.toLocaleString() : "—"}
+            sub={bottlesMade > 0 ? `${bottlesMade.toLocaleString()} bottles` : undefined}
+          />
+          <MetricCard
+            label="Proof Gal (State)"
+            value={proofGallons ? Number(proofGallons).toFixed(3) : "—"}
+            sub={usGallons ? `${Number(usGallons).toFixed(3)} US gal (Federal)` : undefined}
+          />
+          <MetricCard
+            label="Excise Tax"
+            value={exciseTax ? fmtMoney(exciseTax)! : "—"}
+            sub={perBottle ? `${fmtMoney(perBottle)}/bottle` : undefined}
+            accent="text-[#0369a1]"
+          />
+          <MetricCard
+            label="ABV / Proof"
+            value={abv ? `${abv}% / ${proof}°` : proof ? `${proof}°` : "—"}
+          />
+        </div>
+
+        {/* ── Distribution split ── */}
+        {(distCases > 0 || retailCases > 0) && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#737373] mb-2">Distribution Channel</p>
+            <div className="rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 py-3 space-y-2.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md bg-[#1d4ed8]/8 border border-[#1d4ed8]/20 px-3 py-2">
+                  <p className="text-[10px] text-[#1d4ed8] font-semibold uppercase tracking-wide mb-0.5">Distributor</p>
+                  <p className="text-xl font-bold text-[#1d4ed8]">{distCases.toLocaleString()}</p>
+                  <p className="text-[10px] text-[#1d4ed8]/70">cases · {distPct}%</p>
+                </div>
+                <div className="rounded-md bg-[#be185d]/8 border border-[#be185d]/20 px-3 py-2">
+                  <p className="text-[10px] text-[#be185d] font-semibold uppercase tracking-wide mb-0.5">Retail</p>
+                  <p className="text-xl font-bold text-[#be185d]">{retailCases.toLocaleString()}</p>
+                  <p className="text-[10px] text-[#be185d]/70">cases · {retailPct}%</p>
+                </div>
+              </div>
+              {distCases > 0 && retailCases > 0 && (
+                <div>
+                  <div className="h-2.5 rounded-full bg-[#e5e7eb] overflow-hidden flex">
+                    <div className="bg-[#1d4ed8] h-full transition-all" style={{ width: `${distPct}%` }} />
+                    <div className="bg-[#db2777] h-full flex-1" />
+                  </div>
+                  <p className="text-[10px] text-[#737373] mt-1 text-right">
+                    {totalSold.toLocaleString()} total cases sold
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Inventory position ── */}
+        {(b.invBeginningCases != null || b.invEndingInventory != null) && (
+          <Section title="Inventory Position">
+            <DetailRow label="Beginning of Month" value={b.invBeginningCases != null ? `${b.invBeginningCases} cases` : null} />
+            <DetailRow label="Cases Produced" value={casesMade > 0 ? `${casesMade} cases` : null} />
+            <DetailRow label="Cases Sold" value={totalSold > 0 ? `${totalSold} cases` : null} />
+            <DetailRow label="Ending Inventory" value={b.invEndingInventory != null ? `${b.invEndingInventory} cases` : null} />
+          </Section>
+        )}
+
+        {/* ── Production stages (only if data exists) ── */}
+        {hasDistillation && (
+          <Section title="Distillation">
+            <DetailRow label="Distill Date" value={fmt(b.distillDate)} />
+            <DetailRow label="Still Type" value={b.stillType} />
+            <DetailRow label="Distillation Proof" value={b.distillationProof ? `${b.distillationProof}°` : null} />
+            <DetailRow label="Gallons Distilled" value={b.gallonsDistilled ? `${fmtNum(b.gallonsDistilled)} gal` : null} />
+            <DetailRow label="Proof Gallons Produced" value={b.proofGallonsProduced ? `${fmtNum(b.proofGallonsProduced)} PG` : null} />
+          </Section>
+        )}
+
+        {hasBarreling && (
+          <Section title="Barreling">
+            <DetailRow label="Barrel Serial #" value={b.barrelSerialNumber} />
+            <DetailRow label="Fill Date" value={fmt(b.fillDate)} />
+            <DetailRow label="Fill Number" value={b.fillNumber} />
+            <DetailRow label="Container Type" value={b.containerType} />
+            <DetailRow label="Char Level" value={b.charLevel} />
+            <DetailRow label="Warehouse Zone" value={b.warehouseZone} />
+            <DetailRow label="Fill Proof" value={b.fillProof ? `${b.fillProof}°` : null} />
+            <DetailRow label="Fill Wine Gallons" value={b.fillWineGallons ? `${fmtNum(b.fillWineGallons)} gal` : null} />
+            <DetailRow label="Fill Proof Gallons" value={b.fillProofGallons ? `${fmtNum(b.fillProofGallons)} PG` : null} />
+          </Section>
+        )}
+
+        {hasAging && (
+          <Section title="Aging">
+            <DetailRow label="Days Aged" value={b.totalAgingDays ? `${b.totalAgingDays} days` : null} />
+            <DetailRow label="Current Proof Gallons" value={b.currentProofGallons ? `${fmtNum(b.currentProofGallons)} PG` : null} />
+            <DetailRow label="Barrel Status" value={b.barrelStatus} />
+            <DetailRow label="Target Dump Date" value={fmt(b.targetDumpDate)} />
+            <DetailRow label="Amount Received" value={b.amountReceivedGallons != null ? `${b.amountReceivedGallons} gal` : null} />
+          </Section>
+        )}
+
+        {hasBottling && (
+          <Section title="Bottling">
+            <DetailRow label="Bottling Date" value={fmt(b.bottlingDate)} />
+            <DetailRow label="Lot Number" value={b.lotNumber} />
+            <DetailRow label="Proof at Bottling" value={b.bottlingProof ? `${b.bottlingProof}°` : null} />
+            <DetailRow label="Wine Gallons Bottled" value={b.wineGallonsBottled ? `${b.wineGallonsBottled} gal` : null} />
+            <DetailRow label="Proof Gallons Processed" value={b.proofGallonsProcessed ? `${fmtNum(b.proofGallonsProcessed)} PG` : null} />
+            <DetailRow label="Cases 750 mL" value={b.cases750ml} />
+            <DetailRow label="Cases 1 L" value={b.cases1000ml} />
+            <DetailRow label="Cases 1.75 L" value={b.cases1750ml} />
+          </Section>
+        )}
+
+        {/* ── Record metadata ── */}
+        <Section title="Record Details">
           <DetailRow label="Batch Code" value={<span className="font-mono">{batch.batchCode}</span>} />
-          <DetailRow label="Product" value={(batch as any).productName} />
-          <DetailRow label="Batch Date" value={fmt(batch.batchDate)} />
-          <DetailRow label="Spirit Type" value={(batch as any).spiritType} />
-          <DetailRow label="Spirit Class" value={(batch as any).spiritClass} />
-          <DetailRow label="Stage" value={<StagePill stage={batch.stage} />} />
+          <DetailRow label="Status" value={batch.status} />
+          <DetailRow label="Spirit Type" value={b.spiritType} />
+          <DetailRow label="Spirit Class" value={b.spiritClass} />
+          <DetailRow label="Tax Class" value={batch.taxClass ? (TAX_CLASS_LABELS[batch.taxClass] ?? batch.taxClass) : null} />
           <DetailRow label="Notes" value={batch.notes} />
         </Section>
-
-        {!!((batch as any).distillationProof || (batch as any).proofGallonsProduced || (batch as any).distillDate || (batch as any).stillType) && (
-          <Section title="Distillation">
-            <DetailRow label="Distill Date" value={fmt((batch as any).distillDate)} />
-            <DetailRow label="Still Type" value={(batch as any).stillType} />
-            <DetailRow label="Distillation Proof" value={(batch as any).distillationProof ? `${(batch as any).distillationProof}°` : null} />
-            <DetailRow label="Proof Gallons Produced" value={fmtNum((batch as any).proofGallonsProduced) ? `${fmtNum((batch as any).proofGallonsProduced)} PG` : null} />
-          </Section>
-        )}
-
-        {!!((batch as any).fillProof || (batch as any).fillWineGallons || (batch as any).fillDate) && (
-          <Section title="Barreling">
-            <DetailRow label="Fill Date" value={fmt((batch as any).fillDate)} />
-            <DetailRow label="Fill Number" value={(batch as any).fillNumber} />
-            <DetailRow label="Container Type" value={(batch as any).containerType} />
-            <DetailRow label="Fill Proof" value={(batch as any).fillProof ? `${(batch as any).fillProof}°` : null} />
-            <DetailRow label="Fill Wine Gallons" value={(batch as any).fillWineGallons ? `${(batch as any).fillWineGallons} gal` : null} />
-            <DetailRow label="Fill Proof Gallons" value={(batch as any).fillProofGallons ? `${(batch as any).fillProofGallons} PG` : null} />
-          </Section>
-        )}
-
-        {!!((batch as any).targetDumpDate || (batch as any).amountReceivedGallons != null) && (
-          <Section title="Aging">
-            <DetailRow label="Target Dump Date" value={fmt((batch as any).targetDumpDate)} />
-            <DetailRow label="Amount Received" value={(batch as any).amountReceivedGallons != null ? `${(batch as any).amountReceivedGallons} gal` : null} />
-          </Section>
-        )}
-
-        {!!((batch as any).bottlingDate || (batch as any).cases750ml != null || (batch as any).cases1000ml != null || (batch as any).cases1750ml != null) && (
-          <Section title="Bottling">
-            <DetailRow label="Bottling Date" value={fmt((batch as any).bottlingDate)} />
-            <DetailRow label="Lot Number" value={(batch as any).lotNumber} />
-            <DetailRow label="Proof at Bottling" value={(batch as any).bottlingProof ? `${(batch as any).bottlingProof}°` : null} />
-            <DetailRow label="Wine Gallons Bottled" value={(batch as any).wineGallonsBottled ? `${(batch as any).wineGallonsBottled} gal` : null} />
-            <DetailRow label="Proof Gallons Processed" value={(batch as any).proofGallonsProcessed ? `${(batch as any).proofGallonsProcessed} PG` : null} />
-            <DetailRow label="Cases 750 mL" value={(batch as any).cases750ml} />
-            <DetailRow label="Cases 1 L" value={(batch as any).cases1000ml} />
-            <DetailRow label="Cases 1.75 L" value={(batch as any).cases1750ml} />
-            <DetailRow label="Total Cases" value={totalCases > 0 ? totalCases : null} />
-          </Section>
-        )}
-
-        {(batch.exciseTaxDue != null || batch.taxClass) && (
-          <Section title="Tax">
-            <DetailRow
-              label="Tax Class"
-              value={batch.taxClass ? (TAX_CLASS_LABELS[batch.taxClass] ?? batch.taxClass) : null}
-            />
-            <DetailRow label="Excise Tax Due" value={
-              batch.exciseTaxDue != null ? (
-                <span className="font-semibold text-[#0369a1]">
-                  ${Number(batch.exciseTaxDue).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              ) : null
-            } />
-          </Section>
-        )}
       </div>
 
       <div className="flex justify-between items-center pt-4 mt-2 border-t border-[#e5e5e5]">
@@ -266,6 +441,9 @@ export default function Production() {
                 <Th>Batch Code</Th>
                 <Th>Product</Th>
                 <Th>Date</Th>
+                <Th className="hidden sm:table-cell">Dist / Retail</Th>
+                <Th className="hidden md:table-cell">Proof Gal</Th>
+                <Th className="hidden md:table-cell">Tax Due</Th>
                 <Th>Stage</Th>
                 <Th></Th>
               </Tr>
@@ -287,6 +465,26 @@ export default function Production() {
                     <Td className="font-mono font-medium text-[#0a0a0a]">{b.batchCode}</Td>
                     <Td className="text-[#737373]">{(b as any).productName ?? "—"}</Td>
                     <Td className="text-[#737373]">{fmt(b.batchDate)}</Td>
+                    <Td className="hidden sm:table-cell text-xs">
+                      {((b as any).invCasesToDistributors || (b as any).invCasesToRetail) ? (
+                        <span>
+                          <span className="text-[#1d4ed8] font-medium">{(b as any).invCasesToDistributors ?? 0}D</span>
+                          {" / "}
+                          <span className="text-[#be185d] font-medium">{(b as any).invCasesToRetail ?? 0}R</span>
+                        </span>
+                      ) : <span className="text-[#d1d5db]">—</span>}
+                    </Td>
+                    <Td className="hidden md:table-cell text-xs text-[#737373]">
+                      {(b as any).invProofGallons ? `${Number((b as any).invProofGallons).toFixed(2)} PG` :
+                       (b as any).proofGallonsProcessed ? `${fmtNum((b as any).proofGallonsProcessed)} PG` :
+                       (b as any).proofGallonsProduced ? `${fmtNum((b as any).proofGallonsProduced)} PG` :
+                       <span className="text-[#d1d5db]">—</span>}
+                    </Td>
+                    <Td className="hidden md:table-cell text-xs text-[#0369a1] font-medium">
+                      {((b as any).exciseTaxDue || (b as any).invTaxesOwed) ?
+                        `$${Number((b as any).exciseTaxDue || (b as any).invTaxesOwed).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` :
+                        <span className="text-[#d1d5db]">—</span>}
+                    </Td>
                     <Td><StagePill stage={b.stage} /></Td>
                     <Td>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
