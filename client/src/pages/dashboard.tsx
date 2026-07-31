@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -659,7 +660,7 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
 
   return (
     <div
-      className="hidden xl:flex fixed left-4 top-1/2 z-30 flex-col gap-1 p-2.5 rounded-2xl"
+      className="hidden lg:flex fixed left-4 top-1/2 z-[9999] flex-col gap-1 p-2.5 rounded-2xl"
       style={{
         transform: "translateY(-50%)",
         background: "rgba(255,255,255,0.08)",
@@ -898,7 +899,7 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <SectionNav widgetOrder={widgetOrder} activeId={activeSection} />
+      {createPortal(<SectionNav widgetOrder={widgetOrder} activeId={activeSection} />, document.body)}
       <div className="min-h-screen relative" style={{ background: heroBg }}>
 
         {/* ── Decorative blobs ── */}
