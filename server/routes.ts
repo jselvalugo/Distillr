@@ -33,7 +33,7 @@ import {
   updateTenant,
   deleteTenant,
 } from "./tenant-storage";
-import { runWithTenant } from "./tenant-context";
+import { runWithTenant, getCurrentTenantId } from "./tenant-context";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
 import { createCsrfToken, CSRF_HEADER_NAME, isCsrfTokenValid, shouldEnforceCsrf } from "./csrf-protection";
 import { handleAiChat } from "./ai-agent";
@@ -651,7 +651,7 @@ function deriveMovementTaxClassification(movementType: string): string {
 }
 
 function deriveBarrelOperationCategory(eventType: string): TtbOperationCategory {
-  if (["Fill", "Transfer"].includes(eventType)) return "Storage";
+  if (["Fill", "Transfer", "gauge"].includes(eventType)) return "Storage";
   return "Processing";
 }
 
@@ -664,6 +664,7 @@ function deriveBarrelProductionStage(eventType: string): string {
     Dump: "Processing",
     Empty: "Removal",
     Retire: "Removal",
+    gauge: "Maturation",
   };
   return defaults[eventType] || "Processing";
 }
@@ -677,6 +678,7 @@ function deriveBarrelTaxClassification(eventType: string): string {
     Dump: "Tax Paid",
     Empty: "Tax Paid",
     Retire: "Destruction",
+    gauge: "In Bond",
   };
   return defaults[eventType] || "In Bond";
 }
@@ -825,6 +827,86 @@ function buildInventorySnapshot(params: {
     totalGallons: roundNumber(lotGallons + barrelGallons),
     totalEstimatedProofGallons: roundNumber(lotProof + barrelProof),
   };
+}
+
+// ── Operations Ledger auto-write helpers ─────────────────────────────────────
+
+async function writeProductionLedgerEntry(record: {
+  id: string;
+  batchRecordId: string | null | undefined;
+  distillDate: string | null | undefined;
+  proofOfGallons: number | null | undefined;
+  gallonsDistilled: number | null | undefined;
+  percentageDistilled: number | null | undefined;
+}): Promise<void> {
+  const pg = Number(record.proofOfGallons ?? 0);
+  if (!Number.isFinite(pg) || pg <= 0) return;
+
+  const batchId = record.batchRecordId || record.id;
+  const lotId = `LOT-PROD-${batchId}`;
+  const moveId = `MOVE-PROD-${record.id}`;
+  const performedAt = record.distillDate || new Date().toISOString();
+  const tenantId = getCurrentTenantId();
+
+  // Upsert lot: abv=100 so estimatedProofGallons = quantity in the TTB report
+  await query(
+    `INSERT INTO inventory_lots (id, tenant_id, item_id, lot_code, quantity, unit_of_measure, abv, proof_gallons, received_at, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'proof_gallons', 100, $5, $6, $6, $6)
+     ON CONFLICT (id) DO UPDATE SET quantity = EXCLUDED.quantity, proof_gallons = EXCLUDED.proof_gallons, updated_at = EXCLUDED.updated_at`,
+    [lotId, tenantId, batchId, `PROD-${batchId}`, pg, performedAt],
+  );
+
+  // Remove stale movement for this record (covers update case)
+  await query(`DELETE FROM inventory_movements WHERE id = $1 AND tenant_id = $2`, [moveId, tenantId]);
+
+  // Production distillation run → Storage / Distillation / In Bond
+  await query(
+    `INSERT INTO inventory_movements (id, tenant_id, lot_id, movement_type, quantity, ttb_operation_category, production_stage, tax_classification, reason, performed_at, metadata)
+     VALUES ($1, $2, $3, 'Receive', $4, 'Storage', 'Distillation', 'In Bond', $5, $6, $7)`,
+    [
+      moveId, tenantId, lotId, pg,
+      `Distillation run — ${record.id}`,
+      performedAt,
+      JSON.stringify({ sourceType: "production_record", sourceId: record.id, batchRecordId: batchId, gallonsDistilled: record.gallonsDistilled, percentageDistilled: record.percentageDistilled }),
+    ],
+  );
+}
+
+async function writeBottlingLedgerEntry(
+  batchId: string,
+  proofGallonsProcessed: number,
+  bottlingDate: string | null | undefined,
+): Promise<void> {
+  const pg = Number(proofGallonsProcessed ?? 0);
+  if (!Number.isFinite(pg) || pg <= 0) return;
+
+  const lotId = `LOT-PROD-${batchId}`;
+  const moveId = `MOVE-BOTTLE-${batchId}`;
+  const performedAt = bottlingDate || new Date().toISOString();
+  const tenantId = getCurrentTenantId();
+
+  // Ensure lot exists
+  await query(
+    `INSERT INTO inventory_lots (id, tenant_id, item_id, lot_code, quantity, unit_of_measure, abv, proof_gallons, received_at, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'proof_gallons', 100, $5, $6, $6, $6)
+     ON CONFLICT (id) DO NOTHING`,
+    [lotId, tenantId, batchId, `PROD-${batchId}`, pg, performedAt],
+  );
+
+  // Replace previous bottling entry for this batch
+  await query(`DELETE FROM inventory_movements WHERE id = $1 AND tenant_id = $2`, [moveId, tenantId]);
+
+  // Bottling run → Processing / Bottling / Tax Paid (spirits leave bond)
+  await query(
+    `INSERT INTO inventory_movements (id, tenant_id, lot_id, movement_type, quantity, ttb_operation_category, production_stage, tax_classification, reason, performed_at, metadata)
+     VALUES ($1, $2, $3, 'Bottle', $4, 'Processing', 'Bottling', 'Tax Paid', $5, $6, $7)`,
+    [
+      moveId, tenantId, lotId, pg,
+      `Bottling — batch ${batchId}`,
+      performedAt,
+      JSON.stringify({ sourceType: "batch_record", sourceId: batchId }),
+    ],
+  );
 }
 
 async function buildTtbMonthlyPayload(
@@ -1583,6 +1665,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         email: parsed.data.email.trim().toLowerCase(),
       };
 
+      // Enforce per-tenant user cap
+      const tenantId = getCurrentTenantId();
+      const [tenantRow] = await query(
+        `SELECT user_limit, COUNT(u.id)::int AS user_count
+         FROM tenants t LEFT JOIN users u ON u.tenant_id = t.id
+         WHERE t.id = $1 GROUP BY t.user_limit`, [tenantId]
+      );
+      if (tenantRow && tenantRow.user_limit !== -1 && tenantRow.user_count >= tenantRow.user_limit) {
+        return res.status(403).json({
+          error: `User limit reached (${tenantRow.user_limit} users max on your current plan). Contact your administrator to upgrade.`,
+        });
+      }
+
       const user = await authStorage.createUser(payload);
       res.status(201).json({ user });
     } catch (error: any) {
@@ -1835,9 +1930,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               casesToDistributors: rows[0].cases_to_distributors ?? null,
               casesToRetail: rows[0].cases_to_retail ?? null,
               bottlesMade: rows[0].bottles_made ?? null,
-              cases_cased: rows[0].cases_cased ?? null,
-              bottles_empty: rows[0].bottles_empty ?? null,
-              bottlingDate: rows[0].bottling_date ?? null,
+              averageAbvPercent: rows[0].average_abv_percent ?? null,
+              taxesOwed: rows[0].taxes_owed ?? null,
+              endingProofGallons: rows[0].ending_proof_gallons ?? null,
+              endingUsGallons: rows[0].ending_us_gallons ?? null,
+              beginningOfMonthCases: rows[0].beginning_of_month_cases ?? null,
+              endingMonthInventory: rows[0].ending_month_inventory ?? null,
             } : null)
         : null;
 
@@ -1883,6 +1981,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         stage: record.stage,
         status: record.status,
       });
+      if (Number(record.proofGallonsProcessed) > 0) {
+        writeBottlingLedgerEntry(
+          record.id,
+          Number(record.proofGallonsProcessed),
+          record.bottlingDate ?? null,
+        ).catch((err) => console.error("[ledger] bottling write failed:", err));
+      }
       res.json(record);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to update distilling batch record";
@@ -1953,6 +2058,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         gallonsDistilled: record.gallonsDistilled,
         proofOfGallons: record.proofOfGallons,
       });
+      writeProductionLedgerEntry(record).catch((err) => console.error("[ledger] production create failed:", err));
       res.status(201).json(record);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Invalid distilling production record payload";
@@ -1969,6 +2075,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         gallonsDistilled: record.gallonsDistilled,
         proofOfGallons: record.proofOfGallons,
       });
+      writeProductionLedgerEntry(record).catch((err) => console.error("[ledger] production update failed:", err));
       res.json(record);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to update distilling production record";
@@ -2681,6 +2788,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/barrels", async (req, res) => {
     try {
       const payload = insertBarrelSchema.parse(req.body);
+
+      // Enforce barrel cap for Starter plan (max 50)
+      const tenantId = getCurrentTenantId();
+      const [tenantRow] = await query(
+        `SELECT plan, COUNT(b.id)::int AS barrel_count
+         FROM tenants t LEFT JOIN barrels b ON b.tenant_id = t.id
+         WHERE t.id = $1 GROUP BY t.plan`, [tenantId]
+      );
+      if (tenantRow?.plan === "starter" && tenantRow.barrel_count >= 50) {
+        return res.status(403).json({
+          error: "Barrel limit reached (50 barrels max on the Starter plan). Upgrade to Professional to add more barrels.",
+        });
+      }
+
       const barrel = await storage.createBarrel(payload);
       res.status(201).json(barrel);
     } catch {
@@ -2745,6 +2866,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(201).json(event);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Invalid barrel event payload";
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/api/barrels/:id/gauge", async (req, res) => {
+    try {
+      const barrel = await storage.getBarrel(req.params.id);
+      if (!barrel) return res.status(404).json({ error: "Barrel not found" });
+
+      const currentWG = Number(req.body.currentWineGallons);
+      const proof = Number(req.body.currentProof);
+      const gaugeDate: string = req.body.gaugeDate || new Date().toISOString();
+
+      if (!Number.isFinite(currentWG) || currentWG < 0) {
+        return res.status(400).json({ error: "currentWineGallons must be a non-negative number." });
+      }
+      if (!Number.isFinite(proof) || proof < 0 || proof > 200) {
+        return res.status(400).json({ error: "currentProof must be between 0 and 200." });
+      }
+
+      const priorVolume = Number(barrel.currentVolume ?? 0);
+      const lossWG = Math.max(0, Number((priorVolume - currentWG).toFixed(4)));
+      const lossProofGallons = Number((lossWG * proof / 100).toFixed(4));
+      const newProofGallons = Number((currentWG * proof / 100).toFixed(4));
+
+      const event = await storage.createBarrelEvent({
+        barrelId: barrel.id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        eventType: "gauge" as any,
+        eventAt: gaugeDate,
+        volumeChange: lossWG > 0 ? lossWG : null,
+        proofAtEvent: proof,
+        wineGallons: currentWG,
+        ttbOperationCategory: "Storage",
+        productionStage: "Maturation",
+        taxClassification: "In Bond",
+        notes: req.body.notes || `Gauge: ${currentWG.toFixed(2)} WG @ ${proof}°`,
+        performedBy: req.session?.user?.name ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      await storage.updateBarrel(barrel.id, {
+        currentVolume: currentWG,
+        currentProofGallons: newProofGallons,
+        lossesProofGallons: Number(((barrel.lossesProofGallons ?? 0) + lossProofGallons).toFixed(4)),
+      });
+
+      await writeAuditLog(req, "barrel_event", event.id, "create", {
+        barrelId: barrel.id,
+        eventType: "gauge",
+        priorVolume,
+        currentWineGallons: currentWG,
+        currentProof: proof,
+        lossWineGallons: lossWG,
+        lossProofGallons,
+      });
+
+      res.status(201).json({ event, lossWineGallons: lossWG, lossProofGallons, newProofGallons });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to record barrel gauge";
       res.status(400).json({ error: message });
     }
   });
@@ -3569,6 +3750,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     GA: 3.79, NC: 12.06, MI: 11.98, NJ: 5.50, VA: 19.88, CO: 2.28, AZ: 3.00, MA: 4.05,
     TN: 4.40, OR: 22.73, MN: 5.03, WI: 3.25, MO: 2.00, AL: 9.16, SC: 5.42, KY: 1.92,
     IN: 2.68, CT: 5.40, MD: 1.50, NV: 3.60, NM: 6.06,
+    // Remaining 21 states
+    AK: 12.80, AR: 2.50, DE: 3.75, HI: 5.98, IA: 1.75, ID: 10.92,
+    KS: 2.50, LA: 2.50, ME: 5.43, MS: 2.50, MT: 9.39, ND: 2.50,
+    NE: 3.00, NH: 0.00, OK: 5.56, RI: 5.40, SD: 3.93, UT: 15.92,
+    VT: 7.68, WV: 1.65, WY: 0.28,
   };
 
   app.get("/api/state-excise/rates", (_req, res) => {
@@ -4094,6 +4280,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const result = await query(`
         SELECT t.id, t.name, t.slug, t.plan, t.status, t.created_at,
+               t.user_limit, t.license_expires_at, t.billing_email,
+               t.billing_amount, t.billing_cycle, t.license_notes,
                COUNT(u.id)::int AS user_count
         FROM tenants t
         LEFT JOIN users u ON u.tenant_id = t.id
@@ -4109,7 +4297,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/tenants", requireAdminSession, async (req, res) => {
     try {
       const data = createTenantSchema.parse(req.body);
-      const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan });
+      const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan, userLimit: (data as any).userLimit });
       await runWithTenant(tenant.id, async () => {
         await authStorage.createUser({
           email: data.adminEmail,
@@ -4133,6 +4321,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         slug: z.string().trim().min(1).optional(),
         plan: z.enum(["standard", "pro", "enterprise"]).optional(),
         status: z.enum(["active", "suspended", "cancelled"]).optional(),
+        userLimit: z.number().int().optional(),
+        licenseExpiresAt: z.string().nullable().optional(),
+        billingEmail: z.string().email().nullable().optional(),
+        billingAmount: z.number().nullable().optional(),
+        billingCycle: z.enum(["monthly", "annual"]).optional(),
+        licenseNotes: z.string().nullable().optional(),
       }).parse(req.body);
       const tenant = await updateTenant(req.params.id, data);
       res.json(tenant);

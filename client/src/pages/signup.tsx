@@ -1,104 +1,153 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/use-auth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-const FEATURES = [
-  { label: "Instant Setup", desc: "Your distillery is ready in minutes — no lengthy onboarding" },
-  { label: "TTB Ready", desc: "Compliance reports auto-generated from your data on day one" },
-  { label: "Team Access", desc: "Add staff with role-based permissions for admin and operators" },
-  { label: "No Credit Card", desc: "Start free and upgrade when you're ready to scale" },
-];
+const CREAM = "#FAF0E2";
+const NAVY  = "#0F1B42";
+const NAVY2 = "#162050";
 
-function AnimatedBackground() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+const STYLES = `
+  @keyframes fadeUp   { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+  @keyframes barrelFloat { 0%,100%{transform:rotate(-1deg) translateY(0)} 50%{transform:rotate(1deg) translateY(-8px)} }
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  .sgn-input {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+    background: rgba(15,27,66,0.05);
+    border: 1.5px solid rgba(15,27,66,0.18);
+    color: ${NAVY};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  .sgn-input::placeholder { color: rgba(15,27,66,0.35); }
+  .sgn-input:focus {
+    border-color: rgba(15,27,66,0.55);
+    box-shadow: 0 0 0 3px rgba(15,27,66,0.08);
+    background: rgba(15,27,66,0.03);
+  }
 
-    let animId: number;
-    let w = 0, h = 0;
+  .sgn-btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    border: none;
+    cursor: pointer;
+    background: ${NAVY};
+    color: #fff;
+    transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  .sgn-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.32); }
+  .sgn-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
-    const particles: { x: number; y: number; vx: number; vy: number; r: number; alpha: number }[] = [];
+  .sgn-check {
+    width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
+  }
 
-    function resize() {
-      w = canvas!.width  = canvas!.offsetWidth;
-      h = canvas!.height = canvas!.offsetHeight;
-    }
+  @media (max-width: 900px) {
+    .sgn-left  { display: none !important; }
+    .sgn-right { width: 100% !important; }
+  }
+`;
 
-    function init() {
-      resize();
-      particles.length = 0;
-      const count = Math.floor((w * h) / 14000);
-      for (let i = 0; i < count; i++) {
-        particles.push({
-          x: Math.random() * w,
-          y: Math.random() * h,
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: (Math.random() - 0.5) * 0.3,
-          r: Math.random() * 1.5 + 0.5,
-          alpha: Math.random() * 0.4 + 0.1,
-        });
-      }
-    }
-
-    function draw() {
-      ctx!.clearRect(0, 0, w, h);
-
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            ctx!.beginPath();
-            ctx!.strokeStyle = `rgba(255,255,255,${0.12 * (1 - dist / 120)})`;
-            ctx!.lineWidth = 0.5;
-            ctx!.moveTo(particles[i].x, particles[i].y);
-            ctx!.lineTo(particles[j].x, particles[j].y);
-            ctx!.stroke();
-          }
-        }
-      }
-
-      for (const p of particles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = w;
-        if (p.x > w) p.x = 0;
-        if (p.y < 0) p.y = h;
-        if (p.y > h) p.y = 0;
-
-        ctx!.beginPath();
-        ctx!.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx!.fillStyle = `rgba(255,255,255,${p.alpha})`;
-        ctx!.fill();
-      }
-
-      animId = requestAnimationFrame(draw);
-    }
-
-    init();
-    draw();
-
-    const ro = new ResizeObserver(init);
-    ro.observe(canvas);
-
-    return () => {
-      cancelAnimationFrame(animId);
-      ro.disconnect();
-    };
-  }, []);
-
+function BarrelIllustration() {
+  const W = 160, H = 210;
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full"
-      style={{ display: "block" }}
-    />
+    <svg
+      width={W} height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      fill="none"
+      style={{ animation: "barrelFloat 7s ease-in-out infinite", display: "block" }}
+    >
+      <defs>
+        <linearGradient id="sb-body" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor="#1a2d5a" />
+          <stop offset="45%"  stopColor="#253870" />
+          <stop offset="100%" stopColor="#111f46" />
+        </linearGradient>
+        <linearGradient id="sb-hoop" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stopColor="#8fa3d0" />
+          <stop offset="50%" stopColor="#c8d8f4" />
+          <stop offset="100%" stopColor="#6a82b8" />
+        </linearGradient>
+        <radialGradient id="sb-glow" cx="50%" cy="0%" r="60%">
+          <stop offset="0%"  stopColor="rgba(200,216,244,0.18)" />
+          <stop offset="100%" stopColor="rgba(200,216,244,0)" />
+        </radialGradient>
+      </defs>
+
+      {/* Glow */}
+      <ellipse cx={W/2} cy={H*0.42} rx={W*0.52} ry={H*0.52} fill="url(#sb-glow)" />
+
+      {/* Barrel body */}
+      <path
+        d={`M${W*0.18},${H*0.14} Q${W*0.06},${H*0.42} ${W*0.18},${H*0.78}
+           L${W*0.82},${H*0.78} Q${W*0.94},${H*0.42} ${W*0.82},${H*0.14} Z`}
+        fill="url(#sb-body)"
+      />
+
+      {/* Stave lines */}
+      {[0.34, 0.5, 0.66].map((x) => (
+        <line key={x}
+          x1={W*x} y1={H*0.16} x2={W*x} y2={H*0.76}
+          stroke="rgba(200,216,244,0.1)" strokeWidth="1"
+        />
+      ))}
+
+      {/* Top cap */}
+      <ellipse cx={W/2} cy={H*0.14} rx={W*0.32} ry={H*0.055} fill="#1e3060" stroke="#3a5090" strokeWidth="1" />
+      {/* Bottom cap */}
+      <ellipse cx={W/2} cy={H*0.78} rx={W*0.32} ry={H*0.055} fill="#182848" stroke="#2e4280" strokeWidth="1" />
+
+      {/* Hoops */}
+      {[0.25, 0.46, 0.67].map((yFrac) => (
+        <ellipse key={yFrac}
+          cx={W/2} cy={H*yFrac}
+          rx={W * (0.36 + 0.04 * Math.sin(Math.PI * (yFrac - 0.14) / 0.64))}
+          ry={H*0.028}
+          fill="url(#sb-hoop)" fillOpacity="0.85"
+          stroke="rgba(200,216,244,0.3)" strokeWidth="0.5"
+        />
+      ))}
+
+      {/* Bung */}
+      <ellipse cx={W/2} cy={H*0.46} rx={6} ry={3.5} fill="#2a4070" stroke="#7090c0" strokeWidth="0.8" />
+      <ellipse cx={W/2} cy={H*0.46} rx={2.5} ry={1.5} fill="#4070b0" />
+    </svg>
+  );
+}
+
+function WordMark({ color }: { color: string }) {
+  return (
+    <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 26, color, letterSpacing: "-0.02em", lineHeight: 1 }}>
+      Distillr
+    </span>
+  );
+}
+
+function NavyCheck() {
+  return (
+    <svg className="sgn-check" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill={NAVY} />
+      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CreamCheck() {
+  return (
+    <svg className="sgn-check" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="8" fill="rgba(250,240,226,0.15)" />
+      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={CREAM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -110,21 +159,14 @@ export default function Signup() {
   const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [activeFeature, setActiveFeature] = useState(0);
   const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (user) navigate("/");
   }, [user, navigate]);
 
-  useEffect(() => {
-    const t = setInterval(() => setActiveFeature((i) => (i + 1) % FEATURES.length), 3200);
-    return () => clearInterval(t);
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (distilleryName.trim().length < 2) {
       toast.error("Distillery name must be at least 2 characters");
       return;
@@ -133,7 +175,6 @@ export default function Signup() {
       toast.error("Password must be at least 8 characters");
       return;
     }
-
     setIsPending(true);
     try {
       await signup.mutateAsync({ distilleryName: distilleryName.trim(), adminName: adminName.trim(), email, password });
@@ -146,207 +187,176 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#080808" }}>
+    <div style={{
+      display: "flex",
+      minHeight: "100vh",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+      overflowX: "hidden",
+    }}>
+      <style>{STYLES}</style>
 
-      {/* ── Left panel ── */}
-      <div className="hidden lg:flex flex-col flex-1 relative overflow-hidden">
-        <AnimatedBackground />
+      {/* ── LEFT PANEL — navy ── */}
+      <div
+        className="sgn-left"
+        style={{
+          flex: "0 0 52%",
+          background: NAVY,
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          padding: "48px 56px",
+        }}
+      >
+        {/* Stave texture overlay */}
+        <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04, pointerEvents: "none" }}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <line key={i} x1={`${(i / 17) * 100}%`} y1="0" x2={`${(i / 17) * 100}%`} y2="100%"
+              stroke={CREAM} strokeWidth="1" />
+          ))}
+        </svg>
 
-        {/* Dark overlay gradient */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(8,8,8,0.88) 0%, rgba(15,15,15,0.72) 50%, rgba(8,8,8,0.92) 100%)",
-          }}
-        />
+        {/* Subtle top-right glow */}
+        <div style={{
+          position: "absolute", top: -80, right: -80,
+          width: 340, height: 340,
+          background: "radial-gradient(circle, rgba(250,240,226,0.06) 0%, transparent 70%)",
+          borderRadius: "50%", filter: "blur(40px)", pointerEvents: "none",
+        }} />
 
-        {/* Glow orbs */}
-        <div
-          className="absolute"
-          style={{
-            width: 600,
-            height: 600,
-            top: "10%",
-            left: "15%",
-            background: "radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)",
-            borderRadius: "50%",
-            filter: "blur(40px)",
-          }}
-        />
-        <div
-          className="absolute"
-          style={{
-            width: 300,
-            height: 300,
-            bottom: "20%",
-            right: "10%",
-            background: "radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%)",
-            borderRadius: "50%",
-            filter: "blur(30px)",
-          }}
-        />
+        {/* Brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: "auto", animation: "fadeIn 0.6s ease-out both" }}>
+          <WordMark color={CREAM} />
+        </div>
 
-        <div className="relative z-10 flex flex-col h-full p-14">
-          {/* Brand */}
-          <div className="flex items-center gap-3 mb-auto">
-            <div
-              className="w-8 h-8 rounded-md flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #2a2a2a, #000000)" }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-                <path d="M8 6V10M6 8H10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="text-white font-bold text-lg tracking-tight">Distillr</span>
+        {/* Center content */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32, marginBottom: 40 }}>
+          {/* Barrel */}
+          <div style={{ animation: "fadeUp 0.7s ease-out 0.1s both" }}>
+            <BarrelIllustration />
           </div>
 
-          {/* Main copy */}
-          <div className="mb-14">
-            <div
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-6 text-xs font-medium tracking-widest uppercase"
-              style={{
-                background: "rgba(255,255,255,0.08)",
-                color: "#ffffff",
-                border: "1px solid rgba(255,255,255,0.15)",
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
-              Free Trial
-            </div>
-
-            <h1 className="text-5xl font-bold leading-tight mb-5" style={{ color: "#f5f0e8" }}>
-              Start your
-              <br />
-              <span
-                style={{
-                  background: "linear-gradient(90deg, #ffffff, #a0a0a0, #ffffff)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                free trial.
-              </span>
+          {/* Headline */}
+          <div style={{ textAlign: "center", animation: "fadeUp 0.7s ease-out 0.2s both" }}>
+            <h1 style={{
+              fontSize: "clamp(1.7rem, 2.8vw, 2.4rem)",
+              fontWeight: 800,
+              color: CREAM,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.12,
+              marginBottom: 12,
+            }}>
+              Your distillery,<br />fully connected.
             </h1>
-
-            <p className="text-base leading-relaxed max-w-md" style={{ color: "rgba(245,240,232,0.55)" }}>
-              Join distilleries using Distillr to manage production, compliance, and growth — no
-              credit card required.
+            <p style={{ fontSize: 14, color: "rgba(250,240,226,0.55)", lineHeight: 1.65, maxWidth: 340 }}>
+              From grain to glass — batch tracking, TTB compliance, and barrel intelligence in one platform.
             </p>
           </div>
 
-          {/* Rotating feature highlight */}
-          <div
-            className="rounded-xl p-5 mb-8"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <div className="flex gap-2 mb-4">
-              {FEATURES.map((_, i) => (
-                <div
-                  key={i}
-                  onClick={() => setActiveFeature(i)}
-                  className="h-0.5 flex-1 rounded-full cursor-pointer transition-all duration-500"
-                  style={{
-                    background: i === activeFeature ? "#ffffff" : "rgba(255,255,255,0.12)",
-                  }}
-                />
-              ))}
-            </div>
-            <p
-              className="text-xs font-semibold mb-1"
-              style={{ color: "#ffffff", letterSpacing: "0.08em", textTransform: "uppercase" }}
-            >
-              {FEATURES[activeFeature].label}
-            </p>
-            <p className="text-sm" style={{ color: "rgba(245,240,232,0.65)" }}>
-              {FEATURES[activeFeature].desc}
-            </p>
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Feature list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", maxWidth: 340, animation: "fadeUp 0.7s ease-out 0.3s both" }}>
             {[
-              { val: "7-Stage", label: "Production Workflow" },
-              { val: "TTB", label: "5110.40 + 5000.24" },
-              { val: "Real-Time", label: "Proof Gallon Calc" },
-            ].map((s) => (
-              <div key={s.val}>
-                <p className="text-xl font-bold" style={{ color: "#ffffff" }}>
-                  {s.val}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "rgba(245,240,232,0.4)" }}>
-                  {s.label}
-                </p>
+              "7-stage batch production workflow",
+              "TTB Forms 5110.40 & 5000.24 auto-generated",
+              "Real-time proof gallon tracking",
+              "No credit card required to start",
+            ].map((item) => (
+              <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <CreamCheck />
+                <span style={{ fontSize: 13.5, color: "rgba(250,240,226,0.75)", lineHeight: 1.5 }}>{item}</span>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Stats strip */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 0,
+          borderTop: `1px solid rgba(250,240,226,0.12)`,
+          paddingTop: 24,
+          animation: "fadeUp 0.7s ease-out 0.4s both",
+        }}>
+          {[
+            { val: "7-Stage", label: "Production Workflow" },
+            { val: "50-State", label: "Excise Coverage" },
+            { val: "Real-Time", label: "Proof Gallon Calc" },
+          ].map((s, i) => (
+            <div key={s.val} style={{
+              textAlign: "center",
+              padding: "0 12px",
+              borderLeft: i > 0 ? `1px solid rgba(250,240,226,0.1)` : "none",
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: CREAM, letterSpacing: "-0.02em" }}>{s.val}</div>
+              <div style={{ fontSize: 10.5, color: "rgba(250,240,226,0.4)", marginTop: 3, letterSpacing: "0.02em" }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* ── Right panel — signup form ── */}
-      <div
-        className="w-full lg:w-[480px] flex flex-col items-center justify-center px-8 py-12 relative"
-        style={{ background: "#0d0d0d", borderLeft: "1px solid rgba(255,255,255,0.07)" }}
-      >
-        {/* Top subtle glow */}
-        <div
-          className="absolute top-0 left-1/2 -translate-x-1/2"
-          style={{
-            width: 300,
-            height: 200,
-            background: "radial-gradient(ellipse, rgba(200,136,42,0.1) 0%, transparent 70%)",
-            filter: "blur(20px)",
-          }}
-        />
+      {/* ── RIGHT PANEL — cream ── */}
+      <div style={{
+        flex: 1,
+        background: CREAM,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "48px 40px",
+        position: "relative",
+        minHeight: "100vh",
+      }}>
+        {/* Decorative rings top-right */}
+        <div style={{ position: "absolute", top: -60, right: -60, pointerEvents: "none" }}>
+          {[200, 280, 360].map((size) => (
+            <div key={size} style={{
+              position: "absolute",
+              width: size, height: size,
+              border: `1px solid rgba(15,27,66,${size === 200 ? 0.07 : size === 280 ? 0.05 : 0.03})`,
+              borderRadius: "50%",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+            }} />
+          ))}
+        </div>
 
-        <div className="w-full max-w-sm relative z-10">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
-            <div
-              className="w-7 h-7 rounded-md flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #2a2a2a, #000000)" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M8 1L14 4V8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8V4L8 1Z"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-              </svg>
-            </div>
-            <span className="text-white font-bold tracking-tight">Distillr</span>
+        <div style={{ width: "100%", maxWidth: 400, position: "relative", zIndex: 1 }}>
+          {/* Mobile brand */}
+          <div className="sgn-left" style={{
+            display: "none",
+            alignItems: "center", gap: 8, marginBottom: 32,
+          }}>
+            <WordMark color={NAVY} />
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-1.5" style={{ color: "#f5f0e8" }}>
-              Create your account
+          {/* Heading */}
+          <div style={{ marginBottom: 32, animation: "fadeUp 0.6s ease-out both" }}>
+            <h2 style={{
+              fontSize: "clamp(1.8rem, 3vw, 2.4rem)",
+              fontWeight: 800,
+              color: NAVY,
+              letterSpacing: "-0.035em",
+              lineHeight: 1.1,
+              marginBottom: 10,
+            }}>
+              Start your<br />free trial.
             </h2>
-            <p className="text-sm" style={{ color: "rgba(245,240,232,0.4)" }}>
-              Set up your distillery in minutes — free forever to start
+            <p style={{ fontSize: 14, color: `${NAVY}88`, lineHeight: 1.6 }}>
+              Set up your distillery in minutes — no credit card required.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Distillery Name */}
+          {/* Form */}
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.6s ease-out 0.1s both" }}>
+
+            {/* Distillery name */}
             <div>
-              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
                 Distillery name
               </label>
               <input
+                className="sgn-input"
                 type="text"
                 value={distilleryName}
                 onChange={(e) => setDistilleryName(e.target.value)}
@@ -354,152 +364,106 @@ export default function Signup() {
                 required
                 minLength={2}
                 autoFocus
-                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#f5f0e8",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
-                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
               />
             </div>
 
-            {/* Full Name */}
+            {/* Admin name */}
             <div>
-              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
                 Your name
               </label>
               <input
+                className="sgn-input"
                 type="text"
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
                 placeholder="Jane Smith"
                 required
-                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#f5f0e8",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
-                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
               />
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
                 Email address
               </label>
               <input
+                className="sgn-input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@distillery.com"
                 required
-                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#f5f0e8",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
-                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium mb-2" style={{ color: "rgba(245,240,232,0.6)" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: `${NAVY}99`, marginBottom: 6, letterSpacing: "0.02em" }}>
                 Password
               </label>
               <input
+                className="sgn-input"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
                 minLength={8}
-                className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#f5f0e8",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "rgba(200,136,42,0.6)")}
-                onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
               />
-              <p className="text-[10px] mt-1.5" style={{ color: "rgba(245,240,232,0.3)" }}>
-                Minimum 8 characters
-              </p>
+              <p style={{ fontSize: 11, color: `${NAVY}55`, marginTop: 5 }}>Minimum 8 characters</p>
             </div>
 
-            <button
-              type="submit"
-              disabled={isPending}
-              className="w-full py-3 rounded-lg text-sm font-semibold transition-all mt-2"
-              style={{
-                background: isPending ? "rgba(255,255,255,0.5)" : "#ffffff",
-                color: "#0a0a0a",
-                opacity: isPending ? 0.7 : 1,
-                cursor: isPending ? "not-allowed" : "pointer",
-                boxShadow: isPending ? "none" : "0 0 24px rgba(255,255,255,0.12)",
-              }}
-            >
-              {isPending ? "Creating account…" : "Create account"}
+            <button type="submit" disabled={isPending} className="sgn-btn" style={{ marginTop: 4 }}>
+              {isPending ? "Creating account…" : "Create free account →"}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-8">
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-            <span className="text-xs" style={{ color: "rgba(245,240,232,0.2)" }}>secure signup</span>
-            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-          </div>
-
-          {/* Trust badges */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Trust row */}
+          <div style={{
+            display: "flex",
+            gap: 20,
+            marginTop: 24,
+            paddingTop: 20,
+            borderTop: `1px solid rgba(15,27,66,0.1)`,
+            animation: "fadeUp 0.6s ease-out 0.2s both",
+          }}>
             {[
-              { icon: "⚡", label: "Instant Setup", sub: "Ready in minutes" },
-              { icon: "🔐", label: "Role-based access", sub: "Admin & staff tiers" },
-              { icon: "📊", label: "TTB reporting", sub: "Auto-generated filings" },
-              { icon: "🥃", label: "No credit card", sub: "Free to get started" },
-            ].map((b) => (
-              <div
-                key={b.label}
-                className="rounded-lg p-3"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
-              >
-                <p className="text-xs font-medium mb-0.5" style={{ color: "rgba(245,240,232,0.7)" }}>
-                  {b.label}
-                </p>
-                <p className="text-[10px]" style={{ color: "rgba(245,240,232,0.3)" }}>
-                  {b.sub}
-                </p>
+              "No credit card",
+              "14-day free trial",
+              "Cancel anytime",
+            ].map((t) => (
+              <div key={t} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <NavyCheck />
+                <span style={{ fontSize: 11.5, color: `${NAVY}99`, whiteSpace: "nowrap" }}>{t}</span>
               </div>
             ))}
           </div>
 
           {/* Sign in link */}
-          <p className="text-center text-xs mt-8" style={{ color: "rgba(245,240,232,0.3)" }}>
+          <p style={{ textAlign: "center", fontSize: 13, color: `${NAVY}77`, marginTop: 32, animation: "fadeUp 0.6s ease-out 0.25s both" }}>
             Already have an account?{" "}
             <button
               onClick={() => navigate("/login")}
-              className="font-medium transition-colors duration-200"
-              style={{ color: "rgba(245,240,232,0.65)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#f5f0e8")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(245,240,232,0.65)")}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                color: NAVY,
+                padding: 0,
+                borderBottom: `1px solid ${NAVY}`,
+                lineHeight: 1.2,
+                fontFamily: "inherit",
+              }}
             >
               Sign in
             </button>
           </p>
 
-          <p className="text-center text-[10px] mt-5" style={{ color: "rgba(245,240,232,0.2)" }}>
-            Distillr — Distillery Technology Platform &copy; {new Date().getFullYear()}
+          <p style={{ textAlign: "center", fontSize: 11, color: `${NAVY}44`, marginTop: 20 }}>
+            &copy; {new Date().getFullYear()} Distillr — Distillery Technology Platform
           </p>
         </div>
       </div>

@@ -4,6 +4,9 @@ import { useAuth } from "./hooks/use-auth";
 import Landing from "./pages/landing";
 import Login from "./pages/login";
 import Signup from "./pages/signup";
+import FeaturesPage from "./pages/features";
+import PricingPage from "./pages/pricing";
+import FaqPage from "./pages/faq";
 import AdminLogin from "./pages/admin-login";
 import AdminDashboard from "./pages/admin-dashboard";
 import Dashboard from "./pages/dashboard";
@@ -77,6 +80,9 @@ export default function App() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/features" component={FeaturesPage} />
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/faq" component={FaqPage} />
       <Route path="/" component={RootRoute} />
       <Route>
         <AuthGuard>

@@ -27,7 +27,9 @@ const STAGE_COLORS: Record<string, string> = {
   planning: "#6366f1", mash_fermentation: "#8b5cf6", distillation: "#d97706",
   barreling: "#0369a1", aging: "#15803d", bottling: "#b45309", closed: "#6b7280",
 };
-const AMBER = "#c9933a";
+const CREAM = "#FAF0E2";
+const CREAM_ON_WHITE = "rgba(250,240,226,0.85)"; // subtle on white cards
+const CREAM_ON_DARK  = "rgba(250,240,226,0.55)"; // warm but light on navy/black
 
 // ─── SVG Ring Progress ───────────────────────────────────────────────────────
 function Ring({
@@ -113,7 +115,7 @@ function MetricCard({
       onClick={onClick}
       className={`relative bg-white border border-[#e5e5e5] rounded-xl p-5 overflow-hidden transition-all duration-200 ${onClick ? "cursor-pointer hover:shadow-md hover:border-[#d0d0d0]" : ""}`}
     >
-      {highlight && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: AMBER }} />}
+      {highlight && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_WHITE }} />}
 
       {/* Icon top-right */}
       <div className="absolute top-4 right-4 opacity-10">
@@ -399,7 +401,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-[#f7f7f7]">
 
         {/* ── Hero ── */}
-        <div className="bg-[#0a0a0a] px-4 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
+        <div className="px-4 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10" style={{ background: "#0F1B42" }}>
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
               <div>
@@ -414,7 +416,7 @@ export default function Dashboard() {
             {/* Hero KPI cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: AMBER, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
+                { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: CREAM, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
                 { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "produced", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
                 { label: "Cases Bottled", value: fmtNum(casesProduced, 0), sub: "this period", icon: Package, color: "#34d399", pct: relPct(casesProduced, totalSold) },
                 { label: "Cases Sold", value: fmtNum(totalSold, 0), sub: "fulfilled", icon: ShoppingCart, color: "#60a5fa", pct: relPct(totalSold, casesProduced) },
@@ -424,9 +426,9 @@ export default function Dashboard() {
                   <div
                     key={k.label}
                     className="rounded-xl p-4 relative overflow-hidden"
-                    style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${k.accent ? AMBER + "50" : "rgba(255,255,255,0.08)"}` }}
+                    style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${k.accent ? "rgba(250,240,226,0.18)" : "rgba(255,255,255,0.08)"}` }}
                   >
-                    {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: AMBER }} />}
+                    {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
                     <div className="flex items-start justify-between mb-3">
                       <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
                       <Icon size={14} color={k.color} opacity={0.7} />
@@ -472,7 +474,7 @@ export default function Dashboard() {
           <section>
             <SectionLabel>Production</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={AMBER} />
+              <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={CREAM_ON_WHITE} />
               <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
               <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
               <MetricCard label="Scheduled Batches" value={scheduled || "—"} sub="in planning" pct={relPct(scheduled, inProgress, prodRecords)} icon={Calendar} color="#60a5fa" />
@@ -487,7 +489,7 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <div className="flex-1">
-                  <FillBar pct={Math.min((proof / gallons) * 50, 100)} color={AMBER} height={6} />
+                  <FillBar pct={Math.min((proof / gallons) * 50, 100)} color={CREAM_ON_WHITE} height={6} />
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-bold text-[#0a0a0a] tabular-nums">{Math.round((proof / gallons) * 100)}%</p>
@@ -501,7 +503,7 @@ export default function Dashboard() {
           <section>
             <SectionLabel>Bottling & Inventory</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={AMBER} />
+              <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={CREAM_ON_WHITE} />
               <MetricCard label="Bottles Made" value={fmtNum(bottles, 0)} sub="units" pct={relPct(bottles / 12, casesProduced)} icon={Package2} color="#818cf8" />
               <MetricCard label="Inventory Records" value={invRecords || "—"} sub="lot records" pct={relPct(invRecords, inProgress, scheduled)} icon={Archive} color="#34d399" />
               <MetricCard label="Batches In Progress" value={inProgress || "—"} sub="active stages" pct={relPct(inProgress, scheduled, completed)} icon={Activity} color="#f472b6" />
@@ -626,7 +628,7 @@ export default function Dashboard() {
                         <span className="text-[9px] text-[#b0b0b0]">Active</span>
                         <span className="text-[10px] font-bold tabular-nums">{activeBatches.length}</span>
                       </div>
-                      <FillBar pct={totalBatches > 0 ? (activeBatches.length / totalBatches) * 100 : 0} color={AMBER} height={4} />
+                      <FillBar pct={totalBatches > 0 ? (activeBatches.length / totalBatches) * 100 : 0} color={CREAM_ON_WHITE} height={4} />
                     </div>
                     <div>
                       <div className="flex justify-between mb-1">
