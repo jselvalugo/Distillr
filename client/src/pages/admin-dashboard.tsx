@@ -490,6 +490,406 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
   );
 }
 
+// ─── Operations Hub ───────────────────────────────────────────────────────────
+
+type OpsTab = "filings" | "legal" | "industry" | "compliance";
+
+const OPS_TABS: { key: OpsTab; label: string; icon: string }[] = [
+  { key: "filings",    label: "Annual Filings",     icon: "📋" },
+  { key: "legal",      label: "Legal & Privacy",    icon: "⚖️" },
+  { key: "industry",   label: "Industry Reference", icon: "🏭" },
+  { key: "compliance", label: "Data & Compliance",  icon: "🛡️" },
+];
+
+function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 12px", paddingBottom: 8, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function CheckItem({ status, text, sub }: { status: "required" | "recommended" | "annual" | "quarterly" | "monthly"; text: string; sub?: string }) {
+  const colors: Record<string, { bg: string; tc: string; label: string }> = {
+    required:    { bg: "rgba(239,68,68,0.12)",   tc: "#f87171", label: "Required" },
+    recommended: { bg: "rgba(245,158,11,0.12)",  tc: "#fbbf24", label: "Recommended" },
+    annual:      { bg: "rgba(96,165,250,0.12)",  tc: "#60a5fa", label: "Annual" },
+    quarterly:   { bg: "rgba(167,139,250,0.12)", tc: "#a78bfa", label: "Quarterly" },
+    monthly:     { bg: "rgba(52,211,153,0.12)",  tc: "#34d399", label: "Monthly" },
+  };
+  const c = colors[status];
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: c.tc, background: c.bg, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap", alignSelf: "flex-start", marginTop: 1 }}>{c.label}</span>
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "#fff", margin: "0 0 2px" }}>{text}</p>
+        {sub && <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: 0, lineHeight: 1.5 }}>{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function InfoBlock({ title, items }: { title: string; items: { label: string; value: string }[] }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", margin: "0 0 10px", letterSpacing: "0.05em", textTransform: "uppercase" }}>{title}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {items.map(({ label, value }) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>{label}</span>
+            <span style={{ fontSize: 12, color: "#fff", fontWeight: 500, textAlign: "right" }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul style={{ margin: "0 0 12px", padding: "0 0 0 16px", listStyle: "none" }}>
+      {items.map((item, i) => (
+        <li key={i} style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.7, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <span style={{ color: "rgba(255,255,255,0.2)", flexShrink: 0, marginTop: 2 }}>→</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AlertBox({ type, title, body }: { type: "warn" | "info" | "danger"; title: string; body: string }) {
+  const cfg = {
+    warn:   { bg: "rgba(245,158,11,0.08)",  bc: "rgba(245,158,11,0.25)",  tc: "#fbbf24" },
+    info:   { bg: "rgba(96,165,250,0.08)",  bc: "rgba(96,165,250,0.25)",  tc: "#60a5fa" },
+    danger: { bg: "rgba(239,68,68,0.08)",   bc: "rgba(239,68,68,0.25)",   tc: "#f87171" },
+  }[type];
+  return (
+    <div style={{ background: cfg.bg, border: `1px solid ${cfg.bc}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12 }}>
+      <p style={{ fontSize: 12, fontWeight: 700, color: cfg.tc, margin: "0 0 4px" }}>{title}</p>
+      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0, lineHeight: 1.6 }}>{body}</p>
+    </div>
+  );
+}
+
+function FilingsTab() {
+  return (
+    <div>
+      <AlertBox type="warn" title="Disclaimer" body="This is a reference guide, not legal or tax advice. Consult a licensed CPA and attorney for your specific situation. Deadlines vary by entity type, state, and fiscal year." />
+
+      <DocSection title="Federal Tax Obligations (US)">
+        <CheckItem status="annual" text="Form 1120-S — S-Corporation Tax Return" sub="Due March 15. File extension (Form 7004) by March 15 if needed — grants 6-month extension to September 15." />
+        <CheckItem status="annual" text="Form 1040 + Schedule K-1 — Personal Return" sub="Due April 15 (October 15 with extension). K-1 from your S-Corp flows through to your personal return." />
+        <CheckItem status="quarterly" text="Form 1040-ES — Estimated Quarterly Taxes" sub="Due: April 15, June 15, September 15, January 15. Pay estimated personal income tax on S-Corp distributions to avoid underpayment penalties." />
+        <CheckItem status="annual" text="Form 1099-NEC — Contractor Payments ≥ $600" sub="Due January 31 to contractors and IRS. Required for any US-based contractor paid $600+ during the year." />
+        <CheckItem status="annual" text="Form W-2 — Employee Wages" sub="Due January 31 to employees and SSA. If you have W-2 employees." />
+        <CheckItem status="annual" text="FBAR / FinCEN 114 — Foreign Bank Accounts" sub="Due April 15 (auto-extended to October 15). Required if foreign financial accounts exceed $10,000 at any time during the year." />
+      </DocSection>
+
+      <DocSection title="Puerto Rico Obligations">
+        <CheckItem status="annual" text="Planilla de Contribución sobre Ingresos — PR Corporate Return" sub="Form SC 2644 or SC 2553. Due 3.5 months after fiscal year end. Puerto Rico has separate tax jurisdiction from the US federal system." />
+        <CheckItem status="quarterly" text="PR Estimated Tax Payments" sub="Filed with Hacienda (Departamento de Hacienda). Quarterly installments based on prior year liability." />
+        <CheckItem status="annual" text="Patente Municipal — Municipal Business License" sub="Annual municipal license fee for conducting business. Filed with your municipality. Due varies by municipality (typically January–April)." />
+        <CheckItem status="annual" text="Act 60 / Act 20 Annual Report" sub="If operating under Act 60 tax incentives (export services decree), must file annual compliance report with DDEC by April 15." />
+        <CheckItem status="annual" text="PR Sales and Use Tax (IVU) — Monthly Returns" sub="Monthly SUT returns if selling taxable goods/services in Puerto Rico. Due 20th of following month." />
+      </DocSection>
+
+      <DocSection title="Corporate Housekeeping">
+        <CheckItem status="annual" text="Annual Report to State of Incorporation" sub="Delaware: due March 1 + franchise tax by March 1. PR corps: filed with DACO or Dept of State. Failure results in administrative dissolution." />
+        <CheckItem status="annual" text="Registered Agent Renewal" sub="Renew your registered agent service annually (if Delaware/foreign corp). Typically auto-renewed — confirm it doesn't lapse." />
+        <CheckItem status="annual" text="Board/Shareholder Meeting Minutes" sub="Hold annual meeting and document minutes. S-Corps must maintain corporate formalities to preserve liability protection." />
+        <CheckItem status="recommended" text="Operating Agreement / Bylaws Review" sub="Review annually for accuracy. Update if ownership, officers, or business scope has changed." />
+        <CheckItem status="recommended" text="Business Insurance Renewal" sub="General liability, E&O (Errors & Omissions), Cyber Liability. Review coverage limits annually especially as ARR grows." />
+      </DocSection>
+
+      <DocSection title="Software / SaaS Specific">
+        <CheckItem status="annual" text="SOC 2 Type II Audit (when required)" sub="Enterprise customers increasingly require SOC 2 Type II. Begin with SOC 2 Type I if not yet in place. Typically required when ARR > $1M or serving regulated industries." />
+        <CheckItem status="recommended" text="Penetration Test" sub="Annual third-party pen test. Required by many enterprise procurement processes. Keep the report for your security questionnaire library." />
+        <CheckItem status="recommended" text="Privacy Policy & Terms Review" sub="Review and update Privacy Policy and Terms of Service at least annually, or whenever you add new data types, integrations, or change data processing practices." />
+        <CheckItem status="annual" text="Domain & SSL Certificate Renewal" sub="Track expiration dates for all domains, SSL certs, and code signing certificates. Automate via Let's Encrypt or ensure registrar auto-renew is active." />
+      </DocSection>
+    </div>
+  );
+}
+
+function LegalTab() {
+  return (
+    <div>
+      <AlertBox type="info" title="These are structural requirements, not legal advice" body="Have a licensed attorney review all legal documents before publishing. Requirements evolve — schedule an annual review with counsel." />
+
+      <DocSection title="Privacy Policy — Required Elements">
+        <InfoBlock title="What Data You Collect" items={[
+          { label: "Identity data", value: "Name, email, job title, company" },
+          { label: "Account data", value: "Login credentials (hashed), tenant configuration" },
+          { label: "Production data", value: "Batch records, barrel data, inventory entered by users" },
+          { label: "Usage data", value: "Pages visited, features used, session duration" },
+          { label: "Technical data", value: "IP address, browser type, device ID" },
+          { label: "Payment data", value: "Billing name, email — card data via Stripe (not stored by us)" },
+        ]} />
+        <InfoBlock title="CCPA Requirements (California users)" items={[
+          { label: "Right to Know", value: "Disclose categories and purposes of data collected" },
+          { label: "Right to Delete", value: "Honor deletion requests within 45 days" },
+          { label: "Right to Opt-Out", value: "\"Do Not Sell My Personal Information\" link (if applicable)" },
+          { label: "Non-discrimination", value: "Cannot penalize users for exercising CCPA rights" },
+          { label: "Annual update", value: "Update policy if data practices change" },
+        ]} />
+        <InfoBlock title="GDPR Requirements (EU users)" items={[
+          { label: "Lawful basis", value: "Identify legal basis for each processing activity (contract, consent, legitimate interest)" },
+          { label: "Data subject rights", value: "Access, rectification, erasure, portability, objection" },
+          { label: "Response time", value: "30 days to respond to data subject requests" },
+          { label: "DPA requirement", value: "Execute a Data Processing Agreement with EU customers" },
+          { label: "Breach notification", value: "72 hours to notify supervisory authority of breach" },
+          { label: "Data transfers", value: "Standard Contractual Clauses (SCCs) for US → EU transfers" },
+        ]} />
+        <BulletList items={[
+          "Identify a Data Protection Officer (DPO) or point of contact for privacy matters",
+          "Describe data retention periods for each data category",
+          "List all third-party processors (Railway, Neon/Postgres, Stripe, Resend, Sentry, etc.) and their roles",
+          "Describe your cookie policy — session cookies, analytics, third-party",
+          "Include an effective date and commit to notifying users of material changes",
+          "Provide a physical mailing address (required by CAN-SPAM and some state laws)",
+        ]} />
+      </DocSection>
+
+      <DocSection title="Terms of Service — Key Clauses">
+        <BulletList items={[
+          "License grant: Limited, non-exclusive, non-transferable right to access the Service",
+          "Acceptable use: Reference your Acceptable Use Policy; list prohibited conduct explicitly",
+          "Subscription & payment: Billing cycle, auto-renewal, failed payment grace period, price change notice (30 days minimum)",
+          "Data ownership: Users own their data; you have a limited license to process it to provide the Service",
+          "Confidentiality: Mutual NDA provisions for enterprise; at minimum protect customer data",
+          "Limitation of liability: Cap at fees paid in last 12 months; exclude consequential damages",
+          "Indemnification: Customer indemnifies for their content; you indemnify for IP infringement",
+          "Termination: Define what triggers termination, notice period (30 days for convenience), data export window (30–90 days)",
+          "Governing law & disputes: Specify jurisdiction (Puerto Rico or Delaware); consider arbitration clause",
+          "Changes to terms: Require 30 days notice for material changes; continued use = acceptance",
+          "Uptime SLA: If offered, define measurement period, excluded downtime (maintenance, force majeure), and remedies (service credits)",
+          "Force majeure: Exclude liability for events outside reasonable control",
+          "Entire agreement: ToS + DPA + Order Form supersede all prior agreements",
+        ]} />
+        <AlertBox type="warn" title="SaaS-Specific Clause: TTB Data" body="Since Distillr stores federal compliance data (TTB records, excise tax calculations), explicitly disclaim that the software does not provide legal, tax, or regulatory compliance advice. Users are responsible for verifying accuracy of all regulatory filings." />
+      </DocSection>
+
+      <DocSection title="Data Processing Agreement (DPA)">
+        <BulletList items={[
+          "Required for any EU/EEA customer — execute before onboarding them",
+          "Defines: controller (customer) vs processor (Distillr) responsibilities",
+          "Must list sub-processors: Railway (hosting), Neon (database), Stripe (billing), any AI providers",
+          "Includes Standard Contractual Clauses (SCCs) for international transfers",
+          "Specify audit rights — right for customer to audit or receive third-party audit report",
+          "Sub-processor notification: Commit to notifying customers before adding new sub-processors (30 days notice typical)",
+          "Data deletion: Commit to deleting/returning all customer data within 30 days of termination",
+        ]} />
+      </DocSection>
+
+      <DocSection title="Acceptable Use Policy — Key Prohibitions">
+        <BulletList items={[
+          "No use for illegal activities including falsifying federal TTB records",
+          "No reverse engineering, decompilation, or unauthorized API access",
+          "No uploading malicious code, viruses, or disruptive content",
+          "No sharing login credentials across multiple distilleries (one tenant = one DSP)",
+          "No scraping or automated data extraction beyond normal API use",
+          "No use in jurisdictions where distilled spirits production is illegal",
+          "Violation = grounds for immediate suspension without refund",
+        ]} />
+      </DocSection>
+    </div>
+  );
+}
+
+function IndustryTab() {
+  return (
+    <div>
+      <DocSection title="TTB — Distilled Spirits Plant (DSP) Overview">
+        <InfoBlock title="DSP Permit Requirements (27 CFR Part 19)" items={[
+          { label: "Federal Basic Permit", value: "Required before producing, bottling, or warehousing spirits" },
+          { label: "DSP Registration", value: "File with TTB; separate from Basic Permit" },
+          { label: "Bond requirement", value: "Operations/Withdrawal bond required to operate bonded premises" },
+          { label: "Qualifying officer", value: "At least one officer must be a US citizen not prohibited from holding permit" },
+          { label: "State license", value: "State-level distillery license required in addition to federal" },
+          { label: "Renewal", value: "Basic Permits do not expire but must be amended if operations change" },
+        ]} />
+      </DocSection>
+
+      <DocSection title="Federal Excise Tax (FET) — Current Rates">
+        <InfoBlock title="Distilled Spirits FET (per Proof Gallon)" items={[
+          { label: "Craft Tier 1", value: "$2.70/PG — first 100,000 PG removed from bond" },
+          { label: "Craft Tier 2", value: "$13.34/PG — 100,001 to 22,130,000 PG" },
+          { label: "Standard Rate", value: "$13.50/PG — over 22.13M PG or non-craft" },
+          { label: "Craft eligibility", value: "Domestic producers only; not applicable to importers" },
+          { label: "Proof Gallon", value: "1 gallon at 100° proof (50% ABV)" },
+          { label: "Formula", value: "Wine Gallons × (Proof / 100) = Proof Gallons" },
+        ]} />
+        <AlertBox type="warn" title="Craft Rate Qualification" body="The reduced craft rates ($2.70 and $13.34) expire and must be reauthorized by Congress. As of 2024 they are permanent, but track TTB bulletins. Customers must apply for and receive craft producer designation." />
+      </DocSection>
+
+      <DocSection title="TTB Reporting Requirements">
+        <CheckItem status="monthly" text="TTB Report of Operations — Form 5110.40" sub="Monthly. Reports spirits produced, deposited, withdrawn, and inventory balance. Due 15th of following month. Core document that Distillr's compliance module must support." />
+        <CheckItem status="quarterly" text="Excise Tax Return — Form 5000.24" sub="Semi-monthly or quarterly depending on tax liability. Taxpayers with annual liability < $50K may file quarterly; > $50K file semi-monthly. Payment due with return." />
+        <CheckItem status="annual" text="Annual Operations Report" sub="Annual summary submitted to TTB. Reconciles monthly reports for the calendar year." />
+        <CheckItem status="required" text="Gauge Records" sub="Required per 27 CFR §19.289. Every transfer of spirits must be gauged (measured for volume and proof). Distillr's aging/barrel module covers this." />
+        <CheckItem status="required" text="Distilled Spirits Production Records" sub="Per 27 CFR §19.582. Daily records of all spirits produced must be maintained and available for TTB inspection for 3 years." />
+      </DocSection>
+
+      <DocSection title="COLA — Certificate of Label Approval">
+        <BulletList items={[
+          "Required before any bottled distilled spirits can be shipped in interstate commerce",
+          "Filed online via TTB's COLAs Online system (mypermanentrecord.ttb.gov)",
+          "Standard review: 90 days; expedited (30 days) available for compliant submissions",
+          "Required elements: Brand name, class/type of spirits, net contents, alcohol content (ABV%), name and address of bottler/importer",
+          "Formula approval required first for flavored spirits and anything with added ingredients",
+          "COLA is per label — any label change requires new COLA approval",
+          "State label approvals are separate and required by many states in addition to federal COLA",
+        ]} />
+      </DocSection>
+
+      <DocSection title="Key Industry Standards & Definitions">
+        <InfoBlock title="Spirit Classifications (27 CFR Part 5)" items={[
+          { label: "Whiskey", value: "Fermented grain mash, distilled < 190°, stored in oak" },
+          { label: "Bourbon", value: "≥51% corn, new charred oak, entered at ≤125°, bottled ≥80°" },
+          { label: "Rum", value: "Fermented sugar cane products, distilled < 190°" },
+          { label: "Vodka", value: "Neutral spirits distilled ≥ 190°, filtered/treated" },
+          { label: "Gin", value: "Spirits with juniper berry flavor predominant" },
+          { label: "Tequila", value: "Blue agave, produced in specific Mexican regions (import)" },
+        ]} />
+        <InfoBlock title="Common Measurements" items={[
+          { label: "Proof", value: "Twice the ABV percentage (e.g., 80° proof = 40% ABV)" },
+          { label: "Wine Gallon (WG)", value: "1 US liquid gallon of liquid, regardless of alcohol content" },
+          { label: "Proof Gallon (PG)", value: "1 WG at 100° proof; the taxable unit" },
+          { label: "Angel's Share", value: "Volume lost to evaporation during aging (typically 2–10%/year)" },
+          { label: "Fill Proof", value: "Proof at which spirits enter the barrel (must be ≤ 190°)" },
+          { label: "Bottling Proof", value: "Proof at bottling (minimum 80° for most spirits)" },
+        ]} />
+      </DocSection>
+
+      <DocSection title="Product Roadmap Awareness — What Customers Need">
+        <BulletList items={[
+          "TTB Form 5110.40 auto-population from batch records — the #1 requested feature in the distillery compliance space",
+          "State excise tax calculation varies by state — build a state rules engine (California, Texas, Florida are largest markets)",
+          "Barrel tracking interoperability with industry databases (DISCUS, KDA for Kentucky distillers)",
+          "Label management with COLA submission tracking and expiration alerts",
+          "Integration with accounting software (QuickBooks, Xero) for COGS and inventory valuation",
+          "Mobile gauging app — distillers want to log barrel readings from the warehouse floor",
+          "Multi-DSP support — larger customers operate multiple production facilities under one company",
+          "Grain-to-glass traceability — farm-to-bottle documentation increasingly demanded by premium brands",
+          "Electronic TTB filing when/if TTB opens API access",
+          "Distribution tracking — cases shipped to distributors, depletion reporting",
+        ]} />
+      </DocSection>
+    </div>
+  );
+}
+
+function ComplianceTab() {
+  return (
+    <div>
+      <DocSection title="Data Distillr Collects & Processes">
+        <InfoBlock title="Personal Data Categories" items={[
+          { label: "User accounts", value: "Name, email, hashed password, role, tenant_id" },
+          { label: "Billing contacts", value: "Name, billing email — credit card held by Stripe only" },
+          { label: "Usage logs", value: "IP addresses, session tokens, API request logs (30-day retention)" },
+          { label: "Waitlist", value: "Name, email, distillery name, state, message" },
+          { label: "Audit logs", value: "User ID, action, timestamp, changed fields — retained 7 years (TTB requirement)" },
+        ]} />
+        <InfoBlock title="Customer Business Data (Controller is the Customer)" items={[
+          { label: "Production records", value: "Batch codes, distillation specs, proof gallons — TTB compliance data" },
+          { label: "Barrel records", value: "Serial numbers, aging data, warehouse locations" },
+          { label: "Inventory", value: "Item names, lot codes, quantities" },
+          { label: "Staff", value: "Employee names, roles, schedules" },
+          { label: "Sales orders", value: "Order details, distributor contacts, pricing" },
+          { label: "Compliance filings", value: "Permit numbers, filing dates, regulatory data" },
+        ]} />
+      </DocSection>
+
+      <DocSection title="Data Retention Policy">
+        <InfoBlock title="Recommended Retention Periods" items={[
+          { label: "Active account data", value: "Retained for life of subscription" },
+          { label: "TTB/compliance records", value: "7 years (TTB requires 3 years; 7 provides buffer)" },
+          { label: "Financial/billing records", value: "7 years (IRS requirement)" },
+          { label: "Audit logs", value: "7 years" },
+          { label: "Deleted account data", value: "30-day recovery window, then purge within 90 days" },
+          { label: "Server/access logs", value: "30 days rolling" },
+          { label: "Backups", value: "30-day rolling backup retention" },
+        ]} />
+        <AlertBox type="danger" title="Data Purge on Account Deletion" body="When a tenant is deleted, you must purge all their personal data within 90 days. Business/compliance records that are legally required may need to be handed back to the customer before deletion. Document your deletion process." />
+      </DocSection>
+
+      <DocSection title="Security Standards to Maintain">
+        <CheckItem status="required" text="TLS 1.2+ on all endpoints" sub="Enforce HTTPS everywhere. Redirect HTTP to HTTPS. Use HSTS headers. Minimum TLS 1.2, prefer TLS 1.3." />
+        <CheckItem status="required" text="Passwords hashed with bcrypt / Argon2" sub="Minimum cost factor 12 for bcrypt. Never store plaintext passwords. Salt every hash." />
+        <CheckItem status="required" text="Multi-tenant data isolation" sub="Every DB query must include tenant_id filter. Row-level security on PostgreSQL strongly recommended. Regular audit to verify no cross-tenant data leakage." />
+        <CheckItem status="required" text="Environment secrets in secrets manager" sub="Never commit secrets to git. Use Railway environment variables or a secrets manager. Rotate DB passwords and API keys at minimum annually." />
+        <CheckItem status="recommended" text="Rate limiting on auth endpoints" sub="Implement rate limiting on /api/auth/login to prevent brute force. Maximum 5 failed attempts before lockout or CAPTCHA." />
+        <CheckItem status="recommended" text="Dependency vulnerability scanning" sub="Run npm audit or Snyk in CI/CD pipeline. Address critical vulnerabilities within 7 days, high within 30 days." />
+        <CheckItem status="recommended" text="Database backups verified" sub="Verify automated backups weekly. Test restoration quarterly. Document RPO (Recovery Point Objective) and RTO (Recovery Time Objective)." />
+        <CheckItem status="recommended" text="Incident response plan" sub="Document steps for: data breach, service outage, ransomware. Know your 72-hour GDPR notification obligation. Have a breach notification template ready." />
+      </DocSection>
+
+      <DocSection title="Sub-Processors to Disclose">
+        <InfoBlock title="Current Infrastructure (update if you add services)" items={[
+          { label: "Railway", value: "Hosting & deployment (US)" },
+          { label: "Neon / PostgreSQL", value: "Database (US)" },
+          { label: "Stripe", value: "Payment processing (US)" },
+          { label: "Resend / SendGrid", value: "Transactional email (US)" },
+          { label: "Cloudflare", value: "DNS, CDN, DDoS protection (Global)" },
+          { label: "GitHub", value: "Source code repository (US)" },
+          { label: "Sentry (if used)", value: "Error tracking (US)" },
+          { label: "OpenAI / Anthropic (if used)", value: "AI features — MUST disclose if customer data is sent" },
+        ]} />
+        <AlertBox type="danger" title="AI Sub-Processor Disclosure" body="If any customer data (batch records, barrel data, staff information) is sent to an AI provider (OpenAI, Anthropic, etc.) for the AI chat feature, this MUST be disclosed in your Privacy Policy and DPA as a sub-processor. Many enterprise customers and regulated industries will object to this." />
+      </DocSection>
+
+      <DocSection title="Breach Response Checklist">
+        <BulletList items={[
+          "Hour 0–1: Contain the breach — revoke compromised credentials, isolate affected systems",
+          "Hour 1–4: Assess scope — what data was accessed, which tenants are affected, how long was it exposed",
+          "Hour 4–24: Notify affected tenants — provide clear description of what happened, what data, what you're doing",
+          "72 hours: Notify supervisory authority if EU personal data was affected (GDPR requirement)",
+          "7 days: Notify affected users if their personal data was exposed (varies by US state — California requires 45 days, but faster is better)",
+          "30 days: Complete root cause analysis and implement remediation",
+          "Document everything — breach log, notifications sent, timeline, remediation steps",
+          "Review cyber liability insurance coverage — file claim if applicable",
+        ]} />
+      </DocSection>
+    </div>
+  );
+}
+
+function OperationsHub() {
+  const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>("filings");
+
+  return (
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.025em", margin: "0 0 4px" }}>Operations Hub</h1>
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: 0 }}>Reference documents, compliance requirements, and industry knowledge to run Distillr.</p>
+      </div>
+
+      {/* Sub-tab nav */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 6, width: "fit-content" }}>
+        {OPS_TABS.map(tab => (
+          <button key={tab.key} onClick={() => setActiveOpsTab(tab.key)}
+            style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 8, cursor: "pointer", border: "none", display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
+              background: activeOpsTab === tab.key ? "rgba(255,255,255,0.1)" : "transparent",
+              color: activeOpsTab === tab.key ? "#fff" : "rgba(255,255,255,0.4)" }}>
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ maxWidth: 820 }}>
+        {activeOpsTab === "filings"    && <FilingsTab />}
+        {activeOpsTab === "legal"      && <LegalTab />}
+        {activeOpsTab === "industry"   && <IndustryTab />}
+        {activeOpsTab === "compliance" && <ComplianceTab />}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 const EMPTY_FORM = { name: "", slug: "", plan: "standard", adminEmail: "", adminPassword: "", adminName: "", userLimit: "" };
@@ -498,6 +898,7 @@ export default function AdminDashboard() {
   const { isAdmin, isLoading: authLoading, logout } = useAdminAuth();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"tenants" | "operations">("tenants");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -559,13 +960,23 @@ export default function AdminDashboard() {
 
       {/* Top bar */}
       <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.02)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L13.5 4.5V9C13.5 11.985 11.09 14.5 8 14.5C4.91 14.5 2.5 11.985 2.5 9V4.5L8 1.5Z" stroke="white" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 1.5L13.5 4.5V9C13.5 11.985 11.09 14.5 8 14.5C4.91 14.5 2.5 11.985 2.5 9V4.5L8 1.5Z" stroke="white" strokeWidth="1.4" strokeLinejoin="round" /></svg>
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: "-0.01em" }}>Distillr</span>
+            <span style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)" }} />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>Super Admin</span>
           </div>
-          <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: "-0.01em" }}>Distillr</span>
-          <span style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)" }} />
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>Super Admin</span>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {([["tenants", "Tenants & Waitlist"], ["operations", "Operations Hub"]] as const).map(([tab, label]) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                style={{ fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 7, cursor: "pointer", border: "none", background: activeTab === tab ? "rgba(255,255,255,0.1)" : "transparent", color: activeTab === tab ? "#fff" : "rgba(255,255,255,0.4)", transition: "all .15s" }}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <button onClick={() => logout.mutateAsync().then(() => navigate("/admin/login"))}
           style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", background: "none", border: "1px solid rgba(255,255,255,0.1)", cursor: "pointer", padding: "6px 14px", borderRadius: 7 }}>
@@ -573,7 +984,7 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
+      {activeTab === "tenants" && <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 32px" }}>
 
         {/* Heading */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
@@ -747,7 +1158,9 @@ export default function AdminDashboard() {
           )}
         </div>
 
-      </div>
+      </div>}
+
+      {activeTab === "operations" && <OperationsHub />}
 
       {/* Edit License Modal */}
       {editLicense && <EditLicenseModal tenant={editLicense} onClose={() => setEditLicense(null)} />}
