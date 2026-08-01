@@ -576,8 +576,8 @@ function DistillationForm({ data }: { data: BatchFull }) {
   });
 
   const wineGal = parseFloat(form.wineGallonsProduced);
-  const proof = parseFloat(form.distillationProof);
-  const proofGallons = wineGal && proof ? ((wineGal * proof) / 100).toFixed(2) : null;
+  const proof = parseFloat(form.distillationProof); // stored as ABV%
+  const proofGallons = wineGal && proof ? ((wineGal * proof * 2) / 100).toFixed(2) : null;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -588,7 +588,7 @@ function DistillationForm({ data }: { data: BatchFull }) {
         body: JSON.stringify({
           distillDate: form.distillDate,
           gallonsDistilled: wineGal || 0,
-          percentageDistilled: proof ? proof / 2 : 0,
+          percentageDistilled: proof || 0,
           proofOfGallons: pgProduced ?? 0,
           notes: form.notes || null,
         }),
@@ -661,21 +661,21 @@ function DistillationForm({ data }: { data: BatchFull }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Proof at Distillation *</label>
+          <label className="block text-xs font-medium text-[#737373] mb-1">ABV% at Distillation *</label>
           <Input
             type="number"
             step="0.1"
-            max="190"
+            max="100"
             value={form.distillationProof}
             onChange={(e) => setForm((f) => ({ ...f, distillationProof: e.target.value }))}
           />
-          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Must be ≤ 190 proof per TTB regulations</p>
+          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Enter ABV% (e.g. 45 for 90 proof) — ≤ 95% per TTB</p>
         </div>
         <div>
           <CalcField
             label="Proof Gallons Produced"
             value={proofGallons}
-            subNote="= wine gallons × proof / 100"
+            subNote="= wine gallons × ABV% × 2 / 100"
           />
         </div>
         <div>
@@ -748,8 +748,8 @@ function BarrelingForm({ data }: { data: BatchFull }) {
   });
 
   const wg = parseFloat(form.fillWineGallons);
-  const fp = parseFloat(form.fillProof);
-  const fillProofGallons = wg && fp ? ((wg * fp) / 100).toFixed(2) : null;
+  const fp = parseFloat(form.fillProof); // stored as ABV%
+  const fillProofGallons = wg && fp ? ((wg * fp * 2) / 100).toFixed(2) : null;
 
   const saveBarrel = useMutation({
     mutationFn: async () => {
@@ -867,14 +867,15 @@ function BarrelingForm({ data }: { data: BatchFull }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Proof at Fill *</label>
+          <label className="block text-xs font-medium text-[#737373] mb-1">ABV% at Fill *</label>
           <Input
             type="number"
             step="0.1"
+            max="100"
             value={form.fillProof}
             onChange={(e) => setForm((f) => ({ ...f, fillProof: e.target.value }))}
           />
-          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Rum must enter barrel at ≤ 190 proof (27 CFR § 5.22)</p>
+          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Enter ABV% — rum enters barrel at ≤ 95% ABV (27 CFR § 5.22)</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Wine Gallons Filled *</label>
@@ -889,7 +890,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
           <CalcField
             label="Proof Gallons Deposited to Bond"
             value={fillProofGallons}
-            subNote="= wine gallons × fill proof / 100"
+            subNote="= wine gallons × ABV% × 2 / 100"
           />
         </div>
         <div>
@@ -979,7 +980,7 @@ function AgingForm({ data }: { data: BatchFull }) {
   const fillPg = batch.fillProofGallons ?? (barrel?.fillProofGallons ?? null);
   const fillWg = batch.fillWineGallons ?? barrel?.fillVolume ?? null;
   const fillProof = batch.fillProof ?? barrel?.fillProof ?? null;
-  const fillAbv = fillProof ? fillProof / 2 : null;
+  const fillAbv = fillProof || null; // fillProof stored as ABV%
 
   // Latest gauge reading
   const latestGauge = events.filter(e => e.eventType === "gauge").at(0);
@@ -2074,15 +2075,15 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(s => ({ ...s, [k]: e.target.value }));
 
-  // Auto-calc proof gallons produced
+  // Auto-calc proof gallons produced (distillationProof stored as ABV%)
   const wgDist = parseFloat(form.gallonsDistilled);
   const pDist  = parseFloat(form.distillationProof);
-  const calcPgProduced = wgDist && pDist ? (wgDist * pDist / 100).toFixed(2) : null;
+  const calcPgProduced = wgDist && pDist ? (wgDist * pDist * 2 / 100).toFixed(2) : null;
 
-  // Auto-calc fill proof gallons
+  // Auto-calc fill proof gallons (fillProof stored as ABV%)
   const wgFill = parseFloat(form.fillWineGallons);
   const pFill  = parseFloat(form.fillProof);
-  const calcFillPg = wgFill && pFill ? (wgFill * pFill / 100).toFixed(2) : null;
+  const calcFillPg = wgFill && pFill ? (wgFill * pFill * 2 / 100).toFixed(2) : null;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -2229,13 +2230,13 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
             </Select>
           </div>
           {inp("Wine Gallons Distilled", "gallonsDistilled", { type: "number", step: "0.01" })}
-          {inp("Proof at Distillation °", "distillationProof", { type: "number", step: "0.1" })}
+          {inp("ABV% at Distillation", "distillationProof", { type: "number", step: "0.1", max: "100" })}
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Proof Gallons Produced</label>
             <div className="h-9 flex items-center px-3 rounded-md border border-[#e5e5e5] bg-[#f0f9ff] text-sm font-semibold text-[#0369a1]">
               {calcPgProduced ?? (form.proofGallonsProduced || "—")}
             </div>
-            <p className="text-[10px] text-[#a3a3a3] mt-0.5">= wine gal × proof / 100</p>
+            <p className="text-[10px] text-[#a3a3a3] mt-0.5">= wine gal × ABV% × 2 / 100</p>
           </div>
         </div>
       </div>
@@ -2256,7 +2257,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
             </Select>
           </div>
           {inp("Date of Fill", "fillDate", { type: "date" })}
-          {inp("Proof at Fill °", "fillProof", { type: "number", step: "0.1" })}
+          {inp("ABV% at Fill", "fillProof", { type: "number", step: "0.1", max: "100" })}
           {inp("Wine Gallons Filled", "fillWineGallons", { type: "number", step: "0.01" })}
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Fill Proof Gallons</label>

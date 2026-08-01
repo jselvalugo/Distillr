@@ -382,7 +382,6 @@ export default function Production() {
   const qc = useQueryClient();
   const [, navigate] = useLocation();
 
-  const [viewTarget, setViewTarget] = useState<BatchRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BatchRow | null>(null);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [importOpen, setImportOpen] = useState(false);
@@ -566,7 +565,7 @@ export default function Production() {
                   <Tr
                     key={b.id}
                     className="cursor-pointer hover:bg-[#f7f7f7]"
-                    onClick={() => setViewTarget(b)}
+                    onClick={() => navigate(`/production/${b.id}`)}
                   >
                     <Td className="font-mono font-medium text-[#0a0a0a]">{b.batchCode}</Td>
                     <Td className="text-[#737373]">{(b as any).productName ?? "—"}</Td>
@@ -595,18 +594,11 @@ export default function Production() {
                     <Td>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => setViewTarget(b)}
-                          className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
-                          title="View details"
-                        >
-                          <Eye size={13} />
-                        </button>
-                        <button
                           onClick={() => navigate(`/production/${b.id}`)}
                           className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
-                          title="Edit batch"
+                          title="Open batch"
                         >
-                          <Pencil size={13} />
+                          <Eye size={13} />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(b)}
@@ -624,15 +616,6 @@ export default function Production() {
           </Table>
         </div>
       </div>
-
-      {/* Read-only detail dialog */}
-      {viewTarget && (
-        <BatchDetailDialog
-          batch={viewTarget}
-          onClose={() => setViewTarget(null)}
-          onEdit={() => { setViewTarget(null); navigate(`/production/${viewTarget.id}`); }}
-        />
-      )}
 
       {/* Delete confirmation */}
       {deleteTarget && (
