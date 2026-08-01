@@ -9,6 +9,7 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { fmt, fmtNum } from "../lib/utils";
 import type {
+  AuditLog,
   DistillingBatchRecord,
   DistillingProductionRecord,
   InsertDistillingBatchRecord,
@@ -2333,10 +2334,107 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// History helpers
+// ---------------------------------------------------------------------------
+const STAGE_LABELS_MAP: Record<string, string> = {
+  planning: "Planning",
+  mash_fermentation: "Mash & Fermentation",
+  distillation: "Distillation",
+  barreling: "Barreling",
+  aging: "Aging",
+  bottling: "Bottling",
+  closed: "Closed",
+};
+
+function historyLabel(log: AuditLog): { icon: string; text: string; color: string } {
+  const d = log.details as Record<string, unknown>;
+  const stage = typeof d.stage === "string" ? (STAGE_LABELS_MAP[d.stage] ?? d.stage) : null;
+  const type = d.type as string | undefined;
+
+  if (log.action === "create" || type === "batch_created") {
+    return { icon: "🆕", text: "Batch created", color: "text-[#0a0a0a]" };
+  }
+  if (type === "stage_advance") {
+    return { icon: "→", text: `Advanced to ${stage ?? "next stage"}`, color: "text-[#15803d]" };
+  }
+  if (type === "stage_regress") {
+    return { icon: "←", text: `Returned to ${stage ?? "previous stage"}`, color: "text-[#c9933a]" };
+  }
+  if (type === "data_saved") {
+    return { icon: "💾", text: `Data saved${stage ? ` — ${stage}` : ""}`, color: "text-[#0369a1]" };
+  }
+  if (log.action === "delete") {
+    return { icon: "🗑", text: "Record deleted", color: "text-red-600" };
+  }
+  return { icon: "✏️", text: `Updated${stage ? ` — ${stage}` : ""}`, color: "text-[#737373]" };
+}
+
+function HistoryTab({ batchId }: { batchId: string }) {
+  const { data: logs = [], isLoading } = useQuery<AuditLog[]>({
+    queryKey: [`/api/audit-logs`, batchId],
+    queryFn: () => apiRequest(`/api/audit-logs?entityType=distilling_batch_record&entityId=${batchId}&limit=200`),
+    enabled: !!batchId,
+  });
+
+  if (isLoading) {
+    return <div className="text-sm text-[#737373] py-8 text-center">Loading history…</div>;
+  }
+
+  if (!logs.length) {
+    return (
+      <div className="text-center py-12 text-[#737373]">
+        <p className="text-3xl mb-2">📋</p>
+        <p className="text-sm font-medium">No history yet</p>
+        <p className="text-xs mt-1">Changes will appear here as the batch progresses.</p>
+      </div>
+    );
+  }
+
+  const sorted = [...logs].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+
+  return (
+    <div className="space-y-1">
+      {sorted.map((log, i) => {
+        const { icon, text, color } = historyLabel(log);
+        const d = log.details as Record<string, unknown>;
+        const ts = new Date(log.occurredAt);
+        const dateStr = ts.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const timeStr = ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+        const actor = log.actorName ?? log.actorRole ?? "System";
+        const status = typeof d.status === "string" ? d.status : null;
+
+        return (
+          <div key={log.id ?? i} className="flex gap-3 items-start py-3 border-b border-[#f0f0f0] last:border-0">
+            <div className="w-7 h-7 flex items-center justify-center rounded-full bg-[#f7f7f7] text-sm shrink-0 mt-0.5">
+              {icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold leading-snug ${color}`}>{text}</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                {status && <span className="text-xs text-[#737373]">Status: {status}</span>}
+                <span className="text-xs text-[#a3a3a3]">by {actor}</span>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xs font-medium text-[#0a0a0a]">{dateStr}</p>
+              <p className="text-[11px] text-[#a3a3a3]">{timeStr}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 export default function BatchDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const id = params.id;
+  const [mainTab, setMainTab] = useState<"workflow" | "history">("workflow");
 
   const { data, isLoading, error } = useQuery<BatchFull>({
     queryKey: [`/api/distilling/batch-records/${id}/full`],
@@ -2398,24 +2496,49 @@ export default function BatchDetail() {
       {/* Stage Progress Bar */}
       <StageProgressBar current={currentStage} />
 
+      {/* Main Tabs */}
+      <div className="flex gap-1 px-6 border-b border-[#e5e5e5] bg-white">
+        {(["workflow", "history"] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setMainTab(tab)}
+            className={`px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors capitalize ${
+              mainTab === tab
+                ? "border-[var(--brand)] text-[#0a0a0a]"
+                : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
+            }`}
+          >
+            {tab === "workflow" ? "Workflow" : "History"}
+          </button>
+        ))}
+      </div>
+
       <div className="p-6 space-y-4">
-        {/* Current Stage Form */}
-        {currentStage !== "closed" && (
-          <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
-            <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">
-              {STAGE_LABELS[currentStage]}
-            </h2>
-            {renderCurrentForm()}
-          </div>
+        {mainTab === "workflow" && (
+          <>
+            {currentStage !== "closed" && (
+              <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
+                <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">
+                  {STAGE_LABELS[currentStage]}
+                </h2>
+                {renderCurrentForm()}
+              </div>
+            )}
+            {currentStage === "closed" && (
+              <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
+                <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">Closed Batch — Full Record</h2>
+                {renderCurrentForm()}
+              </div>
+            )}
+          </>
         )}
 
-        {currentStage === "closed" && (
+        {mainTab === "history" && (
           <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
-            <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">Closed Batch — Full Record</h2>
-            {renderCurrentForm()}
+            <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">Batch History</h2>
+            <HistoryTab batchId={id!} />
           </div>
         )}
-
       </div>
     </Layout>
   );

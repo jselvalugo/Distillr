@@ -1964,6 +1964,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         batchCode: record.batchCode,
         stage: record.stage,
         status: record.status,
+        type: "batch_created",
       });
       res.status(201).json(record);
     } catch (error: unknown) {
@@ -1980,6 +1981,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         batchCode: record.batchCode,
         stage: record.stage,
         status: record.status,
+        type: "data_saved",
       });
       if (Number(record.proofGallonsProcessed) > 0) {
         writeBottlingLedgerEntry(
@@ -2010,7 +2012,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.inventoryRecordId) updates.inventoryRecordId = req.body.inventoryRecordId;
       if (req.body.productName) updates.productName = req.body.productName;
       const record = await storage.updateDistillingBatchRecord(req.params.id, updates as Parameters<typeof storage.updateDistillingBatchRecord>[1]);
-      await writeAuditLog(req, "distilling_batch_record", record.id, "update", { stage: record.stage });
+      await writeAuditLog(req, "distilling_batch_record", record.id, "update", { stage: record.stage, type: "stage_advance" });
       res.json(record);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to advance batch";
@@ -2031,7 +2033,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const updates: Record<string, unknown> = { stage: prevStage };
       if (prevStage !== "closed") updates.status = "In Progress";
       const record = await storage.updateDistillingBatchRecord(req.params.id, updates as Parameters<typeof storage.updateDistillingBatchRecord>[1]);
-      await writeAuditLog(req, "distilling_batch_record", record.id, "update", { stage: record.stage, action: "regress" });
+      await writeAuditLog(req, "distilling_batch_record", record.id, "update", { stage: record.stage, type: "stage_regress" });
       res.json(record);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to go back a stage";
