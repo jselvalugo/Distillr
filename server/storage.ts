@@ -677,6 +677,7 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     primaryAddress: String(row.primary_address),
     timeZone: String(row.time_zone),
     dspNumber: row.dsp_number != null ? String(row.dsp_number) : null,
+    ein: row.ein != null ? String(row.ein) : null,
     logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
     dashboardColor: row.dashboard_color != null ? String(row.dashboard_color) : null,
     accountTypes: toStringArray(row.account_types),
@@ -2935,12 +2936,12 @@ export class PostgresStorage implements IStorage {
     await query(
       `INSERT INTO platform_config (
         tenant_id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
-        website, primary_address, time_zone, dsp_number, logo_data_url, dashboard_color,
+        website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
       )
       ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
@@ -2953,6 +2954,7 @@ export class PostgresStorage implements IStorage {
         primary_address = EXCLUDED.primary_address,
         time_zone = EXCLUDED.time_zone,
         dsp_number = EXCLUDED.dsp_number,
+        ein = EXCLUDED.ein,
         logo_data_url = EXCLUDED.logo_data_url,
         dashboard_color = EXCLUDED.dashboard_color,
         account_types = EXCLUDED.account_types,
@@ -2978,6 +2980,7 @@ export class PostgresStorage implements IStorage {
         next.primaryAddress,
         next.timeZone,
         next.dspNumber ?? null,
+        next.ein ?? null,
         next.logoDataUrl ?? null,
         next.dashboardColor ?? null,
         next.accountTypes,

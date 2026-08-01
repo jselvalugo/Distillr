@@ -23,6 +23,7 @@ type PlatformConfig = {
   timeZone: string;
   logoDataUrl: string | null;
   dspNumber: string | null;
+  ein: string | null;
   dashboardColor: string | null;
 };
 
@@ -438,7 +439,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
 
 function RegulatoryTab({ config }: { config: PlatformConfig | undefined }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ dspNumber: config?.dspNumber ?? "" });
+  const [form, setForm] = useState({ dspNumber: config?.dspNumber ?? "", ein: config?.ein ?? "" });
   const [saved, setSaved] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(f => ({ ...f, [k]: e.target.value })); setSaved(false);
@@ -448,7 +449,7 @@ function RegulatoryTab({ config }: { config: PlatformConfig | undefined }) {
     mutationFn: () =>
       apiRequest<PlatformConfig>("/api/platform-config", {
         method: "PATCH",
-        body: JSON.stringify({ dspNumber: form.dspNumber || null }),
+        body: JSON.stringify({ dspNumber: form.dspNumber || null, ein: form.ein || null }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
@@ -482,6 +483,12 @@ function RegulatoryTab({ config }: { config: PlatformConfig | undefined }) {
           <div className="flex items-center gap-2">
             <FieldStatus value={form.dspNumber} />
             <Input value={form.dspNumber} onChange={set("dspNumber")} placeholder="e.g. DSP-PR-20001" className="flex-1 font-mono" />
+          </div>
+        </FormRow>
+        <FormRow label="Employer Identification Number (EIN)" hint="Federal tax ID used on TTB Form 5000.24 and IRS filings. Format: XX-XXXXXXX.">
+          <div className="flex items-center gap-2">
+            <FieldStatus value={form.ein} />
+            <Input value={form.ein} onChange={set("ein")} placeholder="e.g. 66-1234567" className="flex-1 font-mono" />
           </div>
         </FormRow>
         <FormRow label="Permit Class" hint="Your DSP classification determines applicable regulations and production limits.">

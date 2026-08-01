@@ -120,6 +120,8 @@ interface StateDistributorReport {
 
 interface PlatformConfig {
   dspNumber: string | null;
+  ein: string | null;
+  primaryAddress: string;
   organizationNameOverride: string | null;
   organizationName: string;
 }
@@ -546,7 +548,7 @@ export default function Reports() {
   async function handleExport5000() {
     if (!exciseByProduct) return;
     setExporting5000(true);
-    try { await export5000Word({ month, proprietorName, dspNumber: dspNumber ?? null, exciseByProduct }); }
+    try { await export5000Word({ month, proprietorName, dspNumber: dspNumber ?? null, ein: platformConfig?.ein ?? null, address: platformConfig?.primaryAddress ?? null, exciseByProduct }); }
     finally { setExporting5000(false); }
   }
 
