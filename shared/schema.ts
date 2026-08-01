@@ -724,6 +724,7 @@ export const distilleryControlTowerSummarySchema = z.object({
     inventoryRecordCount: z.number().int().nonnegative(),
     casesMade: z.number().int().nonnegative(),
     bottlesMade: z.number().int().nonnegative(),
+    proofGallonsProcessed: z.number().nonnegative(),
   }),
   sold: z.object({
     distributorCases: z.number().int().nonnegative(),

@@ -1,643 +1,742 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Trash2, Upload, Download } from "lucide-react";
+import { Pencil, Trash2, Plus, PackageOpen, Tag, Circle, Barrel, Droplets } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
-import { exportToCsv, downloadBrandedTemplate, parseImportFile } from "../lib/csv";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
-import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
 import { Dialog } from "../components/ui/dialog";
-import { statusBadge } from "../components/ui/badge";
+import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
 import { fmt, fmtNum } from "../lib/utils";
 import type { InventoryItem, InventoryLot } from "@shared/schema";
 
-type Tab = "items" | "lots";
+// ---------------------------------------------------------------------------
+// Category config
+// ---------------------------------------------------------------------------
+type CategoryKey = "bottles" | "labels" | "caps" | "barrels" | "wax";
 
-const BLANK_ITEM = { name: "", category: "", unitOfMeasure: "", notes: "" };
-const BLANK_LOT = { itemId: "", lotCode: "", quantity: "", unitOfMeasure: "", abv: "", notes: "" };
+const CATEGORY_CONFIG: Record<CategoryKey, {
+  label: string;
+  dbCategory: string;
+  defaultUnit: string;
+  unitOptions: string[];
+  namePlaceholder: string;
+  Icon: React.ElementType;
+}> = {
+  bottles: {
+    label: "Empty Bottles",
+    dbCategory: "Empty Bottles",
+    defaultUnit: "units",
+    unitOptions: ["units", "cases"],
+    namePlaceholder: "e.g. 750 mL Clear Glass Bottle",
+    Icon: PackageOpen,
+  },
+  labels: {
+    label: "Labels",
+    dbCategory: "Labels",
+    defaultUnit: "units",
+    unitOptions: ["units", "sheets", "rolls"],
+    namePlaceholder: "e.g. Pitorro Label — Front",
+    Icon: Tag,
+  },
+  caps: {
+    label: "Caps",
+    dbCategory: "Caps",
+    defaultUnit: "units",
+    unitOptions: ["units", "bags", "cases"],
+    namePlaceholder: "e.g. Black Screw Cap 28mm",
+    Icon: Circle,
+  },
+  barrels: {
+    label: "Unused Barrels",
+    dbCategory: "Unused Barrels",
+    defaultUnit: "units",
+    unitOptions: ["units"],
+    namePlaceholder: "e.g. 53-gal New American Oak #2 Char",
+    Icon: Barrel,
+  },
+  wax: {
+    label: "Wax",
+    dbCategory: "Wax",
+    defaultUnit: "lbs",
+    unitOptions: ["lbs", "kg", "oz", "gallons"],
+    namePlaceholder: "e.g. Black Bottle Wax",
+    Icon: Droplets,
+  },
+};
 
+const TABS = Object.keys(CATEGORY_CONFIG) as CategoryKey[];
+
+// ---------------------------------------------------------------------------
+// Blank form state
+// ---------------------------------------------------------------------------
+const blankIntake = (cat: CategoryKey) => ({
+  name: "",
+  unit: CATEGORY_CONFIG[cat].defaultUnit,
+  quantity: "",
+  lotCode: "",
+  receivedAt: new Date().toISOString().slice(0, 10),
+  notes: "",
+});
+
+const blankStock = {
+  quantity: "",
+  lotCode: "",
+  receivedAt: new Date().toISOString().slice(0, 10),
+  notes: "",
+};
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export default function Inventory() {
-  const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("items");
+  const [tab, setTab] = useState<CategoryKey>("bottles");
   const [search, setSearch] = useState("");
 
-  // create dialogs
-  const [openItem, setOpenItem] = useState(false);
-  const [openLot, setOpenLot] = useState(false);
-  const [itemForm, setItemForm] = useState(BLANK_ITEM);
-  const [lotForm, setLotForm] = useState(BLANK_LOT);
+  // New item intake
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeForm, setIntakeForm] = useState(blankIntake("bottles"));
 
-  // edit dialogs
-  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-  const [editItemForm, setEditItemForm] = useState(BLANK_ITEM);
-  const [editLot, setEditLot] = useState<InventoryLot | null>(null);
-  const [editLotForm, setEditLotForm] = useState(BLANK_LOT);
+  // Add stock to existing item
+  const [stockTarget, setStockTarget] = useState<InventoryItem | null>(null);
+  const [stockForm, setStockForm] = useState(blankStock);
 
-  // delete confirm
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "item" | "lot"; id: number; name: string } | null>(null);
+  // Edit item name/notes
+  const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", notes: "" });
 
-  // import
-  const [importItemOpen, setImportItemOpen] = useState(false);
-  const [importLotOpen, setImportLotOpen] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
+  // Edit lot quantity
+  const [editLotTarget, setEditLotTarget] = useState<InventoryLot | null>(null);
+  const [editLotForm, setEditLotForm] = useState({ quantity: "", notes: "" });
 
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "item" | "lot"; id: string; label: string } | null>(null);
+
+  // Expanded rows (show lots per item)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // ---------------------------------------------------------------------------
+  // Data
+  // ---------------------------------------------------------------------------
   const { data: items = [] } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory/items"],
     queryFn: () => apiRequest("/api/inventory/items"),
   });
+
   const { data: lots = [] } = useQuery<InventoryLot[]>({
     queryKey: ["/api/inventory/lots"],
     queryFn: () => apiRequest("/api/inventory/lots"),
   });
 
-  // --- create ---
-  const createItem = useMutation({
-    mutationFn: (d: typeof itemForm) =>
-      apiRequest("/api/inventory/items", { method: "POST", body: JSON.stringify(d) }),
+  // ---------------------------------------------------------------------------
+  // Derived data for current tab
+  // ---------------------------------------------------------------------------
+  const cfg = CATEGORY_CONFIG[tab];
+
+  const tabItems = useMemo(() =>
+    items.filter(i => i.category === cfg.dbCategory &&
+      (search === "" ||
+        i.name.toLowerCase().includes(search.toLowerCase()) ||
+        (i.notes ?? "").toLowerCase().includes(search.toLowerCase()))),
+    [items, cfg.dbCategory, search]
+  );
+
+  function lotsForItem(itemId: string) {
+    return lots.filter(l => l.itemId === itemId);
+  }
+
+  function totalQty(itemId: string) {
+    return lotsForItem(itemId).reduce((s, l) => s + (l.quantity ?? 0), 0);
+  }
+
+  function lastReceived(itemId: string) {
+    const dates = lotsForItem(itemId)
+      .map(l => l.receivedAt)
+      .filter(Boolean) as string[];
+    if (!dates.length) return null;
+    return dates.sort().at(-1)!;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mutations
+  // ---------------------------------------------------------------------------
+  const createIntake = useMutation({
+    mutationFn: async (data: typeof intakeForm) => {
+      // 1. Find or create item
+      const existing = items.find(
+        i => i.name.trim().toLowerCase() === data.name.trim().toLowerCase() &&
+             i.category === cfg.dbCategory
+      );
+      let itemId = existing?.id;
+      if (!itemId) {
+        const created = await apiRequest<InventoryItem>("/api/inventory/items", {
+          method: "POST",
+          body: JSON.stringify({
+            name: data.name.trim(),
+            category: cfg.dbCategory,
+            unitOfMeasure: data.unit,
+            notes: data.notes || undefined,
+          }),
+        });
+        itemId = created.id;
+      }
+      // 2. Create lot
+      await apiRequest("/api/inventory/lots", {
+        method: "POST",
+        body: JSON.stringify({
+          itemId,
+          lotCode: data.lotCode || `${cfg.dbCategory.replace(/\s+/g, "-").toUpperCase()}-${Date.now()}`,
+          quantity: +data.quantity,
+          unitOfMeasure: data.unit,
+          receivedAt: data.receivedAt || undefined,
+          notes: data.notes || undefined,
+        }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/items"] });
-      setOpenItem(false);
-      setItemForm(BLANK_ITEM);
-      toast.success("Item added");
+      qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
+      setIntakeOpen(false);
+      setIntakeForm(blankIntake(tab));
+      toast.success(`${cfg.label} intake recorded`);
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const createLot = useMutation({
-    mutationFn: (d: typeof lotForm) =>
-      apiRequest("/api/inventory/lots", {
+  const addStock = useMutation({
+    mutationFn: async (data: typeof stockForm) => {
+      if (!stockTarget) return;
+      await apiRequest("/api/inventory/lots", {
         method: "POST",
-        body: JSON.stringify({ ...d, quantity: +d.quantity, abv: d.abv ? +d.abv : undefined }),
-      }),
+        body: JSON.stringify({
+          itemId: stockTarget.id,
+          lotCode: data.lotCode || `${cfg.dbCategory.replace(/\s+/g, "-").toUpperCase()}-${Date.now()}`,
+          quantity: +data.quantity,
+          unitOfMeasure: stockTarget.unitOfMeasure,
+          receivedAt: data.receivedAt || undefined,
+          notes: data.notes || undefined,
+        }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
-      setOpenLot(false);
-      setLotForm(BLANK_LOT);
-      toast.success("Lot added");
+      setStockTarget(null);
+      setStockForm(blankStock);
+      toast.success("Stock added");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  // --- edit ---
   const updateItem = useMutation({
-    mutationFn: ({ id, ...d }: typeof editItemForm & { id: number }) =>
-      apiRequest(`/api/inventory/items/${id}`, { method: "PATCH", body: JSON.stringify(d) }),
+    mutationFn: (data: { id: string; name: string; notes: string }) =>
+      apiRequest(`/api/inventory/items/${data.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: data.name, notes: data.notes || null }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/items"] });
-      setEditItem(null);
+      setEditTarget(null);
       toast.success("Item updated");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const updateLot = useMutation({
-    mutationFn: ({ id, ...d }: typeof editLotForm & { id: number }) =>
-      apiRequest(`/api/inventory/lots/${id}`, {
+    mutationFn: (data: { id: string; quantity: number; notes: string }) =>
+      apiRequest(`/api/inventory/lots/${data.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...d, quantity: +d.quantity, abv: d.abv ? +d.abv : undefined }),
+        body: JSON.stringify({ quantity: data.quantity, notes: data.notes || null }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
-      setEditLot(null);
+      setEditLotTarget(null);
       toast.success("Lot updated");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  // --- delete ---
   const deleteItem = useMutation({
-    mutationFn: (id: number) =>
-      apiRequest(`/api/inventory/items/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiRequest(`/api/inventory/items/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/items"] });
+      qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
       setDeleteTarget(null);
       toast.success("Item deleted");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const deleteLot = useMutation({
-    mutationFn: (id: number) =>
-      apiRequest(`/api/inventory/lots/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiRequest(`/api/inventory/lots/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
       setDeleteTarget(null);
       toast.success("Lot deleted");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  function openEditItem(i: InventoryItem) {
-    setEditItem(i);
-    setEditItemForm({ name: i.name, category: i.category, unitOfMeasure: i.unitOfMeasure, notes: i.notes ?? "" });
-  }
-
-  function openEditLot(l: InventoryLot) {
-    setEditLot(l);
-    setEditLotForm({
-      itemId: String(l.itemId),
-      lotCode: l.lotCode,
-      quantity: String(l.quantity),
-      unitOfMeasure: l.unitOfMeasure ?? "",
-      abv: l.abv != null ? String(l.abv) : "",
-      notes: l.notes ?? "",
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   }
 
-  const ITEM_EXPORT_COLS = [
-    { header: "name",          key: "name" },
-    { header: "category",      key: "category" },
-    { header: "unitOfMeasure", key: "unitOfMeasure" },
-    { header: "status",        key: "status" },
-    { header: "notes",         key: "notes" },
-  ] as const;
-
-  const LOT_EXPORT_COLS = [
-    { header: "lotCode",       key: "lotCode" },
-    { header: "itemId",        key: "itemId" },
-    { header: "quantity",      key: "quantity" },
-    { header: "unitOfMeasure", key: "unitOfMeasure" },
-    { header: "abv",           key: "abv" },
-    { header: "proofGallons",  key: "proofGallons" },
-    { header: "receivedAt",    key: "receivedAt" },
-    { header: "expiresAt",     key: "expiresAt" },
-    { header: "notes",         key: "notes" },
-  ] as const;
-
-  async function handleImportItems() {
-    if (!importFile) return;
-    setImporting(true);
-    try {
-      const rows = await parseImportFile(importFile);
-      let ok = 0, fail = 0;
-      for (const row of rows) {
-        try {
-          await apiRequest("/api/inventory/items", {
-            method: "POST",
-            body: JSON.stringify({
-              name: row.name,
-              category: row.category,
-              unitOfMeasure: row.unitOfMeasure,
-              notes: row.notes || undefined,
-            }),
-          });
-          ok++;
-        } catch { fail++; }
-      }
-      qc.invalidateQueries({ queryKey: ["/api/inventory/items"] });
-      setImportItemOpen(false);
-      setImportFile(null);
-      toast.success(`Imported ${ok} item${ok !== 1 ? "s" : ""}${fail ? ` (${fail} failed)` : ""}`);
-    } catch {
-      toast.error("Failed to read file");
-    } finally {
-      setImporting(false);
-    }
+  function openIntake() {
+    setIntakeForm(blankIntake(tab));
+    setIntakeOpen(true);
   }
 
-  async function handleImportLots() {
-    if (!importFile) return;
-    setImporting(true);
-    try {
-      const rows = await parseImportFile(importFile);
-      let ok = 0, fail = 0;
-      for (const row of rows) {
-        try {
-          await apiRequest("/api/inventory/lots", {
-            method: "POST",
-            body: JSON.stringify({
-              lotCode: row.lotCode,
-              itemId: row.itemId,
-              quantity: +row.quantity,
-              unitOfMeasure: row.unitOfMeasure || undefined,
-              abv: row.abv ? +row.abv : undefined,
-              proofGallons: row.proofGallons ? +row.proofGallons : undefined,
-              receivedAt: row.receivedAt || undefined,
-              expiresAt: row.expiresAt || undefined,
-              notes: row.notes || undefined,
-            }),
-          });
-          ok++;
-        } catch { fail++; }
-      }
-      qc.invalidateQueries({ queryKey: ["/api/inventory/lots"] });
-      setImportLotOpen(false);
-      setImportFile(null);
-      toast.success(`Imported ${ok} lot${ok !== 1 ? "s" : ""}${fail ? ` (${fail} failed)` : ""}`);
-    } catch {
-      toast.error("Failed to read file");
-    } finally {
-      setImporting(false);
-    }
+  function openAddStock(item: InventoryItem) {
+    setStockTarget(item);
+    setStockForm(blankStock);
   }
 
-  const filteredItems = items.filter(
-    (i) =>
-      i.name.toLowerCase().includes(search.toLowerCase()) ||
-      i.category.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredLots = lots.filter((l) =>
-    l.lotCode.toLowerCase().includes(search.toLowerCase())
-  );
+  function openEditItem(item: InventoryItem) {
+    setEditTarget(item);
+    setEditForm({ name: item.name, notes: item.notes ?? "" });
+  }
 
-  const isDeleting = deleteItem.isPending || deleteLot.isPending;
+  function openEditLot(lot: InventoryLot) {
+    setEditLotTarget(lot);
+    setEditLotForm({ quantity: String(lot.quantity), notes: lot.notes ?? "" });
+  }
 
+  const totalTabItems = tabItems.length;
+  const totalTabQty = tabItems.reduce((s, i) => s + totalQty(i.id), 0);
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <Layout>
       <PageHeader
         title="Inventory"
-        subtitle={`${items.length} items · ${lots.length} lots`}
+        subtitle={`${totalTabItems} ${cfg.label.toLowerCase()} · ${fmtNum(totalTabQty, 0)} ${cfg.defaultUnit} on hand`}
         actions={
           <>
             <Input
               placeholder="Search…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-44"
+              className="w-40"
             />
-            {tab === "items" ? (
-              <>
-                <Button variant="outline" onClick={() => exportToCsv("inventory-items.csv", items, ITEM_EXPORT_COLS as any)}>
-                  <Download size={13} className="mr-1.5" /> Export
-                </Button>
-                <Button variant="outline" onClick={() => { setImportFile(null); setImportItemOpen(true); }}>
-                  <Upload size={13} className="mr-1.5" /> Import
-                </Button>
-                <Button onClick={() => navigate("/inventory/items/new")}>+ Add Item</Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => exportToCsv("inventory-lots.csv", lots, LOT_EXPORT_COLS as any)}>
-                  <Download size={13} className="mr-1.5" /> Export
-                </Button>
-                <Button variant="outline" onClick={() => { setImportFile(null); setImportLotOpen(true); }}>
-                  <Upload size={13} className="mr-1.5" /> Import
-                </Button>
-                <Button onClick={() => navigate("/inventory/lots/new")}>+ Add Lot</Button>
-              </>
-            )}
+            <Button onClick={openIntake}>
+              <Plus size={13} className="mr-1" /> New {cfg.label.replace(/^Unused /, "")}
+            </Button>
           </>
         }
       />
 
-      <div className="p-6">
-        <div className="flex gap-1 mb-4 border-b border-[#e5e5e5]">
-          {(["items", "lots"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
-                tab === t
-                  ? "border-[var(--brand)] text-[#0a0a0a]"
-                  : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
-              }`}
-            >
-              {t === "items" ? "Items" : "Lots"}
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-hidden">
-          {tab === "items" ? (
-            <Table>
-              <Thead>
-                <Tr>
-                  <Th>Name</Th>
-                  <Th>Category</Th>
-                  <Th>Unit</Th>
-                  <Th>Status</Th>
-                  <Th>Updated</Th>
-                  <Th />
-                </Tr>
-              </Thead>
-              <Tbody>
-                {filteredItems.length === 0 ? (
-                  <Tr>
-                    <Td colSpan={6} className="text-center text-[#737373] py-10">
-                      No items
-                    </Td>
-                  </Tr>
-                ) : (
-                  filteredItems.map((i) => (
-                    <Tr key={i.id}>
-                      <Td className="font-medium">{i.name}</Td>
-                      <Td>{i.category}</Td>
-                      <Td>{i.unitOfMeasure}</Td>
-                      <Td>{statusBadge(i.status)}</Td>
-                      <Td>{fmt(i.updatedAt)}</Td>
-                      <Td>
-                        <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => openEditItem(i)}
-                            className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373] hover:text-[#0a0a0a] transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget({ type: "item", id: i.id, name: i.name })}
-                            className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))
+      {/* Tabs */}
+      <div className="px-6 border-b border-[#e5e5e5]">
+        <div className="flex gap-1">
+          {TABS.map((t) => {
+            const c = CATEGORY_CONFIG[t];
+            const Icon = c.Icon;
+            const count = items.filter(i => i.category === c.dbCategory).length;
+            return (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setSearch(""); setExpanded(new Set()); }}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                  tab === t
+                    ? "border-[var(--brand)] text-[#0a0a0a]"
+                    : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
+                }`}
+              >
+                <Icon size={12} />
+                {c.label}
+                {count > 0 && (
+                  <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                    tab === t ? "bg-[var(--brand)] text-white" : "bg-[#f0f0f0] text-[#737373]"
+                  }`}>
+                    {count}
+                  </span>
                 )}
-              </Tbody>
-            </Table>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="p-6">
+        <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-hidden">
+          {tabItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <cfg.Icon size={32} className="text-[#d1d5db] mb-3" />
+              <p className="text-sm font-medium text-[#0a0a0a] mb-1">No {cfg.label.toLowerCase()} yet</p>
+              <p className="text-xs text-[#737373] mb-4">Record your first intake to start tracking stock.</p>
+              <Button size="sm" onClick={openIntake}>
+                <Plus size={12} className="mr-1" /> New {cfg.label.replace(/^Unused /, "")}
+              </Button>
+            </div>
           ) : (
             <Table>
               <Thead>
                 <Tr>
-                  <Th>Lot Code</Th>
-                  <Th>Quantity</Th>
+                  <Th />
+                  <Th>Name / Description</Th>
+                  <Th>On Hand</Th>
                   <Th>Unit</Th>
-                  <Th>ABV %</Th>
-                  <Th>Proof Gal.</Th>
-                  <Th>Received</Th>
-                  <Th>Expires</Th>
+                  <Th>Last Received</Th>
+                  <Th>Lots</Th>
                   <Th />
                 </Tr>
               </Thead>
               <Tbody>
-                {filteredLots.length === 0 ? (
-                  <Tr>
-                    <Td colSpan={8} className="text-center text-[#737373] py-10">
-                      No lots
-                    </Td>
-                  </Tr>
-                ) : (
-                  filteredLots.map((l) => (
-                    <Tr key={l.id}>
-                      <Td className="font-mono font-medium">{l.lotCode}</Td>
-                      <Td>{fmtNum(l.quantity)}</Td>
-                      <Td>{l.unitOfMeasure}</Td>
-                      <Td>{fmtNum(l.abv)}%</Td>
-                      <Td>{fmtNum(l.proofGallons)}</Td>
-                      <Td>{fmt(l.receivedAt)}</Td>
-                      <Td>{fmt(l.expiresAt)}</Td>
-                      <Td>
-                        <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => openEditLot(l)}
-                            className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373] hover:text-[#0a0a0a] transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget({ type: "lot", id: l.id, name: l.lotCode })}
-                            className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
+                {tabItems.map((item) => {
+                  const isOpen = expanded.has(item.id);
+                  const itemLots = lotsForItem(item.id);
+                  const qty = totalQty(item.id);
+                  const last = lastReceived(item.id);
+                  return (
+                    <>
+                      <Tr key={item.id} className="hover:bg-[#f7f7f7]">
+                        {/* Expand chevron */}
+                        <Td className="w-8">
+                          {itemLots.length > 0 && (
+                            <button
+                              onClick={() => toggleExpand(item.id)}
+                              className="text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                            >
+                              <span className={`inline-block transition-transform text-xs ${isOpen ? "rotate-90" : ""}`}>▶</span>
+                            </button>
+                          )}
+                        </Td>
+                        <Td>
+                          <p className="font-medium text-[#0a0a0a] text-sm">{item.name}</p>
+                          {item.notes && <p className="text-[10px] text-[#737373] mt-0.5">{item.notes}</p>}
+                        </Td>
+                        <Td>
+                          <span className={`text-sm font-bold tabular-nums ${qty === 0 ? "text-red-500" : "text-[#0a0a0a]"}`}>
+                            {fmtNum(qty, 0)}
+                          </span>
+                        </Td>
+                        <Td className="text-xs text-[#737373]">{item.unitOfMeasure}</Td>
+                        <Td className="text-xs text-[#737373]">{last ? fmt(last) : "—"}</Td>
+                        <Td className="text-xs text-[#737373]">{itemLots.length}</Td>
+                        <Td>
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              onClick={() => openAddStock(item)}
+                              className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                              title="Add stock"
+                            >
+                              <Plus size={13} />
+                            </button>
+                            <button
+                              onClick={() => openEditItem(item)}
+                              className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget({ type: "item", id: item.id, label: item.name })}
+                              className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </Td>
+                      </Tr>
+
+                      {/* Expanded lot rows */}
+                      {isOpen && itemLots.map((lot) => (
+                        <Tr key={lot.id} className="bg-[#f7f9fc]">
+                          <Td />
+                          <Td className="pl-6">
+                            <span className="font-mono text-xs text-[#737373]">{lot.lotCode}</span>
+                            {lot.notes && <p className="text-[10px] text-[#a3a3a3] mt-0.5">{lot.notes}</p>}
+                          </Td>
+                          <Td>
+                            <span className="text-sm tabular-nums text-[#0369a1] font-medium">
+                              {fmtNum(lot.quantity, 0)}
+                            </span>
+                          </Td>
+                          <Td className="text-xs text-[#737373]">{lot.unitOfMeasure}</Td>
+                          <Td className="text-xs text-[#737373]">{lot.receivedAt ? fmt(lot.receivedAt) : "—"}</Td>
+                          <Td />
+                          <Td>
+                            <div className="flex items-center gap-1 justify-end">
+                              <button
+                                onClick={() => openEditLot(lot)}
+                                className="p-1.5 rounded hover:bg-[#f3f4f6] text-[#737373] hover:text-[#0a0a0a] transition-colors"
+                                title="Edit lot"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget({ type: "lot", id: lot.id, label: lot.lotCode })}
+                                className="p-1.5 rounded hover:bg-red-50 text-[#737373] hover:text-red-600 transition-colors"
+                                title="Delete lot"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </>
+                  );
+                })}
               </Tbody>
             </Table>
           )}
         </div>
       </div>
 
-      {/* Create Item */}
-      <Dialog open={openItem} onClose={() => setOpenItem(false)} title="Add Inventory Item">
-        <form onSubmit={(e) => { e.preventDefault(); createItem.mutate(itemForm); }} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Name *</label>
-              <Input value={itemForm.name} onChange={(e) => setItemForm((f) => ({ ...f, name: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Category *</label>
-              <Input value={itemForm.category} onChange={(e) => setItemForm((f) => ({ ...f, category: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Unit of Measure *</label>
-              <Input value={itemForm.unitOfMeasure} onChange={(e) => setItemForm((f) => ({ ...f, unitOfMeasure: e.target.value }))} placeholder="gal, lbs, cases…" required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input value={itemForm.notes} onChange={(e) => setItemForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpenItem(false)}>Cancel</Button>
-            <Button type="submit" disabled={createItem.isPending}>{createItem.isPending ? "Saving…" : "Add Item"}</Button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Edit Item */}
-      <Dialog open={!!editItem} onClose={() => setEditItem(null)} title="Edit Inventory Item">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (editItem) updateItem.mutate({ ...editItemForm, id: editItem.id });
-          }}
-          className="space-y-3"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Name *</label>
-              <Input value={editItemForm.name} onChange={(e) => setEditItemForm((f) => ({ ...f, name: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Category *</label>
-              <Input value={editItemForm.category} onChange={(e) => setEditItemForm((f) => ({ ...f, category: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Unit of Measure *</label>
-              <Input value={editItemForm.unitOfMeasure} onChange={(e) => setEditItemForm((f) => ({ ...f, unitOfMeasure: e.target.value }))} placeholder="gal, lbs, cases…" required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input value={editItemForm.notes} onChange={(e) => setEditItemForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setEditItem(null)}>Cancel</Button>
-            <Button type="submit" disabled={updateItem.isPending}>{updateItem.isPending ? "Saving…" : "Save Changes"}</Button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Create Lot */}
-      <Dialog open={openLot} onClose={() => setOpenLot(false)} title="Add Lot">
-        <form onSubmit={(e) => { e.preventDefault(); createLot.mutate(lotForm); }} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Item *</label>
-              <Select value={lotForm.itemId} onChange={(e) => setLotForm((f) => ({ ...f, itemId: e.target.value }))} required>
-                <option value="">Select item…</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Lot Code *</label>
-              <Input value={lotForm.lotCode} onChange={(e) => setLotForm((f) => ({ ...f, lotCode: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Quantity *</label>
-              <Input type="number" step="0.01" value={lotForm.quantity} onChange={(e) => setLotForm((f) => ({ ...f, quantity: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Unit</label>
-              <Input value={lotForm.unitOfMeasure} onChange={(e) => setLotForm((f) => ({ ...f, unitOfMeasure: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">ABV %</label>
-              <Input type="number" step="0.01" value={lotForm.abv} onChange={(e) => setLotForm((f) => ({ ...f, abv: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input value={lotForm.notes} onChange={(e) => setLotForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setOpenLot(false)}>Cancel</Button>
-            <Button type="submit" disabled={createLot.isPending}>{createLot.isPending ? "Saving…" : "Add Lot"}</Button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Edit Lot */}
-      <Dialog open={!!editLot} onClose={() => setEditLot(null)} title="Edit Lot">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (editLot) updateLot.mutate({ ...editLotForm, id: editLot.id });
-          }}
-          className="space-y-3"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Item *</label>
-              <Select value={editLotForm.itemId} onChange={(e) => setEditLotForm((f) => ({ ...f, itemId: e.target.value }))} required>
-                <option value="">Select item…</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Lot Code *</label>
-              <Input value={editLotForm.lotCode} onChange={(e) => setEditLotForm((f) => ({ ...f, lotCode: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Quantity *</label>
-              <Input type="number" step="0.01" value={editLotForm.quantity} onChange={(e) => setEditLotForm((f) => ({ ...f, quantity: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Unit</label>
-              <Input value={editLotForm.unitOfMeasure} onChange={(e) => setEditLotForm((f) => ({ ...f, unitOfMeasure: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">ABV %</label>
-              <Input type="number" step="0.01" value={editLotForm.abv} onChange={(e) => setEditLotForm((f) => ({ ...f, abv: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input value={editLotForm.notes} onChange={(e) => setEditLotForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setEditLot(null)}>Cancel</Button>
-            <Button type="submit" disabled={updateLot.isPending}>{updateLot.isPending ? "Saving…" : "Save Changes"}</Button>
-          </div>
-        </form>
-      </Dialog>
-
-      {/* Delete Confirm */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Confirm Delete">
-        <p className="text-sm text-[#0a0a0a] mb-1">
-          Are you sure you want to delete <span className="font-semibold">"{deleteTarget?.name}"</span>?
-        </p>
-        <p className="text-xs text-[#737373] mb-4">This action cannot be undone.</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-          <button
-            onClick={() => {
-              if (!deleteTarget) return;
-              if (deleteTarget.type === "item") deleteItem.mutate(deleteTarget.id);
-              else deleteLot.mutate(deleteTarget.id);
-            }}
-            disabled={isDeleting}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
-          >
-            {isDeleting ? "Deleting…" : "Delete"}
-          </button>
-        </div>
-      </Dialog>
-
-      {/* Import Items */}
-      <Dialog open={importItemOpen} onClose={() => { setImportItemOpen(false); setImportFile(null); }} title="Import Inventory Items">
+      {/* ── New Intake Dialog ── */}
+      <Dialog
+        open={intakeOpen}
+        onClose={() => setIntakeOpen(false)}
+        title={`New ${cfg.label} Intake`}
+      >
         <div className="space-y-4">
           <p className="text-xs text-[#737373]">
-            Upload a CSV or XLSX with columns: <span className="font-mono">name, category, unitOfMeasure, status, notes</span>.
-            Required: <span className="font-mono">name, category, unitOfMeasure</span>.
+            Record a new {cfg.label.toLowerCase()} receipt. If this item already exists, stock will be added to it automatically.
           </p>
-          <button
-            onClick={() => downloadBrandedTemplate("inventory-items")}
-            className="text-xs text-[#0369a1] hover:underline"
-          >
-            Download branded template (.xlsx) →
-          </button>
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
-          />
-          {importFile && (
-            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
-          )}
+
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Name / Description *</label>
+            <Input
+              value={intakeForm.name}
+              onChange={(e) => setIntakeForm(f => ({ ...f, name: e.target.value }))}
+              placeholder={cfg.namePlaceholder}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Quantity Received *</label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={intakeForm.quantity}
+                onChange={(e) => setIntakeForm(f => ({ ...f, quantity: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Unit of Measure</label>
+              <select
+                value={intakeForm.unit}
+                onChange={(e) => setIntakeForm(f => ({ ...f, unit: e.target.value }))}
+                className="w-full h-9 rounded-md border border-[#e5e5e5] bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
+              >
+                {cfg.unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Date Received *</label>
+              <Input
+                type="date"
+                value={intakeForm.receivedAt}
+                onChange={(e) => setIntakeForm(f => ({ ...f, receivedAt: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Lot / Batch Code</label>
+              <Input
+                value={intakeForm.lotCode}
+                onChange={(e) => setIntakeForm(f => ({ ...f, lotCode: e.target.value }))}
+                placeholder="Auto-generated if blank"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+            <Input
+              value={intakeForm.notes}
+              onChange={(e) => setIntakeForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Supplier, PO number, condition…"
+            />
+          </div>
+
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => { setImportItemOpen(false); setImportFile(null); }}>Cancel</Button>
-            <Button onClick={handleImportItems} disabled={!importFile || importing}>
-              {importing ? "Importing…" : "Import"}
+            <Button variant="outline" onClick={() => setIntakeOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => createIntake.mutate(intakeForm)}
+              disabled={createIntake.isPending || !intakeForm.name || !intakeForm.quantity}
+            >
+              {createIntake.isPending ? "Recording…" : "Record Intake"}
             </Button>
           </div>
         </div>
       </Dialog>
 
-      {/* Import Lots */}
-      <Dialog open={importLotOpen} onClose={() => { setImportLotOpen(false); setImportFile(null); }} title="Import Lots">
+      {/* ── Add Stock Dialog ── */}
+      <Dialog
+        open={!!stockTarget}
+        onClose={() => setStockTarget(null)}
+        title={`Add Stock — ${stockTarget?.name ?? ""}`}
+      >
         <div className="space-y-4">
-          <p className="text-xs text-[#737373]">
-            Upload a CSV or XLSX with columns: <span className="font-mono">lotCode, itemId, quantity, unitOfMeasure, abv, proofGallons, receivedAt, expiresAt, notes</span>.
-            Required: <span className="font-mono">lotCode, itemId, quantity</span>.
-            The <span className="font-mono">itemId</span> must match an existing item's ID.
-          </p>
-          <button
-            onClick={() => downloadBrandedTemplate("inventory-lots")}
-            className="text-xs text-[#0369a1] hover:underline"
-          >
-            Download branded template (.xlsx) →
-          </button>
-          <input
-            type="file"
-            accept=".csv,.xlsx"
-            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-xs text-[#737373] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-[#e5e5e5] file:text-xs file:font-medium file:bg-white hover:file:bg-[#f5f5f5] file:cursor-pointer"
-          />
-          {importFile && (
-            <p className="text-xs text-[#737373]">Selected: <span className="font-medium text-[#0a0a0a]">{importFile.name}</span></p>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Quantity *</label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={stockForm.quantity}
+                onChange={(e) => setStockForm(f => ({ ...f, quantity: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Date Received</label>
+              <Input
+                type="date"
+                value={stockForm.receivedAt}
+                onChange={(e) => setStockForm(f => ({ ...f, receivedAt: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Lot / Batch Code</label>
+            <Input
+              value={stockForm.lotCode}
+              onChange={(e) => setStockForm(f => ({ ...f, lotCode: e.target.value }))}
+              placeholder="Auto-generated if blank"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+            <Input
+              value={stockForm.notes}
+              onChange={(e) => setStockForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Supplier, PO number…"
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => { setImportLotOpen(false); setImportFile(null); }}>Cancel</Button>
-            <Button onClick={handleImportLots} disabled={!importFile || importing}>
-              {importing ? "Importing…" : "Import"}
+            <Button variant="outline" onClick={() => setStockTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => addStock.mutate(stockForm)}
+              disabled={addStock.isPending || !stockForm.quantity}
+            >
+              {addStock.isPending ? "Adding…" : "Add Stock"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Edit Item Dialog ── */}
+      <Dialog
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title="Edit Item"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Name / Description *</label>
+            <Input
+              value={editForm.name}
+              onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+            <Input
+              value={editForm.notes}
+              onChange={(e) => setEditForm(f => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => editTarget && updateItem.mutate({ id: editTarget.id, ...editForm })}
+              disabled={updateItem.isPending || !editForm.name}
+            >
+              {updateItem.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Edit Lot Dialog ── */}
+      <Dialog
+        open={!!editLotTarget}
+        onClose={() => setEditLotTarget(null)}
+        title={`Edit Lot — ${editLotTarget?.lotCode ?? ""}`}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Quantity *</label>
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={editLotForm.quantity}
+              onChange={(e) => setEditLotForm(f => ({ ...f, quantity: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+            <Input
+              value={editLotForm.notes}
+              onChange={(e) => setEditLotForm(f => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setEditLotTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => editLotTarget && updateLot.mutate({
+                id: editLotTarget.id,
+                quantity: +editLotForm.quantity,
+                notes: editLotForm.notes,
+              })}
+              disabled={updateLot.isPending || !editLotForm.quantity}
+            >
+              {updateLot.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Delete Confirm Dialog ── */}
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={`Delete ${deleteTarget?.type === "item" ? "Item" : "Lot"}`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[#0a0a0a]">
+            Are you sure you want to delete{" "}
+            <span className="font-semibold">{deleteTarget?.label}</span>?
+            {deleteTarget?.type === "item" && (
+              <span className="block text-xs text-red-600 mt-1">
+                This will also delete all lots associated with this item.
+              </span>
+            )}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+              onClick={() => {
+                if (!deleteTarget) return;
+                if (deleteTarget.type === "item") deleteItem.mutate(deleteTarget.id);
+                else deleteLot.mutate(deleteTarget.id);
+              }}
+              disabled={deleteItem.isPending || deleteLot.isPending}
+            >
+              {deleteItem.isPending || deleteLot.isPending ? "Deleting…" : "Delete"}
             </Button>
           </div>
         </div>

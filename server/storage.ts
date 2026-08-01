@@ -2766,14 +2766,15 @@ export class PostgresStorage implements IStorage {
       ? allOrders.filter(o => o.orderDate.startsWith(reportMonth))
       : allOrders;
 
-    // Proof gallons — prefer proofGallonsProduced (distillation), fall back to proofGallonsProcessed (bottling)
+    // Proof gallons produced — strictly from distillation stage (proofGallonsProduced field only)
     const proofGallonsProduced = roundNumber(
-      batches.reduce((sum, b) => {
-        const pg = toFiniteNumber((b as any).proofGallonsProduced) || toFiniteNumber((b as any).proofGallonsProcessed);
-        return sum + pg;
-      }, 0), 2,
+      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).proofGallonsProduced), 0), 2,
     );
-    // Wine gallons — prefer fillWineGallons (barreling), fall back to wineGallonsBottled
+    // Proof gallons processed — strictly from bottling stage (proofGallonsProcessed field only)
+    const proofGallonsProcessed = roundNumber(
+      batches.reduce((sum, b) => sum + toFiniteNumber((b as any).proofGallonsProcessed), 0), 2,
+    );
+    // Wine gallons distilled — prefer fillWineGallons (barreling), fall back to wineGallonsBottled
     const wineGallonsDistilled = roundNumber(
       batches.reduce((sum, b) => {
         const wg = toFiniteNumber((b as any).fillWineGallons) || toFiniteNumber((b as any).wineGallonsBottled);
@@ -2818,6 +2819,7 @@ export class PostgresStorage implements IStorage {
         inventoryRecordCount: batches.filter(b => ["bottling","closed"].includes(b.stage)).length,
         casesMade: totalCasesBottled,
         bottlesMade: totalBottles,
+        proofGallonsProcessed,
       },
       sold: {
         distributorCases: finalDistCases,

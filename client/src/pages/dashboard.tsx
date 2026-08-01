@@ -910,7 +910,8 @@ export default function Dashboard() {
   }
 
   const gallons = Number(tower?.produced?.gallonsDistilled ?? 0);
-  const proof = Number(tower?.produced?.proofGallons ?? 0);
+  const proof = Number(tower?.produced?.proofGallons ?? 0);           // distillation stage only
+  const proofProcessed = Number(tower?.bottled?.proofGallonsProcessed ?? 0); // bottling stage only
   const prodRecords = Number(tower?.produced?.recordCount ?? 0);
   const scheduled = Number(stats?.scheduled ?? 0);
 
@@ -977,7 +978,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: CREAM, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
-                  { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "produced", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
+                  { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "distilled at still", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
                   { label: "Cases Bottled", value: fmtNum(casesProduced, 0), sub: "this period", icon: Package, color: "#34d399", pct: relPct(casesProduced, totalSold) },
                   { label: "Cases Sold", value: fmtNum(totalSold, 0), sub: "fulfilled", icon: ShoppingCart, color: "#60a5fa", pct: relPct(totalSold, casesProduced) },
                 ].map((k) => {
@@ -1040,7 +1041,7 @@ export default function Dashboard() {
                   <SectionLabel>Production</SectionLabel>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <MetricCard highlight label="Gallons Distilled" value={fmtNum(gallons, 1)} sub="US gallons" pct={relPct(gallons, proof, prodRecords * 10, scheduled * 10)} icon={FlaskConical} color={CREAM_ON_DARK} />
-                    <MetricCard label="Proof Gallons" value={fmtNum(proof, 1)} sub="at proof" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
+                    <MetricCard label="Proof Gallons Distilled" value={fmtNum(proof, 1)} sub="produced at still" pct={relPct(proof, gallons)} icon={Gauge} color="#818cf8" />
                     <MetricCard label="Total Batches" value={batches.length || "—"} sub={selectedMonth ? "this month" : "all batches"} pct={relPct(batches.length, scheduled, inProgress)} icon={ClipboardList} color="#34d399" />
                     <MetricCard label="Scheduled Batches" value={scheduled || "—"} sub="in planning" pct={relPct(scheduled, inProgress, prodRecords)} icon={Calendar} color="#60a5fa" />
                   </div>
@@ -1065,9 +1066,9 @@ export default function Dashboard() {
                 {id === "bottling" && <>
                   <SectionLabel>Bottling & Inventory</SectionLabel>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <MetricCard highlight label="Cases Produced" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={CREAM_ON_DARK} />
+                    <MetricCard highlight label="Cases Bottled" value={fmtNum(casesProduced, 0)} sub="total cases" pct={relPct(casesProduced, bottles / 12)} icon={Package} color={CREAM_ON_DARK} />
                     <MetricCard label="Bottles Made" value={fmtNum(bottles, 0)} sub="units" pct={relPct(bottles / 12, casesProduced)} icon={Package2} color="#818cf8" />
-                    <MetricCard label="Inventory Records" value={invRecords || "—"} sub="lot records" pct={relPct(invRecords, inProgress, scheduled)} icon={Archive} color="#34d399" />
+                    <MetricCard label="Proof Gallons Bottled" value={fmtNum(proofProcessed, 1)} sub="processed at bottling" pct={relPct(proofProcessed, proof)} icon={Gauge} color="#f59e0b" />
                     <MetricCard label="Batches In Progress" value={inProgress || "—"} sub="active stages" pct={relPct(inProgress, scheduled, completed)} icon={Activity} color="#f472b6" />
                   </div>
                 </>}
@@ -1127,7 +1128,7 @@ export default function Dashboard() {
                         <div className="rounded-xl p-5" style={GLASS}>
                           <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Production Totals</p>
                           <div className="space-y-3">
-                            {[{ label: "Proof Gallons produced", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" }, { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" }].map(item => (
+                            {[{ label: "Proof Gal. distilled (produced)", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" }, { label: "Proof Gal. bottled (processed)", value: fmtNum(proofProcessed, 1), pct: relPct(proofProcessed, proof), color: "#f59e0b" }, { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" }].map(item => (
                               <div key={item.label}>
                                 <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">{item.label}</span><span className="text-[10px] font-bold text-white tabular-nums">{item.value}</span></div>
                                 <FillBar pct={item.pct} color={item.color} height={4} />
