@@ -537,9 +537,20 @@ function MashForm({ data }: { data: BatchFull }) {
         </div>
       </div>
       <div className="flex justify-between items-center pt-2">
-        <Button variant="outline" size="sm" onClick={() => savePr.mutate()} disabled={savePr.isPending}>
-          {savePr.isPending ? "Saving…" : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => savePr.mutate()} disabled={savePr.isPending}>
+            {savePr.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (confirm("Go back to Planning? Your saved data will be kept.")) {
+              apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+                .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Returned to Planning"); })
+                .catch((e: Error) => toast.error(e.message));
+            }
+          }} className="text-[#737373]">
+            ← Planning
+          </Button>
+        </div>
         <Button onClick={() => advance.mutate()} disabled={advance.isPending}>
           {advance.isPending ? "Advancing…" : "Advance to Distillation →"}
         </Button>
@@ -695,9 +706,20 @@ function DistillationForm({ data }: { data: BatchFull }) {
         </div>
       </div>
       <div className="flex justify-between items-center pt-2">
-        <Button variant="outline" size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (confirm("Go back to Mash & Fermentation? Your saved data will be kept.")) {
+              apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+                .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Returned to Mash & Fermentation"); })
+                .catch((e: Error) => toast.error(e.message));
+            }
+          }} className="text-[#737373]">
+            ← Mash & Fermentation
+          </Button>
+        </div>
         <Button onClick={() => advance.mutate()} disabled={advance.isPending}>
           {advance.isPending ? "Advancing…" : "Advance to Barreling →"}
         </Button>
@@ -909,9 +931,20 @@ function BarrelingForm({ data }: { data: BatchFull }) {
         </div>
       </div>
       <div className="flex justify-between items-center pt-2">
-        <Button variant="outline" size="sm" onClick={() => saveBarrel.mutate()} disabled={saveBarrel.isPending}>
-          {saveBarrel.isPending ? "Saving…" : "Save Barrel"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => saveBarrel.mutate()} disabled={saveBarrel.isPending}>
+            {saveBarrel.isPending ? "Saving…" : "Save Barrel"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (confirm("Go back to Distillation? Your saved data will be kept.")) {
+              apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+                .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Returned to Distillation"); })
+                .catch((e: Error) => toast.error(e.message));
+            }
+          }} className="text-[#737373]">
+            ← Distillation
+          </Button>
+        </div>
         <Button onClick={() => advance.mutate()} disabled={advance.isPending}>
           {advance.isPending ? "Advancing…" : "Advance to Aging →"}
         </Button>
@@ -1281,7 +1314,16 @@ function AgingForm({ data }: { data: BatchFull }) {
         </div>
       )}
 
-      <div className="flex justify-end pt-2 border-t border-[#e5e5e5]">
+      <div className="flex justify-between items-center pt-2 border-t border-[#e5e5e5]">
+        <Button variant="outline" size="sm" onClick={() => {
+          if (confirm("Go back to Barreling? Your saved data will be kept.")) {
+            apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+              .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Returned to Barreling"); })
+              .catch((e: Error) => toast.error(e.message));
+          }
+        }} className="text-[#737373]">
+          ← Barreling
+        </Button>
         <Button onClick={() => advance.mutate()} disabled={advance.isPending}>
           {advance.isPending ? "Advancing…" : "Advance to Bottling →"}
         </Button>
@@ -1767,7 +1809,16 @@ function BottlingForm({ data }: { data: BatchFull }) {
         </div>
       </div>
 
-      <div className="flex justify-end pt-2 border-t border-[#e5e5e5]">
+      <div className="flex justify-between items-center pt-2 border-t border-[#e5e5e5]">
+        <Button variant="outline" size="sm" onClick={() => {
+          if (confirm("Go back to Aging? Your saved data will be kept.")) {
+            apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+              .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Returned to Aging"); })
+              .catch((e: Error) => toast.error(e.message));
+          }
+        }} className="text-[#737373]">
+          ← Aging
+        </Button>
         <Button onClick={() => advance.mutate()} disabled={advance.isPending || !form.bottlingProof}>
           {advance.isPending ? "Closing…" : "Close Batch →"}
         </Button>
@@ -2260,7 +2311,16 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
         </div>
       </div>
 
-      <div className="flex justify-end pt-4 border-t border-[#e5e5e5]">
+      <div className="flex justify-between items-center pt-4 border-t border-[#e5e5e5]">
+        <Button variant="outline" size="sm" onClick={() => {
+          if (confirm("Reopen this batch to Bottling stage? Status will return to In Progress.")) {
+            apiRequest(`/api/distilling/batch-records/${batch.id}/regress`, { method: "POST" })
+              .then(() => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Batch reopened to Bottling"); })
+              .catch((e: Error) => toast.error(e.message));
+          }
+        }} className="text-[#737373]">
+          ← Reopen to Bottling
+        </Button>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save All Changes"}
         </Button>

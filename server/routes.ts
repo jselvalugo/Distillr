@@ -2018,6 +2018,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.post("/api/distilling/batch-records/:id/regress", async (req, res) => {
+    const STAGE_ORDER = [
+      "planning", "mash_fermentation", "distillation", "barreling", "aging", "bottling", "closed",
+    ] as const;
+    try {
+      const batch = await storage.getDistillingBatchRecord(req.params.id);
+      if (!batch) return res.status(404).json({ error: "Batch not found" });
+      const idx = STAGE_ORDER.indexOf(batch.stage as typeof STAGE_ORDER[number]);
+      if (idx <= 0) return res.status(400).json({ error: "Already at first stage" });
+      const prevStage = STAGE_ORDER[idx - 1];
+      const updates: Record<string, unknown> = { stage: prevStage };
+      if (prevStage !== "closed") updates.status = "In Progress";
+      const record = await storage.updateDistillingBatchRecord(req.params.id, updates as Parameters<typeof storage.updateDistillingBatchRecord>[1]);
+      await writeAuditLog(req, "distilling_batch_record", record.id, "update", { stage: record.stage, action: "regress" });
+      res.json(record);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to go back a stage";
+      res.status(400).json({ error: message });
+    }
+  });
+
   app.delete("/api/distilling/batch-records/:id", async (req, res) => {
     try {
       await storage.deleteDistillingBatchRecord(req.params.id);
