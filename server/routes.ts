@@ -1977,11 +1977,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const payload = insertDistillingBatchRecordSchema.partial().parse(req.body);
       const record = await storage.updateDistillingBatchRecord(req.params.id, payload);
+      const SKIP = new Set(["id", "createdAt", "updatedAt", "stage", "status", "batchCode", "tenantId"]);
+      const changes = Object.fromEntries(
+        Object.entries(payload).filter(([k, v]) => !SKIP.has(k) && v !== null && v !== undefined),
+      );
       await writeAuditLog(req, "distilling_batch_record", record.id, "update", {
         batchCode: record.batchCode,
         stage: record.stage,
         status: record.status,
         type: "data_saved",
+        changes,
       });
       if (Number(record.proofGallonsProcessed) > 0) {
         writeBottlingLedgerEntry(
@@ -2076,11 +2081,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const payload = insertDistillingProductionRecordSchema.parse(req.body);
       const record = await storage.createDistillingProductionRecord(payload);
+      const { batchRecordId, id: _id, createdAt: _c, updatedAt: _u, ...mashChanges } = record as typeof record & { batchRecordId?: string | null };
       await writeAuditLog(req, "distilling_production_record", record.id, "create", {
         distillDate: record.distillDate,
         gallonsDistilled: record.gallonsDistilled,
         proofOfGallons: record.proofOfGallons,
       });
+      if (batchRecordId) {
+        await writeAuditLog(req, "distilling_batch_record", batchRecordId, "update", {
+          type: "data_saved",
+          stage: "mash_fermentation",
+          changes: mashChanges,
+        });
+      }
       writeProductionLedgerEntry(record).catch((err) => console.error("[ledger] production create failed:", err));
       res.status(201).json(record);
     } catch (error: unknown) {
@@ -2093,11 +2106,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const payload = insertDistillingProductionRecordSchema.partial().parse(req.body);
       const record = await storage.updateDistillingProductionRecord(req.params.id, payload);
+      const { batchRecordId, id: _id, createdAt: _c, updatedAt: _u, ...mashChanges } = record as typeof record & { batchRecordId?: string | null };
+      const SKIP_PROD = new Set(["id", "createdAt", "updatedAt", "batchRecordId", "tenantId"]);
+      const filteredChanges = Object.fromEntries(
+        Object.entries(mashChanges).filter(([k, v]) => !SKIP_PROD.has(k) && v !== null && v !== undefined),
+      );
       await writeAuditLog(req, "distilling_production_record", record.id, "update", {
         distillDate: record.distillDate,
         gallonsDistilled: record.gallonsDistilled,
         proofOfGallons: record.proofOfGallons,
       });
+      if (batchRecordId) {
+        await writeAuditLog(req, "distilling_batch_record", batchRecordId, "update", {
+          type: "data_saved",
+          stage: "mash_fermentation",
+          changes: filteredChanges,
+        });
+      }
       writeProductionLedgerEntry(record).catch((err) => console.error("[ledger] production update failed:", err));
       res.json(record);
     } catch (error: unknown) {

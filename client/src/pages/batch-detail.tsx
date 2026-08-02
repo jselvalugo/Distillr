@@ -2334,7 +2334,6 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 // History helpers
 // ---------------------------------------------------------------------------
 const STAGE_LABELS_MAP: Record<string, string> = {
@@ -2346,6 +2345,70 @@ const STAGE_LABELS_MAP: Record<string, string> = {
   bottling: "Bottling",
   closed: "Closed",
 };
+
+const FIELD_LABELS: Record<string, string> = {
+  // Planning
+  productName: "Product Name",
+  spiritType: "Spirit Type",
+  spiritClass: "Spirit Class",
+  batchDate: "Batch Date",
+  notes: "Notes",
+  // Mash & Fermentation
+  mashDate: "Mash Date",
+  gallonsMolasses: "Gallons of Molasses",
+  lbsSugar: "lbs Sugar",
+  yeastDate: "Yeast Pitch Date",
+  libertaliaYeastPackets: "Libertalia Yeast Packets",
+  riskeyYeastPackets: "Riskey Yeast Packets",
+  // Distillation
+  distillDate: "Distillation Date",
+  stillType: "Still Type",
+  distillationProof: "ABV% at Distillation",
+  gallonsDistilled: "Wine Gallons Distilled",
+  wineGallonsDistilled: "Wine Gallons Distilled",
+  percentageDistilled: "ABV%",
+  proofOfGallons: "Proof Gallons",
+  proofGallonsProduced: "Proof Gallons Produced",
+  // Barreling
+  fillDate: "Fill Date",
+  fillNumber: "Fill Number",
+  fillProof: "Fill ABV%",
+  fillWineGallons: "Fill Wine Gallons",
+  fillProofGallons: "Fill Proof Gallons",
+  containerType: "Container Type",
+  barrelId: "Barrel",
+  targetDumpDate: "Target Dump Date",
+  amountReceivedGallons: "Amount Received (gal)",
+  // Bottling
+  bottlingDate: "Bottling Date",
+  bottlingProof: "Bottling ABV%",
+  wineGallonsBottled: "Wine Gallons Bottled",
+  proofGallonsProcessed: "Proof Gallons Processed",
+  cases750ml: "Cases (750 mL)",
+  cases1000ml: "Cases (1000 mL)",
+  cases1750ml: "Cases (1750 mL)",
+  totalCases: "Total Cases",
+  lotNumber: "Lot Number",
+  taxClass: "Tax Class",
+  exciseTaxDue: "Excise Tax Due ($)",
+  // Refs
+  productionRecordId: "Production Record ID",
+  inventoryRecordId: "Inventory Record ID",
+};
+
+function formatFieldValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key.toLowerCase().includes("date") && typeof value === "string") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? value : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  if (key === "exciseTaxDue" && typeof value === "number") return `$${value.toFixed(2)}`;
+  if ((key.includes("Proof") || key.includes("proof") || key.includes("Gallons") || key.includes("gallons")) && typeof value === "number") {
+    return value.toFixed(3).replace(/\.?0+$/, "");
+  }
+  return String(value);
+}
 
 function historyLabel(log: AuditLog): { icon: string; text: string; color: string } {
   const d = log.details as Record<string, unknown>;
@@ -2362,7 +2425,7 @@ function historyLabel(log: AuditLog): { icon: string; text: string; color: strin
     return { icon: "←", text: `Returned to ${stage ?? "previous stage"}`, color: "text-[#c9933a]" };
   }
   if (type === "data_saved") {
-    return { icon: "💾", text: `Data saved${stage ? ` — ${stage}` : ""}`, color: "text-[#0369a1]" };
+    return { icon: "💾", text: `Saved — ${stage ?? "record"}`, color: "text-[#0369a1]" };
   }
   if (log.action === "delete") {
     return { icon: "🗑", text: "Record deleted", color: "text-red-600" };
@@ -2370,7 +2433,27 @@ function historyLabel(log: AuditLog): { icon: string; text: string; color: strin
   return { icon: "✏️", text: `Updated${stage ? ` — ${stage}` : ""}`, color: "text-[#737373]" };
 }
 
+function HistoryChanges({ changes }: { changes: Record<string, unknown> }) {
+  const entries = Object.entries(changes).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (!entries.length) return null;
+  return (
+    <div className="mt-2 rounded-md border border-[#e5e5e5] bg-[#fafafa] divide-y divide-[#f0f0f0]">
+      {entries.map(([key, value]) => (
+        <div key={key} className="flex items-baseline gap-2 px-3 py-1.5">
+          <span className="text-[11px] font-medium text-[#737373] shrink-0 w-40">
+            {FIELD_LABELS[key] ?? key}
+          </span>
+          <span className="text-[11px] text-[#0a0a0a] break-all">
+            {formatFieldValue(key, value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HistoryTab({ batchId }: { batchId: string }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { data: logs = [], isLoading } = useQuery<AuditLog[]>({
     queryKey: [`/api/audit-logs`, batchId],
     queryFn: () => apiRequest(`/api/audit-logs?entityType=distilling_batch_record&entityId=${batchId}&limit=200`),
@@ -2393,8 +2476,11 @@ function HistoryTab({ batchId }: { batchId: string }) {
 
   const sorted = [...logs].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 
+  const toggle = (id: string) =>
+    setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
   return (
-    <div className="space-y-1">
+    <div className="divide-y divide-[#f0f0f0]">
       {sorted.map((log, i) => {
         const { icon, text, color } = historyLabel(log);
         const d = log.details as Record<string, unknown>;
@@ -2402,23 +2488,36 @@ function HistoryTab({ batchId }: { batchId: string }) {
         const dateStr = ts.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
         const timeStr = ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
         const actor = log.actorName ?? log.actorRole ?? "System";
-        const status = typeof d.status === "string" ? d.status : null;
+        const changes = d.changes && typeof d.changes === "object" ? d.changes as Record<string, unknown> : null;
+        const hasChanges = changes && Object.keys(changes).length > 0;
+        const rowId = log.id ?? String(i);
+        const isOpen = expanded.has(rowId);
 
         return (
-          <div key={log.id ?? i} className="flex gap-3 items-start py-3 border-b border-[#f0f0f0] last:border-0">
-            <div className="w-7 h-7 flex items-center justify-center rounded-full bg-[#f7f7f7] text-sm shrink-0 mt-0.5">
-              {icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold leading-snug ${color}`}>{text}</p>
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                {status && <span className="text-xs text-[#737373]">Status: {status}</span>}
-                <span className="text-xs text-[#a3a3a3]">by {actor}</span>
+          <div key={rowId} className="py-3">
+            <div className="flex gap-3 items-start">
+              <div className="w-7 h-7 flex items-center justify-center rounded-full bg-[#f7f7f7] text-sm shrink-0 mt-0.5">
+                {icon}
               </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs font-medium text-[#0a0a0a]">{dateStr}</p>
-              <p className="text-[11px] text-[#a3a3a3]">{timeStr}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold leading-snug ${color}`}>{text}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                  <span className="text-xs text-[#a3a3a3]">by {actor}</span>
+                  {hasChanges && (
+                    <button
+                      onClick={() => toggle(rowId)}
+                      className="text-[11px] text-[var(--brand)] hover:underline"
+                    >
+                      {isOpen ? "Hide fields ▲" : `${Object.keys(changes!).length} field${Object.keys(changes!).length !== 1 ? "s" : ""} changed ▼`}
+                    </button>
+                  )}
+                </div>
+                {isOpen && hasChanges && <HistoryChanges changes={changes!} />}
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-medium text-[#0a0a0a]">{dateStr}</p>
+                <p className="text-[11px] text-[#a3a3a3]">{timeStr}</p>
+              </div>
             </div>
           </div>
         );
