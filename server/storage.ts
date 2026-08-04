@@ -681,6 +681,13 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     ein: row.ein != null ? String(row.ein) : null,
     logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
     dashboardColor: row.dashboard_color != null ? String(row.dashboard_color) : null,
+    inventoryLossRates: (() => {
+      try {
+        const raw = row.inventory_loss_rates;
+        if (raw == null) return { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 };
+        return typeof raw === "string" ? JSON.parse(raw) : raw;
+      } catch { return { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 }; }
+    })(),
     accountTypes: toStringArray(row.account_types),
     accountStatuses: toStringArray(row.account_statuses),
     accountIndustries: toStringArray(row.account_industries),
@@ -2961,9 +2968,9 @@ export class PostgresStorage implements IStorage {
         website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
-        requirement_types, requirement_statuses, requirement_severities
+        requirement_types, requirement_statuses, requirement_severities, inventory_loss_rates
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
       )
       ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
@@ -2989,7 +2996,8 @@ export class PostgresStorage implements IStorage {
         location_statuses = EXCLUDED.location_statuses,
         requirement_types = EXCLUDED.requirement_types,
         requirement_statuses = EXCLUDED.requirement_statuses,
-        requirement_severities = EXCLUDED.requirement_severities`,
+        requirement_severities = EXCLUDED.requirement_severities,
+        inventory_loss_rates = EXCLUDED.inventory_loss_rates`,
       [
         tenantId,
         next.organizationName,
@@ -3016,6 +3024,7 @@ export class PostgresStorage implements IStorage {
         next.requirementTypes,
         next.requirementStatuses,
         next.requirementSeverities,
+        next.inventoryLossRates != null ? JSON.stringify(next.inventoryLossRates) : null,
       ],
     );
 

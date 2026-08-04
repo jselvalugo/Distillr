@@ -25,6 +25,7 @@ type PlatformConfig = {
   dspNumber: string | null;
   ein: string | null;
   dashboardColor: string | null;
+  inventoryLossRates: Record<string, number> | null;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -943,9 +944,178 @@ function SystemTab({ user }: { user: { email: string; role: string } | null }) {
   );
 }
 
+// ─── Inventory Loss Rates Tab ─────────────────────────────────────────────────
+
+const LOSS_RATE_META: { key: string; label: string; unit: string; benchmark: string; why: string; ref: string }[] = [
+  {
+    key: "Labels",
+    label: "Labels",
+    unit: "units",
+    benchmark: "3–7%",
+    why: "Labeling machine misfeeds, tears during application, misalignment rejects, adhesive failures. High-speed rotary labelers typically run 4–6% waste.",
+    ref: "Industry: PMC Global / PMMI Packaging Study",
+  },
+  {
+    key: "Caps",
+    label: "Caps / Closures",
+    unit: "units",
+    benchmark: "1–3%",
+    why: "Misapplied or stripped threads (screw caps), cracked corks, capper mis-feeds. Lower waste than labels due to simpler application mechanics.",
+    ref: "Industry: Glass & Closure Suppliers Assoc.",
+  },
+  {
+    key: "Empty Bottles",
+    label: "Empty Bottles",
+    unit: "units",
+    benchmark: "0.3–1%",
+    why: "Glass breakage during unboxing, conveyor transfer, and line handling. Tempered glass reduces this; older equipment increases it.",
+    ref: "Industry: FEVE European Container Glass Federation",
+  },
+  {
+    key: "Wax",
+    label: "Bottle Wax",
+    unit: "lbs",
+    benchmark: "4–8%",
+    why: "Wax dripping from dipped bottles during cooling, over-dipping waste, and wax left in the dip pot. Roughly 1 oz wasted per 12 bottles at standard dip depth.",
+    ref: "Craft distillery ops benchmarks",
+  },
+  {
+    key: "Molasses",
+    label: "Molasses",
+    unit: "gallons",
+    benchmark: "3–6%",
+    why: "Pump and hose transfer residual, drum/tote carryover (typically 0.5–2 gal per 55-gal drum), minor evaporation, and yeast starter waste. TTB requires recording all raw materials used per 27 CFR § 19.582.",
+    ref: "27 CFR § 19.582; craft distillery ops",
+  },
+  {
+    key: "Cane Sugar",
+    label: "Cane Sugar",
+    unit: "lbs",
+    benchmark: "2–4%",
+    why: "Bag residual (~0.5 lb per 50-lb bag), spillage during transfer, clumping from humidity absorption, and dissolving losses in the mash vessel.",
+    ref: "27 CFR § 19.582; craft distillery ops",
+  },
+  {
+    key: "Unused Barrels",
+    label: "Unused Barrels",
+    unit: "units",
+    benchmark: "0%",
+    why: "Barrels stored before filling do not incur process loss. Loss tracking begins at the fill stage (barrel aging records).",
+    ref: "TTB Form 5110.40 Part III",
+  },
+];
+
+function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined }) {
+  const qc = useQueryClient();
+  const defaults: Record<string, number> = { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 };
+  const [rates, setRates] = useState<Record<string, string>>(() => {
+    const src = config?.inventoryLossRates ?? defaults;
+    return Object.fromEntries(LOSS_RATE_META.map(m => [m.key, String(src[m.key] ?? defaults[m.key] ?? 0)]));
+  });
+
+  const save = useMutation({
+    mutationFn: () => apiRequest("/api/platform-config", {
+      method: "PATCH",
+      body: JSON.stringify({
+        inventoryLossRates: Object.fromEntries(
+          Object.entries(rates).map(([k, v]) => [k, parseFloat(v) || 0])
+        ),
+      }),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/platform-config"] }); toast.success("Loss rates saved"); },
+    onError: () => toast.error("Failed to save"),
+  });
+
+  return (
+    <div className="px-5 sm:px-8 py-6 space-y-6 max-w-3xl">
+
+      <SectionCard
+        title="Process Loss Rates"
+        description="Expected material waste during production operations. These rates drive the 'Est. Process Loss' and 'Net Usable' calculations shown in the Inventory table. Rates are percentages (e.g. enter 5 for 5%)."
+      >
+        <div className="rounded-lg border border-[#e5e5e5] overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-[#f7f7f7] border-b border-[#e5e5e5]">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a] w-36">Material</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a]">Why Loss Occurs</th>
+                <th className="text-center px-4 py-2.5 font-semibold text-[#0a0a0a] w-28">Benchmark</th>
+                <th className="text-center px-4 py-2.5 font-semibold text-[#0a0a0a] w-28">Your Rate (%)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f0f0f0]">
+              {LOSS_RATE_META.map(m => (
+                <tr key={m.key} className="hover:bg-[#fafafa]">
+                  <td className="px-4 py-3 font-medium text-[#0a0a0a] align-top">{m.label}</td>
+                  <td className="px-4 py-3 text-[#737373] align-top">
+                    <p>{m.why}</p>
+                    <p className="text-[10px] text-[#a3a3a3] mt-1 italic">{m.ref}</p>
+                  </td>
+                  <td className="px-4 py-3 text-center align-top">
+                    <span className="inline-block bg-blue-50 text-blue-700 rounded px-2 py-0.5 text-[11px] font-mono">{m.benchmark}</span>
+                  </td>
+                  <td className="px-4 py-3 text-center align-top">
+                    <div className="flex items-center justify-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={rates[m.key] ?? "0"}
+                        onChange={e => setRates(r => ({ ...r, [m.key]: e.target.value }))}
+                        className="w-16 text-center text-xs border border-[#e5e5e5] rounded px-2 py-1 font-mono focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
+                      />
+                      <span className="text-[#a3a3a3]">%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={() => save.mutate()} disabled={save.isPending} size="sm">
+            {save.isPending ? "Saving…" : "Save Loss Rates"}
+          </Button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="How This Works"
+        description="The loss calculation is applied at the category level across all items in that category."
+      >
+        <div className="space-y-3 text-xs text-[#737373]">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="font-semibold text-amber-800 mb-1">Formula</p>
+            <p className="font-mono text-amber-700">Est. Process Loss = On Hand × (Rate ÷ 100)</p>
+            <p className="font-mono text-amber-700">Net Usable = On Hand − Est. Process Loss</p>
+          </div>
+          <p>
+            <strong className="text-[#0a0a0a]">Example — Labels at 5%:</strong> If you have 2,000 labels on hand,
+            expect ~100 to be wrecked during the bottling run (misfeeds, tears, jams). Plan your runs around
+            1,900 net usable labels.
+          </p>
+          <p>
+            <strong className="text-[#0a0a0a]">TTB Note:</strong> Raw material losses (Molasses, Cane Sugar) must
+            be recorded as part of your production records under <span className="font-mono">27 CFR § 19.582</span>.
+            These estimates help you reconcile actual usage against purchased quantity. Actual discrepancies should
+            be noted in your batch production records.
+          </p>
+          <p>
+            <strong className="text-[#0a0a0a]">Recommendation:</strong> Review these rates quarterly against actual
+            waste counts from your bottling runs and mash logs. Adjust upward if your equipment is older or your
+            crew is training; adjust downward as processes improve.
+          </p>
+        </div>
+      </SectionCard>
+
+    </div>
+  );
+}
+
 // ─── Sidebar nav ──────────────────────────────────────────────────────────────
 
-type Tab = "org-info" | "branding" | "regulatory" | "export" | "import" | "system";
+type Tab = "org-info" | "branding" | "regulatory" | "inventory" | "export" | "import" | "system";
 
 const NAV_GROUPS = [
   {
@@ -961,6 +1131,13 @@ const NAV_GROUPS = [
     icon: Shield,
     items: [
       { key: "regulatory" as Tab, label: "TTB & Standards" },
+    ],
+  },
+  {
+    group: "Operations",
+    icon: Database,
+    items: [
+      { key: "inventory" as Tab, label: "Inventory & Loss Rates" },
     ],
   },
   {
@@ -1048,6 +1225,7 @@ export default function Settings() {
           {tab === "org-info"    && <OrganizationTab config={config} />}
           {tab === "branding"    && <BrandingTab config={config} />}
           {tab === "regulatory"  && <RegulatoryTab config={config} />}
+          {tab === "inventory"   && <InventoryLossRatesTab config={config} />}
           {tab === "export"      && <ExportTab />}
           {tab === "import"      && <ImportTab />}
           {tab === "system"      && <SystemTab user={user} />}

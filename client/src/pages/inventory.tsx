@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Trash2, Plus, PackageOpen, Tag, Circle, Barrel, Droplets } from "lucide-react";
+import { Pencil, Trash2, Plus, PackageOpen, Tag, Circle, Barrel, Droplets, FlaskConical, Wheat } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
@@ -14,7 +14,7 @@ import type { InventoryItem, InventoryLot } from "@shared/schema";
 // ---------------------------------------------------------------------------
 // Category config
 // ---------------------------------------------------------------------------
-type CategoryKey = "bottles" | "labels" | "caps" | "barrels" | "wax";
+type CategoryKey = "bottles" | "labels" | "caps" | "barrels" | "wax" | "molasses" | "sugar";
 
 const CATEGORY_CONFIG: Record<CategoryKey, {
   label: string;
@@ -63,6 +63,22 @@ const CATEGORY_CONFIG: Record<CategoryKey, {
     unitOptions: ["lbs", "kg", "oz", "gallons"],
     namePlaceholder: "e.g. Black Bottle Wax",
     Icon: Droplets,
+  },
+  molasses: {
+    label: "Molasses",
+    dbCategory: "Molasses",
+    defaultUnit: "gallons",
+    unitOptions: ["gallons", "drums", "totes"],
+    namePlaceholder: "e.g. Blackstrap Molasses — 55-gal Drum",
+    Icon: FlaskConical,
+  },
+  sugar: {
+    label: "Cane Sugar",
+    dbCategory: "Cane Sugar",
+    defaultUnit: "lbs",
+    unitOptions: ["lbs", "kg", "bags"],
+    namePlaceholder: "e.g. Raw Cane Sugar — 50-lb Bag",
+    Icon: Wheat,
   },
 };
 
@@ -130,6 +146,16 @@ export default function Inventory() {
     queryFn: () => apiRequest("/api/inventory/lots"),
   });
 
+  const { data: platformConfig } = useQuery<{ inventoryLossRates?: Record<string, number> | null }>({
+    queryKey: ["/api/platform-config"],
+    queryFn: () => apiRequest("/api/platform-config"),
+    staleTime: 60_000,
+  });
+
+  const lossRates: Record<string, number> = platformConfig?.inventoryLossRates ?? {
+    "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0,
+  };
+
   // ---------------------------------------------------------------------------
   // Derived data for current tab
   // ---------------------------------------------------------------------------
@@ -157,6 +183,11 @@ export default function Inventory() {
       .filter(Boolean) as string[];
     if (!dates.length) return null;
     return dates.sort().at(-1)!;
+  }
+
+  function lossRate(dbCategory: string): number | null {
+    const r = lossRates[dbCategory];
+    return (r !== undefined && r > 0) ? r : null;
   }
 
   // ---------------------------------------------------------------------------
@@ -386,6 +417,10 @@ export default function Inventory() {
                   <Th />
                   <Th>Name / Description</Th>
                   <Th>On Hand</Th>
+                  {lossRate(cfg.dbCategory) !== null && <>
+                    <Th className="hidden md:table-cell text-amber-700">Est. Loss</Th>
+                    <Th className="hidden md:table-cell text-[#15803d]">Net Usable</Th>
+                  </>}
                   <Th>Unit</Th>
                   <Th>Last Received</Th>
                   <Th>Lots</Th>
@@ -421,6 +456,16 @@ export default function Inventory() {
                             {fmtNum(qty, 0)}
                           </span>
                         </Td>
+                        {(() => {
+                          const rate = lossRate(cfg.dbCategory);
+                          if (rate === null) return null;
+                          const loss = Math.ceil(qty * rate / 100);
+                          const usable = qty - loss;
+                          return (<>
+                            <Td className="hidden md:table-cell text-xs text-amber-600 font-medium">−{loss.toLocaleString()} ({rate}%)</Td>
+                            <Td className="hidden md:table-cell text-xs text-[#15803d] font-medium">{usable.toLocaleString()}</Td>
+                          </>);
+                        })()}
                         <Td className="text-xs text-[#737373]">{item.unitOfMeasure}</Td>
                         <Td className="text-xs text-[#737373]">{last ? fmt(last) : "—"}</Td>
                         <Td className="text-xs text-[#737373]">{itemLots.length}</Td>
