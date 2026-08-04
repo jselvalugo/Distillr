@@ -95,6 +95,20 @@ interface BatchFull {
 }
 
 // ---------------------------------------------------------------------------
+// FormSection — Agiloft-style horizontal section divider
+// ---------------------------------------------------------------------------
+function FormSection({ title }: { title: string }) {
+  return (
+    <div className="col-span-2 flex items-center gap-3 pt-2">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-[#a3a3a3] shrink-0 select-none">
+        {title}
+      </span>
+      <div className="flex-1 h-px bg-[#e5e5e5]" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 const STAGES = [
@@ -291,6 +305,8 @@ function PlanningForm({ data }: { data: BatchFull }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
+
+        <FormSection title="Batch Identity" />
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Batch Code *</label>
           <Input
@@ -304,9 +320,11 @@ function PlanningForm({ data }: { data: BatchFull }) {
           <Input
             value={form.productName}
             onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
-            placeholder="e.g. Libertalia Rum"
+            placeholder="e.g. Libertalia, Riskey, Pitorro…"
           />
         </div>
+
+        <FormSection title="Classification" />
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Type *</label>
           <Select
@@ -320,13 +338,15 @@ function PlanningForm({ data }: { data: BatchFull }) {
           </Select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Class / Type</label>
+          <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Class / Sub-type</label>
           <Input
             value={form.spiritClass}
             onChange={(e) => setForm((f) => ({ ...f, spiritClass: e.target.value }))}
             placeholder="e.g. Dark Rum, White Rum, Aged Rum"
           />
         </div>
+
+        <FormSection title="Scheduling" />
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Batch Date *</label>
           <Input
@@ -343,6 +363,7 @@ function PlanningForm({ data }: { data: BatchFull }) {
             placeholder="Optional notes"
           />
         </div>
+
       </div>
       <div className="flex justify-between items-center pt-2">
         <Button variant="outline" size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
@@ -432,12 +453,22 @@ function MashForm({ data }: { data: BatchFull }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Show Libertalia yeast field if product is Libertalia (or unrecognised/unset → show both).
+  // Show Riskey yeast field if product is Riskey (or unrecognised/unset → show both).
+  const productLower = (batch.productName ?? "").toLowerCase();
+  const isLibertalia = productLower.includes("libertalia");
+  const isRiskey = productLower.includes("riskey");
+  const showLibertalia = isLibertalia || (!isLibertalia && !isRiskey);
+  const showRiskey = isRiskey || (!isLibertalia && !isRiskey);
+
   return (
     <div className="space-y-4">
       <TtbInfoBox>
         ℹ️ TTB requires tracking of all raw materials used in production per 27 CFR § 19.582
       </TtbInfoBox>
       <div className="grid grid-cols-2 gap-4">
+
+        <FormSection title="Mash Setup" />
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Mash Date *</label>
           <Input
@@ -456,6 +487,8 @@ function MashForm({ data }: { data: BatchFull }) {
             placeholder="Total liquid volume"
           />
         </div>
+
+        <FormSection title="Ingredients & Fermentation" />
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Molasses (gallons)</label>
           <Input
@@ -474,24 +507,28 @@ function MashForm({ data }: { data: BatchFull }) {
             onChange={(e) => setForm((f) => ({ ...f, lbsSugar: e.target.value }))}
           />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Libertalia Yeast Packets</label>
-          <Input
-            type="number"
-            min="0"
-            value={form.libertaliaYeastPackets}
-            onChange={(e) => setForm((f) => ({ ...f, libertaliaYeastPackets: e.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Riskey Yeast Packets</label>
-          <Input
-            type="number"
-            min="0"
-            value={form.riskeyYeastPackets}
-            onChange={(e) => setForm((f) => ({ ...f, riskeyYeastPackets: e.target.value }))}
-          />
-        </div>
+        {showLibertalia && (
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Libertalia Yeast Packets</label>
+            <Input
+              type="number"
+              min="0"
+              value={form.libertaliaYeastPackets}
+              onChange={(e) => setForm((f) => ({ ...f, libertaliaYeastPackets: e.target.value }))}
+            />
+          </div>
+        )}
+        {showRiskey && (
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Riskey Yeast Packets</label>
+            <Input
+              type="number"
+              min="0"
+              value={form.riskeyYeastPackets}
+              onChange={(e) => setForm((f) => ({ ...f, riskeyYeastPackets: e.target.value }))}
+            />
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Yeast Pitch Date</label>
           <Input
@@ -528,14 +565,16 @@ function MashForm({ data }: { data: BatchFull }) {
             placeholder="0–100"
           />
         </div>
+
+        <FormSection title="Notes" />
         <div className="col-span-2">
-          <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
           <Input
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             placeholder="Optional fermentation notes"
           />
         </div>
+
       </div>
       <div className="flex justify-between items-center pt-2">
         <div className="flex items-center gap-2">
