@@ -4072,7 +4072,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       production: [
         { header: "batchCode",             hint: "Required — e.g. BATCH-2024-001" },
         { header: "stage",                 hint: "planning | mash_fermentation | distillation | barreling | aging | bottling | closed" },
-        { header: "batchDate",             hint: "Required — YYYY-MM-DD" },
+        { header: "batchDate",             hint: "Required — YYYY-MM-DD (mash/start date)" },
+        { header: "productionMonth",       hint: "YYYY-MM — month distillation occurred; auto-derived from distillDate if blank" },
         { header: "status",                hint: "Draft | In Progress | Completed | Closed" },
         { header: "productName",           hint: "e.g. WhiskeyTech Reserve" },
         { header: "spiritType",            hint: "e.g. rum, whiskey, bourbon" },
