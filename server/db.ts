@@ -697,6 +697,12 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS fill_date TEXT;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS target_dump_date TEXT;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS amount_received_gallons DOUBLE PRECISION;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS production_month TEXT;
+
+    -- Backfill production_month from distill_date for existing records
+    UPDATE distilling_batch_records
+      SET production_month = SUBSTRING(distill_date, 1, 7)
+      WHERE production_month IS NULL AND distill_date IS NOT NULL AND distill_date != '';
 
     -- Tenant isolation columns (for migrating existing single-tenant deployments)
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';

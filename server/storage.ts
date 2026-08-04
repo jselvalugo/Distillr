@@ -616,6 +616,7 @@ function mapDistillingBatchRecord(row: Record<string, unknown>): DistillingBatch
     fillDate: toNullableText(row.fill_date),
     targetDumpDate: toNullableText(row.target_dump_date),
     amountReceivedGallons: toFiniteNumber(row.amount_received_gallons),
+    productionMonth: toNullableText(row.production_month),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -2233,6 +2234,10 @@ export class PostgresStorage implements IStorage {
   async createDistillingBatchRecord(record: InsertDistillingBatchRecord): Promise<DistillingBatchRecord> {
     const now = new Date().toISOString();
     const tenantId = getCurrentTenantId();
+    const distillDateForInsert = record.distillDate || null;
+    const productionMonthForInsert = record.productionMonth
+      ?? (distillDateForInsert ? distillDateForInsert.slice(0, 7) : null);
+
     const rows = await query(
       `INSERT INTO distilling_batch_records (
         id, tenant_id, batch_code, batch_date, stage, status,
@@ -2243,11 +2248,11 @@ export class PostgresStorage implements IStorage {
         bottling_date, bottling_proof, wine_gallons_bottled, proof_gallons_processed,
         cases_750ml, cases_1000ml, cases_1750ml, total_cases,
         lot_number, tax_class, excise_tax_due, distill_date, fill_date,
-        target_dump_date, amount_received_gallons,
+        target_dump_date, amount_received_gallons, production_month,
         created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39
+        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
       ) RETURNING *`,
       [
         record.id || generateId("DBATCH"),
@@ -2283,10 +2288,11 @@ export class PostgresStorage implements IStorage {
         record.lotNumber || null,
         record.taxClass || null,
         record.exciseTaxDue ?? null,
-        record.distillDate || null,
+        distillDateForInsert,
         record.fillDate || null,
         record.targetDumpDate || null,
         record.amountReceivedGallons ?? null,
+        productionMonthForInsert,
         record.createdAt || now,
         record.updatedAt || now,
       ],
@@ -2312,6 +2318,15 @@ export class PostgresStorage implements IStorage {
       updatedAt: new Date().toISOString(),
     };
 
+    // Auto-derive productionMonth from distillDate — set when distillation date is first recorded.
+    // This ensures the batch counts for the month it was distilled, not the month mashing started.
+    if (next.distillDate && !next.productionMonth) {
+      next.productionMonth = next.distillDate.slice(0, 7);
+    } else if (updates.distillDate && next.productionMonth) {
+      // If distillDate is explicitly updated, re-derive productionMonth unless it was manually set.
+      next.productionMonth = updates.distillDate.slice(0, 7);
+    }
+
     const tenantId = getCurrentTenantId();
     const rows = await query(
       `UPDATE distilling_batch_records SET
@@ -2323,9 +2338,9 @@ export class PostgresStorage implements IStorage {
         bottling_date = $22, bottling_proof = $23, wine_gallons_bottled = $24, proof_gallons_processed = $25,
         cases_750ml = $26, cases_1000ml = $27, cases_1750ml = $28, total_cases = $29,
         lot_number = $30, tax_class = $31, excise_tax_due = $32, distill_date = $33, fill_date = $34,
-        target_dump_date = $35, amount_received_gallons = $36,
-        updated_at = $37
-      WHERE id = $1 AND tenant_id = $38
+        target_dump_date = $35, amount_received_gallons = $36, production_month = $37,
+        updated_at = $38
+      WHERE id = $1 AND tenant_id = $39
       RETURNING *`,
       [
         id,
@@ -2337,7 +2352,7 @@ export class PostgresStorage implements IStorage {
         next.bottlingDate ?? null, next.bottlingProof ?? null, next.wineGallonsBottled ?? null, next.proofGallonsProcessed ?? null,
         next.cases750ml ?? null, next.cases1000ml ?? null, next.cases1750ml ?? null, next.totalCases ?? null,
         next.lotNumber ?? null, next.taxClass ?? null, next.exciseTaxDue ?? null, next.distillDate ?? null, next.fillDate ?? null,
-        next.targetDumpDate ?? null, next.amountReceivedGallons ?? null,
+        next.targetDumpDate ?? null, next.amountReceivedGallons ?? null, next.productionMonth ?? null,
         next.updatedAt,
         tenantId,
       ],
@@ -2759,8 +2774,13 @@ export class PostgresStorage implements IStorage {
       this.getSalesOrders(),
       this.getDistillingInventoryRecords(),
     ]);
+    // Filter by productionMonth (distillation month) when available; fall back to batchDate for
+    // pre-distillation stages so they still appear in the month they were started.
     const batches = reportMonth
-      ? allBatches.filter(b => b.batchDate.startsWith(reportMonth))
+      ? allBatches.filter(b => {
+          const effectiveMonth = (b as any).productionMonth ?? b.batchDate.slice(0, 7);
+          return effectiveMonth === reportMonth;
+        })
       : allBatches;
     const salesOrders = reportMonth
       ? allOrders.filter(o => o.orderDate.startsWith(reportMonth))

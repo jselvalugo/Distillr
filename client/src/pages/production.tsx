@@ -86,6 +86,7 @@ type BatchRow = DistillingBatchRecord & {
   amountReceivedGallons?: number | null;
   distillDate?: string | null;
   fillDate?: string | null;
+  productionMonth?: string | null;
   // Joined from distilling_inventory_records
   invCasesToDistributors?: number | null;
   invCasesToRetail?: number | null;
@@ -545,7 +546,7 @@ export default function Production() {
               <Tr>
                 <Th>Batch Code</Th>
                 <Th>Product</Th>
-                <Th>Date</Th>
+                <Th>Production Month</Th>
                 <Th className="hidden sm:table-cell">Dist / Retail</Th>
                 <Th className="hidden md:table-cell">Proof Gal</Th>
                 <Th className="hidden md:table-cell">Tax Due</Th>
@@ -569,7 +570,27 @@ export default function Production() {
                   >
                     <Td className="font-mono font-medium text-[#0a0a0a]">{b.batchCode}</Td>
                     <Td className="text-[#737373]">{(b as any).productName ?? "—"}</Td>
-                    <Td className="text-[#737373]">{fmt(b.batchDate)}</Td>
+                    <Td className="text-[#737373]">
+                      {(() => {
+                        const pm = (b as any).productionMonth as string | null | undefined;
+                        const batchMonth = b.batchDate.slice(0, 7);
+                        if (pm) {
+                          const label = new Date(pm + "-02").toLocaleDateString("en-US", { month: "short", year: "numeric" });
+                          const differsFromBatch = pm !== batchMonth;
+                          return (
+                            <span>
+                              {label}
+                              {differsFromBatch && (
+                                <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 rounded px-1" title={`Mash started ${fmt(b.batchDate)}`}>
+                                  distilled
+                                </span>
+                              )}
+                            </span>
+                          );
+                        }
+                        return fmt(b.batchDate);
+                      })()}
+                    </Td>
                     <Td className="hidden sm:table-cell text-xs">
                       {((b as any).invCasesToDistributors || (b as any).invCasesToRetail) ? (
                         <span>
