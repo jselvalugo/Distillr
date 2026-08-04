@@ -799,6 +799,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
         method: "PATCH",
         body: JSON.stringify({
           fillNumber: form.fillNumber || null,
+          batchCode: form.fillNumber || undefined,
           fillProof: fp || null,
           fillWineGallons: wg || null,
           fillProofGallons: fpg,
