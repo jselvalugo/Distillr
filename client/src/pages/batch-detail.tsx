@@ -607,7 +607,7 @@ function DistillationForm({ data }: { data: BatchFull }) {
   const { batch, productionRecord: pr } = data;
   const [form, setForm] = useState({
     distillDate: pr?.distillDate ?? new Date().toISOString().slice(0, 10),
-    stillType: batch.stillType ?? "",
+    stillType: batch.stillType ?? "hybrid_column",
     wineGallonsProduced: String(pr?.gallonsDistilled ?? ""),
     distillationProof: String(batch.distillationProof ?? ""),
     lowWinesVolume: "",
@@ -688,7 +688,7 @@ function DistillationForm({ data }: { data: BatchFull }) {
             <option value="">— Select still type —</option>
             <option value="pot">Pot Still</option>
             <option value="column">Column Still</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="hybrid_column">Hybrid Column Still</option>
           </Select>
         </div>
         <div>
@@ -2082,7 +2082,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     yeastDate:              pr?.yeastDate ?? "",
     // Distillation
     distillDate:          (batch as any).distillDate ?? pr?.distillDate ?? "",
-    stillType:            (batch as any).stillType ?? "",
+    stillType:            (batch as any).stillType ?? "hybrid_column",
     gallonsDistilled:     String(pr?.gallonsDistilled ?? ""),
     distillationProof:    String((batch as any).distillationProof ?? ""),
     proofGallonsProduced: String((batch as any).proofGallonsProduced ?? ""),
@@ -2266,7 +2266,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               <option value="">— Select —</option>
               <option value="pot">Pot Still</option>
               <option value="column">Column Still</option>
-              <option value="hybrid">Hybrid</option>
+              <option value="hybrid_column">Hybrid Column Still</option>
             </Select>
           </div>
           {inp("Wine Gallons Distilled", "gallonsDistilled", { type: "number", step: "0.01" })}
