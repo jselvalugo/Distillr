@@ -892,14 +892,6 @@ function BarrelingForm({ data }: { data: BatchFull }) {
           </Select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Container Serial Number</label>
-          <Input
-            value={form.serialNumber}
-            onChange={(e) => setForm((f) => ({ ...f, serialNumber: e.target.value }))}
-            placeholder="e.g. BARREL-001"
-          />
-        </div>
-        <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Date of Fill *</label>
           <Input
             type="date"
@@ -1008,6 +1000,7 @@ function AgingForm({ data }: { data: BatchFull }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const [targetDumpDate, setTargetDumpDate] = useState((batch as any).targetDumpDate ?? "");
+  const [serialNumber, setSerialNumber] = useState(barrel?.serialNumber ?? "");
   const [gauge, setGauge] = useState({ gaugeDate: today, currentProof: "", currentWineGallons: "", notes: "" });
   const [tempLog, setTempLog] = useState({ tempDate: today, outdoorTemp: "", notes: "" });
   const [dump, setDump] = useState({ dumpDate: today, amountReceived: "", proofAtDump: "", notes: "" });
@@ -1048,6 +1041,14 @@ function AgingForm({ data }: { data: BatchFull }) {
       body: JSON.stringify({ targetDumpDate: targetDumpDate || null }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Target date saved"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saveSerialNumber = useMutation({
+    mutationFn: () => barrelId
+      ? apiRequest(`/api/barrels/${barrelId}`, { method: "PATCH", body: JSON.stringify({ serialNumber: serialNumber || null }) })
+      : Promise.reject(new Error("No barrel record yet")),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Serial number saved"); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -1127,9 +1128,19 @@ function AgingForm({ data }: { data: BatchFull }) {
             <p className="text-xs text-[#737373]">Product</p>
             <p className="text-sm font-semibold text-[#0a0a0a]">{batch.productName ?? "—"}</p>
           </div>
-          <div>
-            <p className="text-xs text-[#737373]">Barrel</p>
-            <p className="text-sm font-mono font-medium">{barrel?.serialNumber ?? "—"}</p>
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-xs text-[#737373] mb-1">Container Serial Number</label>
+            <div className="flex gap-2">
+              <Input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="e.g. BARREL-001"
+                className="h-7 text-xs font-mono"
+              />
+              <Button size="sm" variant="outline" onClick={() => saveSerialNumber.mutate()} disabled={saveSerialNumber.isPending} className="shrink-0">
+                Save
+              </Button>
+            </div>
           </div>
           <div>
             <p className="text-xs text-[#737373]">Amount Aging</p>
