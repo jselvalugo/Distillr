@@ -146,7 +146,7 @@ export default function Inventory() {
     queryFn: () => apiRequest("/api/inventory/lots"),
   });
 
-  const { data: platformConfig } = useQuery<{ inventoryLossRates?: Record<string, number> | null }>({
+  const { data: platformConfig } = useQuery<{ inventoryLossRates?: Record<string, number> | null; productLabelCounts?: Record<string, number> | null }>({
     queryKey: ["/api/platform-config"],
     queryFn: () => apiRequest("/api/platform-config"),
     staleTime: 60_000,
@@ -540,6 +540,55 @@ export default function Inventory() {
           )}
         </div>
       </div>
+
+      {/* ── Label Demand by Product (Labels tab only) ── */}
+      {tab === "labels" && (() => {
+        const labelCounts: Record<string, number> = platformConfig?.productLabelCounts ?? { "Pitorro": 4, "Riskey": 2 };
+        const lossRatePct = lossRates["Labels"] ?? 5;
+        const totalOnHand = tabItems.reduce((sum, item) => {
+          const q = lots.filter(l => l.inventoryItemId === item.id).reduce((s, l) => s + l.quantity, 0);
+          return sum + q;
+        }, 0);
+        const netUsable = Math.floor(totalOnHand - Math.ceil(totalOnHand * lossRatePct / 100));
+        return (
+          <div className="px-5 sm:px-8 py-4">
+            <div className="bg-white border border-[#e5e5e5] rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-[#f0f0f0] bg-[#fafafa] flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[#0a0a0a]">Label Demand by Product</p>
+                  <p className="text-xs text-[#737373] mt-0.5">How many bottles can be fully labeled from current net usable stock ({lossRatePct}% process loss applied)</p>
+                </div>
+                <span className="text-xs text-[#a3a3a3]">Net usable: <span className="font-mono font-medium text-[#0a0a0a]">{netUsable.toLocaleString()}</span> labels</span>
+              </div>
+              <div className="p-5">
+                <div className="rounded-lg border border-[#e5e5e5] overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-[#f7f7f7] border-b border-[#e5e5e5]">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a]">Product</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a]">Labels / Bottle</th>
+                        <th className="text-right px-4 py-2.5 font-semibold text-[#15803d]">Bottles Coverable</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f0f0f0]">
+                      {Object.entries(labelCounts).map(([product, count]) => (
+                        <tr key={product} className="hover:bg-[#fafafa]">
+                          <td className="px-4 py-3 font-medium text-[#0a0a0a]">{product}</td>
+                          <td className="px-4 py-3 text-[#737373]">{count} label{count !== 1 ? "s" : ""}</td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold text-[#15803d]">
+                            {count > 0 ? Math.floor(netUsable / count).toLocaleString() : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-[#a3a3a3] mt-2">Label counts are configured in Settings → Inventory &amp; Loss Rates.</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── New Intake Dialog ── */}
       <Dialog

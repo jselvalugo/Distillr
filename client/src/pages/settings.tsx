@@ -26,6 +26,7 @@ type PlatformConfig = {
   ein: string | null;
   dashboardColor: string | null;
   inventoryLossRates: Record<string, number> | null;
+  productLabelCounts: Record<string, number> | null;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1005,6 +1006,12 @@ const LOSS_RATE_META: { key: string; label: string; unit: string; benchmark: str
   },
 ];
 
+// Label breakdown descriptions per product
+const LABEL_BREAKDOWN: Record<string, string> = {
+  "Pitorro": "Front · Back · Neck · Back-neck strip",
+  "Riskey":  "Front · Back",
+};
+
 function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined }) {
   const qc = useQueryClient();
   const defaults: Record<string, number> = { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 };
@@ -1013,7 +1020,14 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
     return Object.fromEntries(LOSS_RATE_META.map(m => [m.key, String(src[m.key] ?? defaults[m.key] ?? 0)]));
   });
 
-  const save = useMutation({
+  // Product label counts state: array of { product, count } for easy add/remove
+  type LabelRow = { product: string; count: string };
+  const [labelRows, setLabelRows] = useState<LabelRow[]>(() => {
+    const src = config?.productLabelCounts ?? { "Pitorro": 4, "Riskey": 2 };
+    return Object.entries(src).map(([product, count]) => ({ product, count: String(count) }));
+  });
+
+  const saveRates = useMutation({
     mutationFn: () => apiRequest("/api/platform-config", {
       method: "PATCH",
       body: JSON.stringify({
@@ -1025,6 +1039,24 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/platform-config"] }); toast.success("Loss rates saved"); },
     onError: () => toast.error("Failed to save"),
   });
+
+  const saveLabelCounts = useMutation({
+    mutationFn: () => apiRequest("/api/platform-config", {
+      method: "PATCH",
+      body: JSON.stringify({
+        productLabelCounts: Object.fromEntries(
+          labelRows
+            .filter(r => r.product.trim())
+            .map(r => [r.product.trim(), parseInt(r.count) || 0])
+        ),
+      }),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/platform-config"] }); toast.success("Label counts saved"); },
+    onError: () => toast.error("Failed to save"),
+  });
+
+  // keep the old `save` alias pointing at rates save so existing JSX still compiles
+  const save = saveRates;
 
   return (
     <div className="px-5 sm:px-8 py-6 space-y-6 max-w-3xl">
@@ -1076,6 +1108,68 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
         <div className="flex justify-end pt-2">
           <Button onClick={() => save.mutate()} disabled={save.isPending} size="sm">
             {save.isPending ? "Saving…" : "Save Loss Rates"}
+          </Button>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Labels per Product"
+        description="Number of labels applied per bottle for each product line. Drives the label demand calculation in the Inventory → Labels tab."
+      >
+        <div className="rounded-lg border border-[#e5e5e5] overflow-hidden mb-3">
+          <table className="w-full text-xs">
+            <thead className="bg-[#f7f7f7] border-b border-[#e5e5e5]">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a] w-40">Product</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a]">Label Breakdown</th>
+                <th className="text-center px-4 py-2.5 font-semibold text-[#0a0a0a] w-28">Labels / Bottle</th>
+                <th className="w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f0f0f0]">
+              {labelRows.map((row, i) => (
+                <tr key={i} className="hover:bg-[#fafafa]">
+                  <td className="px-4 py-2.5 align-middle">
+                    <input
+                      type="text"
+                      value={row.product}
+                      onChange={e => setLabelRows(rows => rows.map((r, j) => j === i ? { ...r, product: e.target.value } : r))}
+                      placeholder="Product name"
+                      className="w-full border border-[#e5e5e5] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 align-middle text-[#737373] italic">
+                    {LABEL_BREAKDOWN[row.product.trim()] ?? "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-center align-middle">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={row.count}
+                      onChange={e => setLabelRows(rows => rows.map((r, j) => j === i ? { ...r, count: e.target.value } : r))}
+                      className="w-16 text-center border border-[#e5e5e5] rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
+                    />
+                  </td>
+                  <td className="px-2 py-2.5 text-center align-middle">
+                    <button
+                      onClick={() => setLabelRows(rows => rows.filter((_, j) => j !== i))}
+                      className="text-[#d1d5db] hover:text-red-400 transition-colors text-sm font-bold"
+                      title="Remove row"
+                    >×</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setLabelRows(rows => [...rows, { product: "", count: "1" }])}
+            className="text-xs text-[var(--brand)] hover:underline"
+          >+ Add product</button>
+          <Button onClick={() => saveLabelCounts.mutate()} disabled={saveLabelCounts.isPending} size="sm">
+            {saveLabelCounts.isPending ? "Saving…" : "Save Label Counts"}
           </Button>
         </div>
       </SectionCard>
