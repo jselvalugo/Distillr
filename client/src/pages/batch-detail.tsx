@@ -1580,9 +1580,26 @@ function toIsoWeek(dateStr: string): string {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+const BOTTLING_VARIANTS: Record<string, string[]> = {
+  riskey: ["Barrel Strength", "Alejandro", "Hybrid Oak"],
+  libertalia: ["Libertalia", "Oak Aged Libertalia"],
+};
+
 function BottlingForm({ data }: { data: BatchFull }) {
   const qc = useQueryClient();
   const { batch, inventoryRecord: inv } = data;
+
+  const baseProd = (batch.productName ?? "").toLowerCase();
+  const variantOptions = BOTTLING_VARIANTS[baseProd] ?? null;
+
+  // Seed the variant if productName was already saved as a variant value
+  const seedVariant = (() => {
+    if (!variantOptions) return "";
+    const allVariants = Object.values(BOTTLING_VARIANTS).flat();
+    return allVariants.includes(batch.productName ?? "") ? (batch.productName ?? "") : "";
+  })();
+
+  const [bottlingVariant, setBottlingVariant] = useState(seedVariant);
 
   const [form, setForm] = useState({
     bottlingDate: batch.bottlingDate ?? new Date().toISOString().slice(0, 10),
@@ -1678,6 +1695,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
   const save = useMutation({
     mutationFn: async () => {
       const pgProcessed = bottlingProof ? totals.wgBottled * bottlingProof / 100 : null;
+      const resolvedProductName = bottlingVariant || batch.productName || null;
       await apiRequest(`/api/distilling/batch-records/${batch.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -1692,6 +1710,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
           lotNumber: form.lotNumber || null,
           exciseTaxDue: taxOwed || null,
           taxClass: form.taxClass || null,
+          productName: resolvedProductName,
         }),
       });
 
@@ -1699,7 +1718,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
         reportWeek: toIsoWeek(form.bottlingDate || new Date().toISOString().slice(0, 10)),
         batchRecordId: batch.id,
         linkedBarrelId: batch.barrelId || null,
-        productName: batch.productName || null,
+        productName: resolvedProductName,
         beginningOfWeekCases: 0,
         currentWeekInventory: totals.casesBottled,
         endingWeekInventory: totals.endingCases,
@@ -1817,6 +1836,17 @@ function BottlingForm({ data }: { data: BatchFull }) {
       <div className="rounded-lg border border-[#e5e5e5] p-4 space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#737373]">Bottling Details</p>
         <div className="grid grid-cols-2 gap-4">
+          {variantOptions && (
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-[#737373] mb-1">Product Name *</label>
+              <Select value={bottlingVariant} onChange={(e) => setBottlingVariant(e.target.value)}>
+                <option value="">— Select product variant —</option>
+                {variantOptions.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Date of Bottling *</label>
             <Input type="date" value={form.bottlingDate} onChange={(e) => setForm(f => ({ ...f, bottlingDate: e.target.value }))} />
