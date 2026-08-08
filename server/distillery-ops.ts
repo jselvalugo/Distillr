@@ -274,11 +274,22 @@ export function prepareBarrelEventForBarrel(
   if (resolvedVolumeChange !== null && !Number.isFinite(resolvedVolumeChange)) {
     throw new Error("Volume change must be a valid number.");
   }
-  if (resolvedVolumeChange !== null && resolvedVolumeChange < 0) {
+  // "dump" (lowercase) is the AgingForm dump event — it intentionally carries a negative
+  // volumeChange so the record reflects liquid removed. Skip the positive-only guard for it.
+  if (resolvedVolumeChange !== null && resolvedVolumeChange < 0 && eventType !== "dump") {
     throw new Error("Volume change must be entered as a positive value.");
   }
 
   let nextVolume = currentVolume;
+
+  // AgingForm dump: negative volumeChange = gallons removed from barrel
+  if (eventType === "dump" && resolvedVolumeChange !== null && resolvedVolumeChange < 0) {
+    const removed = Math.abs(resolvedVolumeChange);
+    if (removed > currentVolume + EPSILON) {
+      throw new Error(`Dump amount (${roundNumber(removed)} gal) exceeds barrel volume (${roundNumber(currentVolume)} gal).`);
+    }
+    nextVolume = roundNumber(Math.max(0, currentVolume - removed));
+  }
 
   if (eventType === "Fill" || eventType === "TopOff") {
     resolvedVolumeChange = ensurePositiveMagnitude(
