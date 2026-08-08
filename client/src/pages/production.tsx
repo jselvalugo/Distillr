@@ -329,7 +329,7 @@ function BatchDetailDialog({ batch, onClose, onEdit }: {
             <DetailRow label="Fill Number" value={b.fillNumber} />
             <DetailRow label="Container Type" value={b.containerType} />
             <DetailRow label="Char Level" value={b.charLevel} />
-            <DetailRow label="Warehouse Zone" value={b.warehouseZone} />
+            <DetailRow label="Location" value={b.warehouseZone} />
             <DetailRow label="Fill Proof" value={b.fillProof ? `${b.fillProof}°` : null} />
             <DetailRow label="Fill Wine Gallons" value={b.fillWineGallons ? `${fmtNum(b.fillWineGallons)} gal` : null} />
             <DetailRow label="Fill Proof Gallons" value={b.fillProofGallons ? `${fmtNum(b.fillProofGallons)} PG` : null} />

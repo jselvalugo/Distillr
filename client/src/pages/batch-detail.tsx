@@ -150,6 +150,56 @@ function calcExciseTax(proofGallons: number, taxClass: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Location Picker — Suite / Zone / Level → "207-C-2"
+// ---------------------------------------------------------------------------
+const LOC_SUITES = ["206", "207", "208"];
+const LOC_ZONES  = ["A", "B", "C"];
+const LOC_LEVELS = ["1", "2", "3"];
+
+function parseLocation(val: string) {
+  const [suite = "", zone = "", level = ""] = val.split("-");
+  return { suite, zone, level };
+}
+
+function LocationPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { suite, zone, level } = parseLocation(value);
+  const emit = (s: string, z: string, l: string) => {
+    const combined = [s, z, l].filter(Boolean).join("-");
+    onChange(combined);
+  };
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Suite</p>
+          <Select value={suite} onChange={(e) => emit(e.target.value, zone, level)}>
+            <option value="">—</option>
+            {LOC_SUITES.map(s => <option key={s} value={s}>{s}</option>)}
+          </Select>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Zone</p>
+          <Select value={zone} onChange={(e) => emit(suite, e.target.value, level)}>
+            <option value="">—</option>
+            {LOC_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+          </Select>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Level</p>
+          <Select value={level} onChange={(e) => emit(suite, zone, e.target.value)}>
+            <option value="">—</option>
+            {LOC_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+          </Select>
+        </div>
+      </div>
+      {value && (
+        <p className="text-[10px] text-[#737373] font-mono">{value}</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stage Progress Bar
 // ---------------------------------------------------------------------------
 function StageProgressBar({ current, labelOverrides }: { current: Stage; labelOverrides?: Partial<Record<Stage, string>> }) {
@@ -808,7 +858,6 @@ function BarrelingForm({ data }: { data: BatchFull }) {
     fillProof: String(batch.fillProof ?? barrel?.fillProof ?? ""),
     fillWineGallons: String(batch.fillWineGallons ?? barrel?.fillVolume ?? ""),
     charLevel: barrel?.charLevel ?? "#2",
-    warehouseLocation: "",
     warehouseZone: barrel?.warehouseZone ?? "",
     notes: barrel?.notes ?? "",
   });
@@ -968,21 +1017,9 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             <option value="N/A">N/A</option>
           </Select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Warehouse Location</label>
-          <Input
-            value={form.warehouseLocation}
-            onChange={(e) => setForm((f) => ({ ...f, warehouseLocation: e.target.value }))}
-            placeholder="e.g. Warehouse A"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Storage Zone / Rack</label>
-          <Input
-            value={form.warehouseZone}
-            onChange={(e) => setForm((f) => ({ ...f, warehouseZone: e.target.value }))}
-            placeholder="e.g. Zone A, Rack 3"
-          />
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-[#737373] mb-1">Location</label>
+          <LocationPicker value={form.warehouseZone} onChange={(v) => setForm((f) => ({ ...f, warehouseZone: v }))} />
         </div>
         <div className="col-span-2">
           <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
@@ -1262,9 +1299,9 @@ function AgingForm({ data }: { data: BatchFull }) {
               <label className="block text-xs font-medium text-[#737373] mb-1">Container Serial Number</label>
               <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="e.g. TOTE-001" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-[#737373] mb-1">Storage Zone / Rack</label>
-              <Input value={pitorroBarrel.warehouseZone} onChange={(e) => setPitorroBarrel(f => ({ ...f, warehouseZone: e.target.value }))} placeholder="e.g. Zone A" />
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-[#737373] mb-1">Location</label>
+              <LocationPicker value={pitorroBarrel.warehouseZone} onChange={(v) => setPitorroBarrel(f => ({ ...f, warehouseZone: v }))} />
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
@@ -2296,7 +2333,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     fillProof:       String((batch as any).fillProof ?? ""),
     fillWineGallons: String((batch as any).fillWineGallons ?? ""),
     fillProofGallons:String((batch as any).fillProofGallons ?? ""),
-    warehouseZone:   "",
+    warehouseZone:   data.barrel?.warehouseZone ?? "",
     charLevel:       "",
     // Aging
     targetDumpDate:       (batch as any).targetDumpDate ?? "",
@@ -2371,7 +2408,14 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
           pitorroFruit:         form.pitorroFruit || null,
         }),
       });
-      // 2. PATCH production record (mash + distillation) if it exists
+      // 2. PATCH barrel location if barrel exists
+      if (batch.barrelId) {
+        await apiRequest(`/api/barrels/${batch.barrelId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ warehouseZone: form.warehouseZone || null }),
+        });
+      }
+      // 3. PATCH production record (mash + distillation) if it exists
       if (batch.productionRecordId) {
         await apiRequest(`/api/distilling/production-records/${batch.productionRecordId}`, {
           method: "PATCH",
@@ -2530,7 +2574,10 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
             </div>
             <p className="text-[10px] text-[#a3a3a3] mt-0.5">= wine gal × fill proof / 100</p>
           </div>
-          {inp("Warehouse Zone", "warehouseZone", { placeholder: "e.g. Zone A, Rack 3" })}
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-[#737373] mb-1">Location</label>
+            <LocationPicker value={form.warehouseZone} onChange={(v) => setForm(s => ({ ...s, warehouseZone: v }))} />
+          </div>
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Char Level</label>
             <Select value={form.charLevel} onChange={f("charLevel")}>

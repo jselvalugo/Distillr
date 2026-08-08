@@ -70,7 +70,7 @@ function BarrelDetailDialog({ barrel, onClose, onEdit }: {
 
         {(barrel.warehouseZone || barrel.charLevel) && (
           <Section title="Storage">
-            <DetailRow label="Warehouse Zone" value={barrel.warehouseZone} />
+            <DetailRow label="Location" value={barrel.warehouseZone} />
             <DetailRow label="Char Level" value={barrel.charLevel} />
           </Section>
         )}
@@ -225,7 +225,7 @@ export default function Barrels() {
                   <Th className="hidden md:table-cell">Fill Vol.</Th>
                   <Th className="hidden md:table-cell">Proof Gal.</Th>
                   <Th className="hidden md:table-cell">Curr. Vol.</Th>
-                  <Th className="hidden md:table-cell">Zone</Th>
+                  <Th className="hidden md:table-cell">Location</Th>
                   <Th className="hidden md:table-cell">Char</Th>
                   <Th className="hidden md:table-cell">Aging Days</Th>
                   <Th></Th>

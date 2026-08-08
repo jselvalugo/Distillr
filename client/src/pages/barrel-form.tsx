@@ -8,6 +8,48 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import type { Barrel } from "@shared/schema";
 
+const LOC_SUITES = ["206", "207", "208"];
+const LOC_ZONES  = ["A", "B", "C"];
+const LOC_LEVELS = ["1", "2", "3"];
+
+function parseLocation(val: string) {
+  const [suite = "", zone = "", level = ""] = val.split("-");
+  return { suite, zone, level };
+}
+
+function LocationPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { suite, zone, level } = parseLocation(value);
+  const emit = (s: string, z: string, l: string) => onChange([s, z, l].filter(Boolean).join("-"));
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Suite</p>
+          <Select value={suite} onChange={(e) => emit(e.target.value, zone, level)}>
+            <option value="">—</option>
+            {LOC_SUITES.map(s => <option key={s} value={s}>{s}</option>)}
+          </Select>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Zone</p>
+          <Select value={zone} onChange={(e) => emit(suite, e.target.value, level)}>
+            <option value="">—</option>
+            {LOC_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
+          </Select>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Level</p>
+          <Select value={level} onChange={(e) => emit(suite, zone, e.target.value)}>
+            <option value="">—</option>
+            {LOC_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+          </Select>
+        </div>
+      </div>
+      {value && <p className="text-[10px] text-[#737373] font-mono">{value}</p>}
+    </div>
+  );
+}
+
 const PRODUCTS = [
   "Original Pitorro",
   "Coconut Pitorro",
@@ -168,8 +210,8 @@ export default function BarrelForm() {
 
       <FormSection title="Storage Location" subtitle="Warehouse and cooperage details">
         <FormGrid>
-          <Field label="Warehouse Zone" hint="e.g. Rickhouse A, Row 3">
-            <Input value={form.warehouseZone} onChange={set("warehouseZone")} placeholder="Rickhouse A" />
+          <Field label="Location" hint="Suite · Zone · Level (e.g. 207-C-2)" span="full">
+            <LocationPicker value={form.warehouseZone} onChange={(v) => setForm(f => ({ ...f, warehouseZone: v }))} />
           </Field>
           <Field label="Char Level" hint="e.g. #3, #4, Medium+">
             <Input value={form.charLevel} onChange={set("charLevel")} placeholder="#3" />
