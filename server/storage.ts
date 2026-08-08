@@ -617,6 +617,8 @@ function mapDistillingBatchRecord(row: Record<string, unknown>): DistillingBatch
     targetDumpDate: toNullableText(row.target_dump_date),
     amountReceivedGallons: toFiniteNumber(row.amount_received_gallons),
     productionMonth: toNullableText(row.production_month),
+    expectingOutcome: toNullableText(row.expecting_outcome),
+    expectingDate: toNullableText(row.expecting_date),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -2263,10 +2265,11 @@ export class PostgresStorage implements IStorage {
         cases_750ml, cases_1000ml, cases_1750ml, total_cases,
         lot_number, tax_class, excise_tax_due, distill_date, fill_date,
         target_dump_date, amount_received_gallons, production_month,
+        expecting_outcome, expecting_date,
         created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40
+        $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42
       ) RETURNING *`,
       [
         record.id || generateId("DBATCH"),
@@ -2307,6 +2310,8 @@ export class PostgresStorage implements IStorage {
         record.targetDumpDate || null,
         record.amountReceivedGallons ?? null,
         productionMonthForInsert,
+        record.expectingOutcome || null,
+        record.expectingDate || null,
         record.createdAt || now,
         record.updatedAt || now,
       ],
@@ -2353,8 +2358,9 @@ export class PostgresStorage implements IStorage {
         cases_750ml = $26, cases_1000ml = $27, cases_1750ml = $28, total_cases = $29,
         lot_number = $30, tax_class = $31, excise_tax_due = $32, distill_date = $33, fill_date = $34,
         target_dump_date = $35, amount_received_gallons = $36, production_month = $37,
-        updated_at = $38
-      WHERE id = $1 AND tenant_id = $39
+        expecting_outcome = $38, expecting_date = $39,
+        updated_at = $40
+      WHERE id = $1 AND tenant_id = $41
       RETURNING *`,
       [
         id,
@@ -2367,6 +2373,7 @@ export class PostgresStorage implements IStorage {
         next.cases750ml ?? null, next.cases1000ml ?? null, next.cases1750ml ?? null, next.totalCases ?? null,
         next.lotNumber ?? null, next.taxClass ?? null, next.exciseTaxDue ?? null, next.distillDate ?? null, next.fillDate ?? null,
         next.targetDumpDate ?? null, next.amountReceivedGallons ?? null, next.productionMonth ?? null,
+        next.expectingOutcome ?? null, next.expectingDate ?? null,
         next.updatedAt,
         tenantId,
       ],

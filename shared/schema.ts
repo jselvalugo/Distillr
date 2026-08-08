@@ -585,6 +585,8 @@ export const distillingBatchRecordSchema = z.object({
   targetDumpDate: z.string().nullable().optional(),
   amountReceivedGallons: z.number().nullable().optional(),
   productionMonth: z.string().nullable().optional(),
+  expectingOutcome: z.string().nullable().optional(),
+  expectingDate: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -624,6 +626,8 @@ export const insertDistillingBatchRecordSchema = distillingBatchRecordSchema.par
   targetDumpDate: true,
   amountReceivedGallons: true,
   productionMonth: true,
+  expectingOutcome: true,
+  expectingDate: true,
   createdAt: true,
   updatedAt: true,
 });

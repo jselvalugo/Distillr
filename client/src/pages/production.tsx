@@ -87,6 +87,8 @@ type BatchRow = DistillingBatchRecord & {
   distillDate?: string | null;
   fillDate?: string | null;
   productionMonth?: string | null;
+  expectingOutcome?: string | null;
+  expectingDate?: string | null;
   // Joined from distilling_inventory_records
   invCasesToDistributors?: number | null;
   invCasesToRetail?: number | null;
@@ -365,6 +367,8 @@ function BatchDetailDialog({ batch, onClose, onEdit }: {
           <DetailRow label="Spirit Class" value={b.spiritClass} />
           <DetailRow label="Tax Class" value={batch.taxClass ? (TAX_CLASS_LABELS[batch.taxClass] ?? batch.taxClass) : null} />
           <DetailRow label="Notes" value={batch.notes} />
+          <DetailRow label="Expected Outcome" value={b.expectingOutcome} />
+          <DetailRow label="Expected Date" value={fmt(b.expectingDate ?? null)} />
         </Section>
       </div>
 
@@ -443,6 +447,8 @@ export default function Production() {
     { header: "totalCases",            key: "totalCases" },
     { header: "taxClass",              key: "taxClass" },
     { header: "exciseTaxDue",          key: "exciseTaxDue" },
+    { header: "expectingOutcome",      key: "expectingOutcome" },
+    { header: "expectingDate",         key: "expectingDate" },
   ] as const;
 
   async function handleImport() {
@@ -487,6 +493,8 @@ export default function Production() {
               totalCases:            row.totalCases ? +row.totalCases : undefined,
               taxClass:              row.taxClass || undefined,
               exciseTaxDue:          row.exciseTaxDue ? +row.exciseTaxDue : undefined,
+              expectingOutcome:      row.expectingOutcome || undefined,
+              expectingDate:         row.expectingDate || undefined,
             }),
           });
           ok++;

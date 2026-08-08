@@ -258,6 +258,8 @@ function PlanningForm({ data }: { data: BatchFull }) {
     spiritClass: batch.spiritClass ?? "",
     batchDate: batch.batchDate ?? "",
     notes: batch.notes ?? "",
+    expectingOutcome: (batch as any).expectingOutcome ?? "",
+    expectingDate: (batch as any).expectingDate ?? "",
   });
 
   function buildPayload() {
@@ -268,6 +270,8 @@ function PlanningForm({ data }: { data: BatchFull }) {
       spiritClass: form.spiritClass || null,
       batchDate: form.batchDate,
       notes: form.notes || null,
+      expectingOutcome: form.expectingOutcome || null,
+      expectingDate: form.expectingDate || null,
     };
   }
 
@@ -361,6 +365,24 @@ function PlanningForm({ data }: { data: BatchFull }) {
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             placeholder="Optional notes"
+          />
+        </div>
+
+        <FormSection title="Expectations" />
+        <div>
+          <label className="block text-xs font-medium text-[#737373] mb-1">Expected Outcome</label>
+          <Input
+            value={form.expectingOutcome}
+            onChange={(e) => setForm((f) => ({ ...f, expectingOutcome: e.target.value }))}
+            placeholder="e.g. 200 cases Libertalia, 80 PG yield"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#737373] mb-1">Expected Date</label>
+          <Input
+            type="date"
+            value={form.expectingDate}
+            onChange={(e) => setForm((f) => ({ ...f, expectingDate: e.target.value }))}
           />
         </div>
 
@@ -2065,6 +2087,8 @@ function ClosedSummary({ data }: { data: BatchFull }) {
           {pr && <InfoRow label="Gallons Molasses" value={pr.gallonsMolasses ? `${pr.gallonsMolasses} gal` : null} />}
           {pr && <InfoRow label="Cane Sugar" value={pr.lbsSugar ? `${pr.lbsSugar} lbs` : null} />}
           <InfoRow label="Notes" value={batch.notes} />
+          {(batch as any).expectingOutcome && <InfoRow label="Expected Outcome" value={(batch as any).expectingOutcome} />}
+          {(batch as any).expectingDate && <InfoRow label="Expected Date" value={fmt((batch as any).expectingDate)} />}
         </div>
       </div>
     </div>
@@ -2123,6 +2147,8 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     totalCases:             String((batch as any).totalCases ?? ""),
     taxClass:               (batch as any).taxClass ?? "craft_tier1",
     exciseTaxDue:           String((batch as any).exciseTaxDue ?? ""),
+    expectingOutcome:       (batch as any).expectingOutcome ?? "",
+    expectingDate:          (batch as any).expectingDate ?? "",
   });
 
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -2173,6 +2199,8 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
           totalCases:           form.totalCases ? +form.totalCases : null,
           taxClass:             form.taxClass || null,
           exciseTaxDue:         form.exciseTaxDue ? +form.exciseTaxDue : null,
+          expectingOutcome:     form.expectingOutcome || null,
+          expectingDate:        form.expectingDate || null,
         }),
       });
       // 2. PATCH production record (mash + distillation) if it exists
@@ -2252,6 +2280,8 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               className="w-full rounded-md border border-[#e5e5e5] bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-[#b0b0b0] focus:outline-none focus:ring-1 focus:ring-[#0a0a0a] resize-none"
             />
           </div>
+          {inp("Expected Outcome", "expectingOutcome", { placeholder: "e.g. 200 cases Libertalia, 80 PG yield" })}
+          {inp("Expected Date", "expectingDate", { type: "date" })}
         </div>
       </div>
 

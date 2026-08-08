@@ -698,6 +698,8 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS target_dump_date TEXT;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS amount_received_gallons DOUBLE PRECISION;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS production_month TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS expecting_outcome TEXT;
+    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS expecting_date TEXT;
 
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS inventory_loss_rates TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS product_label_counts TEXT;
