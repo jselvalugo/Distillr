@@ -14,7 +14,15 @@ import { Layout } from "../components/layout";
 import { fmtNum } from "../lib/utils";
 import type { DistilleryControlTowerSummary, Stats } from "@shared/schema";
 
-type BatchRow = { id: number; batchCode: string; stage: string; status: string; productName: string | null; batchDate: string };
+type BatchRow = {
+  id: number; batchCode: string; stage: string; status: string;
+  productName: string | null; batchDate: string;
+  cases750ml?: number | null; cases1000ml?: number | null; cases1750ml?: number | null;
+  totalCases?: number | null; bottlingProof?: number | null;
+  wineGallonsBottled?: number | null; proofGallonsProcessed?: number | null;
+  exciseTaxDue?: number | null; lotNumber?: string | null;
+  fillProofGallons?: number | null;
+};
 type PermitRow = { id: number; permitType: string; expirationDate: string | null; status: string; permitNumber: string | null };
 type ColaRow = { id: number; productName: string; status: string; expiresAt: string | null };
 type ExciseRow = { id: number; state: string; dueDate: string; status: string };
@@ -751,6 +759,7 @@ const SECTION_LABELS: Record<string, string> = {
 };
 const DEFAULT_WIDGET_ORDER = ["pipeline", "production", "bottling", "sales_compliance", "calendar", "quickaccess"];
 const WIDGET_ORDER_KEY = "distillr_widget_order";
+const DASHBOARD_VIEW_KEY = "distillr_dashboard_view";
 
 function WidgetShell({
   id, editMode, onMove, isFirst, isLast, children,
@@ -815,6 +824,14 @@ export default function Dashboard() {
     } catch {}
     return DEFAULT_WIDGET_ORDER;
   });
+
+  const [dashboardView, setDashboardView] = useState<"operations" | "processing">(() => {
+    try { return (localStorage.getItem(DASHBOARD_VIEW_KEY) as any) ?? "operations"; } catch { return "operations"; }
+  });
+  function switchView(v: "operations" | "processing") {
+    setDashboardView(v);
+    try { localStorage.setItem(DASHBOARD_VIEW_KEY, v); } catch {}
+  }
 
   function moveWidget(id: string, dir: -1 | 1) {
     setWidgetOrder(prev => {
@@ -951,67 +968,117 @@ export default function Dashboard() {
             <div className="max-w-6xl mx-auto">
               <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">Operations Overview</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">
+                    {dashboardView === "operations" ? "Operations Overview" : "Finished Products"}
+                  </p>
                   <h1 className="text-3xl font-bold text-white leading-none">
-                    {monthLabel}
+                    {dashboardView === "operations" ? monthLabel : "Processing"}
                   </h1>
                 </div>
-                <div className="flex items-center gap-2">
-                  <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Dashboard view tabs */}
+                  <div className="flex rounded-lg overflow-hidden border border-white/10">
+                    {([
+                      { key: "operations", label: "Operations" },
+                      { key: "processing", label: "Finished Products" },
+                    ] as const).map(v => (
+                      <button
+                        key={v.key}
+                        onClick={() => switchView(v.key)}
+                        className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                          dashboardView === v.key
+                            ? "bg-white/15 text-white"
+                            : "text-white/35 hover:text-white hover:bg-white/8"
+                        }`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="w-px h-6 bg-white/15" />
+                  {dashboardView === "operations" && <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />}
+                  {dashboardView === "operations" && <div className="w-px h-6 bg-white/15" />}
                   <NotificationCenter permits={permits} colas={colas} />
                   <div className="w-px h-6 bg-white/15" />
-                  <button
-                    onClick={() => setEditMode(v => !v)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                      editMode ? "bg-white/15 text-white" : "text-white/40 hover:text-white hover:bg-white/10"
-                    }`}
-                    title="Customize layout"
-                  >
-                    <SlidersHorizontal size={12} />
-                    <span className="hidden sm:block">{editMode ? "Done" : "Customize"}</span>
-                  </button>
+                  {dashboardView === "operations" && (
+                    <button
+                      onClick={() => setEditMode(v => !v)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        editMode ? "bg-white/15 text-white" : "text-white/40 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="Customize layout"
+                    >
+                      <SlidersHorizontal size={12} />
+                      <span className="hidden sm:block">{editMode ? "Done" : "Customize"}</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Hero KPI cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: CREAM, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
-                  { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "distilled at still", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
-                  { label: "Cases Bottled", value: fmtNum(casesProduced, 0), sub: "this period", icon: Package, color: "#34d399", pct: relPct(casesProduced, totalSold) },
-                  { label: "Cases Sold", value: fmtNum(totalSold, 0), sub: "fulfilled", icon: ShoppingCart, color: "#60a5fa", pct: relPct(totalSold, casesProduced) },
-                ].map((k) => {
-                  const Icon = k.icon;
-                  return (
-                    <div
-                      key={k.label}
-                      className="rounded-xl p-4 relative overflow-hidden"
-                      style={GLASS_HERO}
-                    >
-                      {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
-                      <div className="flex items-start justify-between mb-3">
-                        <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
-                        <Icon size={14} color={k.color} opacity={0.7} />
+              {/* Hero KPI cards — Operations */}
+              {dashboardView === "operations" && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Active Batches", value: allActiveBatches.length, sub: "in pipeline", icon: Activity, color: CREAM, pct: relPct(allActiveBatches.length, casesProduced, totalSold, proof), accent: true },
+                    { label: "Proof Gallons", value: fmtNum(proof, 1), sub: "distilled at still", icon: Gauge, color: "#818cf8", pct: relPct(proof, gallons) },
+                    { label: "Cases Bottled", value: fmtNum(casesProduced, 0), sub: "this period", icon: Package, color: "#34d399", pct: relPct(casesProduced, totalSold) },
+                    { label: "Cases Sold", value: fmtNum(totalSold, 0), sub: "fulfilled", icon: ShoppingCart, color: "#60a5fa", pct: relPct(totalSold, casesProduced) },
+                  ].map((k) => {
+                    const Icon = k.icon;
+                    return (
+                      <div key={k.label} className="rounded-xl p-4 relative overflow-hidden" style={GLASS_HERO}>
+                        {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
+                        <div className="flex items-start justify-between mb-3">
+                          <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
+                          <Icon size={14} color={k.color} opacity={0.7} />
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <p className="text-3xl font-bold text-white tabular-nums leading-none">{k.value}</p>
+                          {k.pct > 0 && <div className="mb-0.5"><Ring pct={k.pct} size={32} strokeW={3} color={k.color} bg="rgba(255,255,255,0.1)" /></div>}
+                        </div>
+                        <p className="text-[10px] text-white/25 mt-1.5">{k.sub}</p>
                       </div>
-                      <div className="flex items-end gap-2">
-                        <p className="text-3xl font-bold text-white tabular-nums leading-none">{k.value}</p>
-                        {k.pct > 0 && (
-                          <div className="mb-0.5">
-                            <Ring pct={k.pct} size={32} strokeW={3} color={k.color} bg="rgba(255,255,255,0.1)" />
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Hero KPI cards — Processing */}
+              {dashboardView === "processing" && (() => {
+                const closedBatches = allBatches.filter(b => b.stage === "closed" || b.stage === "bottling");
+                const totalCasesAll = closedBatches.reduce((s, b) => s + (b.totalCases ?? 0), 0);
+                const totalExcise = closedBatches.reduce((s, b) => s + (b.exciseTaxDue ?? 0), 0);
+                const totalPgProcessed = closedBatches.reduce((s, b) => s + (b.proofGallonsProcessed ?? 0), 0);
+                const onHand = Math.max(0, totalCasesAll - totalSold);
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: "Cases Produced", value: fmtNum(totalCasesAll, 0), sub: "all finished products", icon: Package, color: CREAM, pct: relPct(totalCasesAll, totalSold), accent: true },
+                      { label: "Cases On Hand", value: fmtNum(onHand, 0), sub: "estimated remaining", icon: Package2, color: "#34d399", pct: relPct(onHand, totalCasesAll) },
+                      { label: "PG Processed", value: fmtNum(totalPgProcessed, 1), sub: "proof gal. at bottling", icon: Gauge, color: "#818cf8", pct: relPct(totalPgProcessed, totalPgProcessed) },
+                      { label: "Excise Tax Due", value: `$${fmtNum(totalExcise, 0)}`, sub: "estimated liability", icon: ShoppingCart, color: "#f59e0b", pct: relPct(totalExcise, totalExcise) },
+                    ].map((k) => {
+                      const Icon = k.icon;
+                      return (
+                        <div key={k.label} className="rounded-xl p-4 relative overflow-hidden" style={GLASS_HERO}>
+                          {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
+                          <div className="flex items-start justify-between mb-3">
+                            <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
+                            <Icon size={14} color={k.color} opacity={0.7} />
                           </div>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-white/25 mt-1.5">{k.sub}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                          <p className="text-3xl font-bold text-white tabular-nums leading-none">{k.value}</p>
+                          <p className="text-[10px] text-white/25 mt-1.5">{k.sub}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
           <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-10">
-            {widgetOrder.map((id, idx) => (
+            {dashboardView === "operations" && widgetOrder.map((id, idx) => (
               <WidgetShell
                 key={id}
                 id={id}
@@ -1207,6 +1274,173 @@ export default function Dashboard() {
                 </>}
               </WidgetShell>
             ))}
+
+            {dashboardView === "processing" && (() => {
+              const closedBatches = allBatches.filter(b => b.stage === "closed" || b.stage === "bottling");
+
+              // By-product aggregation
+              const byProduct: Record<string, { cases750: number; cases1000: number; cases1750: number; total: number; pg: number; excise: number; count: number }> = {};
+              for (const b of closedBatches) {
+                const name = b.productName ?? "Unknown";
+                if (!byProduct[name]) byProduct[name] = { cases750: 0, cases1000: 0, cases1750: 0, total: 0, pg: 0, excise: 0, count: 0 };
+                byProduct[name].cases750 += b.cases750ml ?? 0;
+                byProduct[name].cases1000 += b.cases1000ml ?? 0;
+                byProduct[name].cases1750 += b.cases1750ml ?? 0;
+                byProduct[name].total += b.totalCases ?? 0;
+                byProduct[name].pg += b.proofGallonsProcessed ?? 0;
+                byProduct[name].excise += b.exciseTaxDue ?? 0;
+                byProduct[name].count += 1;
+              }
+              const productRows = Object.entries(byProduct).sort((a, b) => b[1].total - a[1].total);
+
+              // Bottle size totals
+              const sz750 = closedBatches.reduce((s, b) => s + (b.cases750ml ?? 0), 0);
+              const sz1000 = closedBatches.reduce((s, b) => s + (b.cases1000ml ?? 0), 0);
+              const sz1750 = closedBatches.reduce((s, b) => s + (b.cases1750ml ?? 0), 0);
+              const szTotal = sz750 + sz1000 + sz1750 || 1;
+
+              // Recent bottlings
+              const recent = [...closedBatches]
+                .filter(b => b.totalCases)
+                .sort((a, b) => (b.batchDate ?? "").localeCompare(a.batchDate ?? ""))
+                .slice(0, 10);
+
+              return (
+                <>
+                  {/* By Product */}
+                  <div className="rounded-xl overflow-hidden" style={GLASS}>
+                    <div className="px-5 py-4 border-b border-white/10">
+                      <SectionLabel>By Product</SectionLabel>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Product</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">750 ml</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">1 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">1.75 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Total Cases</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">PG Processed</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Excise Tax</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Batches</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productRows.length === 0 && (
+                            <tr><td colSpan={8} className="px-5 py-8 text-center text-white/25 text-xs">No finished products yet</td></tr>
+                          )}
+                          {productRows.map(([name, row]) => (
+                            <tr key={name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                              <td className="px-5 py-3 font-semibold text-white">{name}</td>
+                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases750 > 0 ? fmtNum(row.cases750, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases1000 > 0 ? fmtNum(row.cases1000, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases1750 > 0 ? fmtNum(row.cases1750, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right font-bold text-white tabular-nums">{row.total > 0 ? fmtNum(row.total, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.pg > 0 ? fmtNum(row.pg, 2) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-amber-300 tabular-nums">{row.excise > 0 ? `$${fmtNum(row.excise, 0)}` : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/40 tabular-nums">{row.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Bottle Size Breakdown + Distribution */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Bottle size breakdown */}
+                    <div className="rounded-xl p-5" style={GLASS}>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-5">Bottle Size Mix</p>
+                      <div className="space-y-4">
+                        {[
+                          { label: "750 mL", cases: sz750, color: CREAM_ON_DARK },
+                          { label: "1 L", cases: sz1000, color: "#818cf8" },
+                          { label: "1.75 L", cases: sz1750, color: "#34d399" },
+                        ].map(sz => (
+                          <div key={sz.label}>
+                            <div className="flex justify-between mb-1.5">
+                              <span className="text-xs font-semibold text-white/60">{sz.label}</span>
+                              <span className="text-xs font-bold text-white tabular-nums">{sz.cases > 0 ? fmtNum(sz.cases, 0) : "—"} cases · {sz.cases > 0 ? Math.round((sz.cases / szTotal) * 100) : 0}%</span>
+                            </div>
+                            <FillBar pct={(sz.cases / szTotal) * 100} color={sz.color} height={6} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Distribution channel */}
+                    <div className="rounded-xl p-5" style={GLASS}>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-5">Distribution Channel</p>
+                      <div className="grid grid-cols-3 gap-4 mb-5">
+                        <div>
+                          <p className="text-[9px] text-white/30 uppercase tracking-wider mb-1">Bottled</p>
+                          <p className="text-2xl font-bold text-white tabular-nums">{fmtNum(casesProduced, 0)}</p>
+                          <p className="text-[10px] text-white/25">cases</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] text-white/30 uppercase tracking-wider">Distributor</p></div>
+                          <p className="text-2xl font-bold text-white tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
+                          <p className="text-[10px] text-white/25">cases</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] text-white/30 uppercase tracking-wider">Retail</p></div>
+                          <p className="text-2xl font-bold text-white tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
+                          <p className="text-[10px] text-white/25">cases</p>
+                        </div>
+                      </div>
+                      {(distCases > 0 || retailCases > 0)
+                        ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" />
+                        : <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }} />
+                      }
+                    </div>
+                  </div>
+
+                  {/* Recent Bottlings */}
+                  <div className="rounded-xl overflow-hidden" style={GLASS}>
+                    <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                      <SectionLabel>Recent Bottlings</SectionLabel>
+                      <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-white/40 hover:text-white transition-colors flex items-center gap-1">
+                        View all <ArrowRight size={11} />
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Batch</th>
+                            <th className="text-left px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Product</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Total Cases</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">750 ml</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">1 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">1.75 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden md:table-cell">PG Processed</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden md:table-cell">Label Barrel #</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recent.length === 0 && (
+                            <tr><td colSpan={8} className="px-5 py-8 text-center text-white/25">No bottling records yet</td></tr>
+                          )}
+                          {recent.map(b => (
+                            <tr key={b.id} className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigate(`/production/${b.id}`)}>
+                              <td className="px-5 py-3 font-mono text-white/70">{b.batchCode}</td>
+                              <td className="px-4 py-3 text-white/60">{b.productName ?? "—"}</td>
+                              <td className="px-4 py-3 text-right font-bold text-white tabular-nums">{b.totalCases ? fmtNum(b.totalCases, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases750ml ? fmtNum(b.cases750ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases1000ml ? fmtNum(b.cases1000ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases1750ml ? fmtNum(b.cases1750ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden md:table-cell">{b.proofGallonsProcessed ? fmtNum(b.proofGallonsProcessed, 2) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-white/40 hidden md:table-cell">{b.lotNumber ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
