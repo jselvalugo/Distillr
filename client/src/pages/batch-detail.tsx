@@ -1838,7 +1838,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
         <div className="grid grid-cols-2 gap-4">
           {variantOptions && (
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-[#737373] mb-1">Product Name *</label>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Product Name</label>
               <Select value={bottlingVariant} onChange={(e) => setBottlingVariant(e.target.value)}>
                 <option value="">— Select product variant —</option>
                 {variantOptions.map((v) => (
@@ -1848,7 +1848,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Date of Bottling *</label>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Date of Bottling</label>
             <Input type="date" value={form.bottlingDate} onChange={(e) => setForm(f => ({ ...f, bottlingDate: e.target.value }))} />
           </div>
           <div>
@@ -1856,7 +1856,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
             <Input value={form.lotNumber} onChange={(e) => setForm(f => ({ ...f, lotNumber: e.target.value }))} placeholder="Optional — e.g. barrel # on label" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Proof at Bottling *</label>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Proof at Bottling</label>
             <Input type="number" step="0.1" value={form.bottlingProof} onChange={(e) => setForm(f => ({ ...f, bottlingProof: e.target.value }))} placeholder="e.g. 90.0" />
           </div>
           <div>
@@ -1872,7 +1872,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Tax Class *</label>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Tax Class</label>
             <Select
               value={form.taxClass}
               onChange={(e) => setForm(f => ({ ...f, taxClass: e.target.value }))}
