@@ -761,6 +761,71 @@ const DEFAULT_WIDGET_ORDER = ["pipeline", "production", "bottling", "sales_compl
 const WIDGET_ORDER_KEY = "distillr_widget_order";
 const DASHBOARD_VIEW_KEY = "distillr_dashboard_view";
 
+const DASHBOARD_VIEWS = [
+  { key: "operations",  label: "Operations",        sub: "Production pipeline & compliance",   icon: FlaskConical },
+  { key: "processing",  label: "Finished Products",  sub: "Cases, distribution & excise tax",  icon: Package },
+] as const;
+
+type DashboardViewKey = typeof DASHBOARD_VIEWS[number]["key"];
+
+function DashboardPicker({ value, onChange }: { value: DashboardViewKey; onChange: (v: DashboardViewKey) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = DASHBOARD_VIEWS.find(d => d.key === value) ?? DASHBOARD_VIEWS[0];
+
+  useEffect(() => {
+    function onOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/8 hover:bg-white/12 transition-colors group"
+      >
+        <current.icon size={13} className="text-white/50 group-hover:text-white/70 transition-colors shrink-0" />
+        <div className="text-left">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 leading-none mb-0.5">Dashboard</p>
+          <p className="text-xs font-semibold text-white leading-none">{current.label}</p>
+        </div>
+        {open ? <ChevronUp size={12} className="text-white/40 ml-1 shrink-0" /> : <ChevronDown size={12} className="text-white/40 ml-1 shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/15 overflow-hidden shadow-2xl" style={{ background: "rgba(15,27,66,0.97)", backdropFilter: "blur(20px)", zIndex: 200 }}>
+          <div className="px-3 py-2 border-b border-white/10">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-white/25">Select Dashboard</p>
+          </div>
+          {DASHBOARD_VIEWS.map(d => {
+            const Icon = d.icon;
+            const active = d.key === value;
+            return (
+              <button
+                key={d.key}
+                onClick={() => { onChange(d.key); setOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-white/5 last:border-0 ${active ? "bg-white/12" : "hover:bg-white/8"}`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-white/20" : "bg-white/8"}`}>
+                  <Icon size={15} className={active ? "text-white" : "text-white/40"} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-semibold leading-none mb-1 ${active ? "text-white" : "text-white/60"}`}>{d.label}</p>
+                  <p className="text-[10px] text-white/30 leading-tight truncate">{d.sub}</p>
+                </div>
+                {active && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WidgetShell({
   id, editMode, onMove, isFirst, isLast, children,
 }: {
@@ -971,36 +1036,16 @@ export default function Dashboard() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">
                     {dashboardView === "operations" ? "Operations Overview" : "Finished Products"}
                   </p>
-                  <h1 className="text-3xl font-bold text-white leading-none">
-                    {dashboardView === "operations" ? monthLabel : "Processing"}
-                  </h1>
+                  <h1 className="text-3xl font-bold text-white leading-none">{monthLabel}</h1>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Dashboard view tabs */}
-                  <div className="flex rounded-lg overflow-hidden border border-white/10">
-                    {([
-                      { key: "operations", label: "Operations" },
-                      { key: "processing", label: "Finished Products" },
-                    ] as const).map(v => (
-                      <button
-                        key={v.key}
-                        onClick={() => switchView(v.key)}
-                        className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                          dashboardView === v.key
-                            ? "bg-white/15 text-white"
-                            : "text-white/35 hover:text-white hover:bg-white/8"
-                        }`}
-                      >
-                        {v.label}
-                      </button>
-                    ))}
-                  </div>
+                  <DashboardPicker value={dashboardView} onChange={switchView} />
                   <div className="w-px h-6 bg-white/15" />
-                  {dashboardView === "operations" && <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />}
-                  {dashboardView === "operations" && <div className="w-px h-6 bg-white/15" />}
+                  <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
+                  <div className="w-px h-6 bg-white/15" />
                   <NotificationCenter permits={permits} colas={colas} />
-                  <div className="w-px h-6 bg-white/15" />
-                  {dashboardView === "operations" && (
+                  {dashboardView === "operations" && <>
+                    <div className="w-px h-6 bg-white/15" />
                     <button
                       onClick={() => setEditMode(v => !v)}
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
@@ -1011,7 +1056,7 @@ export default function Dashboard() {
                       <SlidersHorizontal size={12} />
                       <span className="hidden sm:block">{editMode ? "Done" : "Customize"}</span>
                     </button>
-                  )}
+                  </>}
                 </div>
               </div>
 
@@ -1045,7 +1090,10 @@ export default function Dashboard() {
 
               {/* Hero KPI cards — Processing */}
               {dashboardView === "processing" && (() => {
-                const closedBatches = allBatches.filter(b => b.stage === "closed" || b.stage === "bottling");
+                const closedBatches = allBatches.filter(b =>
+                  (b.stage === "closed" || b.stage === "bottling") &&
+                  (!selectedMonth || b.batchDate?.startsWith(selectedMonth))
+                );
                 const totalCasesAll = closedBatches.reduce((s, b) => s + (b.totalCases ?? 0), 0);
                 const totalExcise = closedBatches.reduce((s, b) => s + (b.exciseTaxDue ?? 0), 0);
                 const totalPgProcessed = closedBatches.reduce((s, b) => s + (b.proofGallonsProcessed ?? 0), 0);
