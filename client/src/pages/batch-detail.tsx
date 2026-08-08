@@ -1852,8 +1852,8 @@ function BottlingForm({ data }: { data: BatchFull }) {
             <Input type="date" value={form.bottlingDate} onChange={(e) => setForm(f => ({ ...f, bottlingDate: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Lot Number *</label>
-            <Input value={form.lotNumber} onChange={(e) => setForm(f => ({ ...f, lotNumber: e.target.value }))} placeholder="For label compliance" />
+            <label className="block text-xs font-medium text-[#737373] mb-1">Label Barrel Number</label>
+            <Input value={form.lotNumber} onChange={(e) => setForm(f => ({ ...f, lotNumber: e.target.value }))} placeholder="Optional — e.g. barrel # on label" />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Proof at Bottling *</label>
