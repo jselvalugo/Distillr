@@ -188,7 +188,7 @@ export default function Barrels() {
   return (
     <Layout>
       <PageHeader
-        title="Barrels"
+        title="Aging"
         subtitle={`${barrels.length} barrel${barrels.length !== 1 ? "s" : ""} tracked`}
         actions={
           <>

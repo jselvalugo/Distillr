@@ -73,7 +73,7 @@ const EXPORT_TABLES = [
   { key: "batches",              label: "Production Batches",    desc: "Core batch workflow records",          module: "Production" },
   { key: "production_records",   label: "Production Records",    desc: "Mash & distillation logs",             module: "Production" },
   { key: "inventory_records",    label: "Inventory Records",     desc: "Bottling & inventory",                 module: "Production" },
-  { key: "barrels",              label: "Barrels",               desc: "Barrel tracking and aging",            module: "Production" },
+  { key: "barrels",              label: "Aging",                 desc: "Barrel tracking and aging",            module: "Production" },
   { key: "barrel_events",        label: "Barrel Events",         desc: "Gauge readings, temp & dump records",  module: "Production" },
   { key: "inventory_items",      label: "Inventory Items",       desc: "Item catalog",                         module: "Inventory" },
   { key: "inventory_lots",       label: "Inventory Lots",        desc: "Stock lots",                           module: "Inventory" },

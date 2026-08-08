@@ -154,7 +154,7 @@ export default function BarrelForm() {
     <FormLayout
       title={isEdit ? `Edit Barrel — ${existing?.serialNumber ?? ""}` : "Add Barrel"}
       subtitle={isEdit ? "Update barrel record and storage details" : "Register a new barrel into the aging program"}
-      breadcrumbs={[{ label: "Barrels", href: "/barrels" }, { label: isEdit ? "Edit Barrel" : "Add Barrel" }]}
+      breadcrumbs={[{ label: "Aging", href: "/barrels" }, { label: isEdit ? "Edit Barrel" : "Add Barrel" }]}
       onSave={save}
       saving={mut.isPending}
       saveLabel={isEdit ? "Save Changes" : "Add Barrel"}

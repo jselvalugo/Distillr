@@ -1190,7 +1190,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: "Production", sub: "Manage batches", href: "/production", icon: FlaskConical },
-                      { label: "Barrels", sub: "Aging & tracking", href: "/barrels", icon: Archive },
+                      { label: "Aging", sub: "Aging & tracking", href: "/barrels", icon: Archive },
                       { label: "Inventory", sub: "Lots & items", href: "/inventory", icon: Package },
                       { label: "Sales Orders", sub: "Clients & orders", href: "/sales-orders", icon: ShoppingCart },
                     ].map((nav) => {

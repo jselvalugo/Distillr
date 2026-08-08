@@ -35,7 +35,7 @@ const APP_GROUPS = [
     label: "Operations",
     items: [
       { href: "/production", label: "Production", sub: "Batches & distilling runs", icon: FlaskConical },
-      { href: "/barrels", label: "Barrels", sub: "Aging & warehouse tracking", icon: Layers },
+      { href: "/barrels", label: "Aging", sub: "Aging & warehouse tracking", icon: Layers },
       { href: "/inventory", label: "Inventory", sub: "Lots, items & stock", icon: Package },
       { href: "/floor-plan", label: "Floor Plan", sub: "Equipment & layout", icon: LayoutGrid },
     ],
