@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { LandingNav } from "../components/LandingNav";
 
-const CREAM  = "#FAF0E2";
-const NAVY   = "#0F1B42";
+const WHITE = "#ffffff";
+const BLACK = "#000000";
+const OFF   = "#0a0a0a";
 
 const PLANS = [
   {
@@ -40,69 +41,106 @@ const FAQS = [
 ];
 
 const STYLES = `
-  @keyframes fadein { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadein    { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
   @keyframes slidedown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes floatUp { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes floatUp   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes shimmer   { 0%{background-position:200% center} 100%{background-position:-200% center} }
+  @keyframes scanline  { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  .lnd-hero-gradient-text {
+    background: linear-gradient(
+      110deg,
+      #ffffff 0%,
+      #c8c8c8 20%,
+      #ffffff 35%,
+      #8a8a8a 50%,
+      #ffffff 65%,
+      #c8c8c8 80%,
+      #ffffff 100%
+    );
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 6s linear infinite;
+  }
+
+  .lnd-hero-gradient-span {
+    background: linear-gradient(
+      110deg,
+      #ffffff 0%,
+      #a0a0a0 30%,
+      #ffffff 50%,
+      #606060 70%,
+      #ffffff 100%
+    );
+    background-size: 300% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+  }
+
   .lnd-nav-link {
     font-size: 13px;
-    color: ${NAVY};
+    color: rgba(255,255,255,0.55);
     text-decoration: none;
     padding: 6px 14px;
     border-radius: 8px;
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
   }
-  .lnd-nav-link:hover { background: rgba(15,27,66,0.08); }
+  .lnd-nav-link:hover { background: rgba(255,255,255,0.07); color: #fff; }
 
   .lnd-btn-primary {
-    background: ${NAVY};
-    color: #fff;
+    background: ${WHITE};
+    color: ${BLACK};
     border: none;
     cursor: pointer;
     font-size: 14px;
     font-weight: 700;
     padding: 11px 26px;
     border-radius: 100px;
-    transition: transform 0.18s, box-shadow 0.18s;
+    transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
     line-height: 1;
     letter-spacing: -0.01em;
   }
-  .lnd-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.28); }
+  .lnd-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(255,255,255,0.25); background: #e8e8e8; }
 
   .lnd-btn-outline {
     background: transparent;
-    color: ${NAVY};
-    border: 1.5px solid ${NAVY};
+    color: rgba(255,255,255,0.7);
+    border: 1.5px solid rgba(255,255,255,0.22);
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
     padding: 11px 26px;
     border-radius: 100px;
-    transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+    transition: transform 0.18s, box-shadow 0.18s, background 0.18s, border-color 0.18s, color 0.18s;
     line-height: 1;
+    backdrop-filter: blur(8px);
   }
-  .lnd-btn-outline:hover { transform: translateY(-2px); background: rgba(15,27,66,0.06); }
+  .lnd-btn-outline:hover { transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.4); color: #fff; }
 
   .lnd-btn-signin {
     background: transparent;
-    color: ${NAVY};
+    color: rgba(255,255,255,0.5);
     border: none;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
     padding: 8px 14px;
     border-radius: 8px;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
     line-height: 1;
   }
-  .lnd-btn-signin:hover { background: rgba(15,27,66,0.08); }
+  .lnd-btn-signin:hover { background: rgba(255,255,255,0.07); color: #fff; }
 
   .lnd-btn-getstarted {
-    background: ${NAVY};
-    color: #fff;
+    background: ${WHITE};
+    color: ${BLACK};
     border: none;
     cursor: pointer;
     font-size: 13px;
@@ -112,17 +150,23 @@ const STYLES = `
     transition: transform 0.18s, box-shadow 0.18s;
     line-height: 1;
   }
-  .lnd-btn-getstarted:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,27,66,0.3); }
+  .lnd-btn-getstarted:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,255,255,0.2); }
 
   .lnd-feature-card {
-    background: rgba(15,27,66,0.06);
-    border: 1px solid rgba(15,27,66,0.14);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
     padding: 28px 24px;
-    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     cursor: default;
+    backdrop-filter: blur(12px);
   }
-  .lnd-feature-card:hover { background: rgba(15,27,66,0.1); border-color: rgba(15,27,66,0.22); transform: translateY(-2px); }
+  .lnd-feature-card:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.16);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(255,255,255,0.04);
+  }
 
   .lnd-faq-btn {
     width: 100%;
@@ -147,7 +191,7 @@ const STYLES = `
     margin-bottom: 24px;
     transition: transform 0.18s, box-shadow 0.18s;
   }
-  .lnd-plan-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,27,66,0.25); }
+  .lnd-plan-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.15); }
 
   /* Responsive */
   .lnd-nav-links { display: flex; align-items: center; }
@@ -229,12 +273,12 @@ const STYLES = `
 function FooterBarrelMark() {
   return (
     <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-      <ellipse cx="16" cy="7"  rx="9" ry="3.5" stroke={CREAM} strokeWidth="1.6" />
-      <ellipse cx="16" cy="25" rx="9" ry="3.5" stroke={CREAM} strokeWidth="1.6" />
-      <line x1="7"  y1="7"  x2="7"  y2="25" stroke={CREAM} strokeWidth="1.6" />
-      <line x1="25" y1="7"  x2="25" y2="25" stroke={CREAM} strokeWidth="1.6" />
-      <ellipse cx="16" cy="13" rx="10" ry="3" stroke={CREAM} strokeOpacity="0.35" strokeWidth="1" />
-      <ellipse cx="16" cy="19" rx="10" ry="3" stroke={CREAM} strokeOpacity="0.35" strokeWidth="1" />
+      <ellipse cx="16" cy="7"  rx="9" ry="3.5" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
+      <ellipse cx="16" cy="25" rx="9" ry="3.5" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
+      <line x1="7"  y1="7"  x2="7"  y2="25" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
+      <line x1="25" y1="7"  x2="25" y2="25" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
+      <ellipse cx="16" cy="13" rx="10" ry="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+      <ellipse cx="16" cy="19" rx="10" ry="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
     </svg>
   );
 }
@@ -242,8 +286,8 @@ function FooterBarrelMark() {
 function CreamCheck() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-      <circle cx="9" cy="9" r="9" fill="rgba(250,240,226,0.15)" />
-      <path d="M5.5 9l2.5 2.5 4.5-4.5" stroke={CREAM} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="9" cy="9" r="9" fill="rgba(255,255,255,0.08)" />
+      <path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="rgba(255,255,255,0.8)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -251,16 +295,16 @@ function CreamCheck() {
 function PricingCheck({ featured }: { featured: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-      <circle cx="8" cy="8" r="8" fill={featured ? "rgba(255,255,255,0.12)" : "rgba(15,27,66,0.1)"} />
-      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={featured ? "#fff" : NAVY} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="8" fill={featured ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)"} />
+      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={featured ? "#000" : "rgba(255,255,255,0.7)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 const footerLinks = [
   { l: "Features", h: "/features" },
-  { l: "Pricing", h: "/pricing" },
-  { l: "FAQ", h: "/faq" },
+  { l: "Pricing",  h: "/pricing" },
+  { l: "FAQ",      h: "/faq" },
 ];
 
 export default function Landing() {
@@ -269,8 +313,8 @@ export default function Landing() {
 
   return (
     <div style={{
-      background: CREAM,
-      color: NAVY,
+      background: BLACK,
+      color: WHITE,
       minHeight: "100vh",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
       overflowX: "hidden",
@@ -280,8 +324,21 @@ export default function Landing() {
       <LandingNav />
 
       {/* ── HERO SECTION ── */}
-      <section style={{ background: CREAM, position: "relative" }}>
-        <div className="lnd-hero-inner">
+      <section style={{ background: BLACK, position: "relative", overflow: "hidden" }}>
+
+        {/* Futuristic background aura */}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+          <div style={{ position: "absolute", top: "-20%", left: "30%", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(255,255,255,0.04) 0%, transparent 65%)", filter: "blur(60px)" }} />
+          <div style={{ position: "absolute", bottom: 0, right: "10%", width: 400, height: 300, background: "radial-gradient(ellipse, rgba(255,255,255,0.03) 0%, transparent 70%)", filter: "blur(50px)" }} />
+          {/* Subtle grid lines */}
+          <div style={{
+            position: "absolute", inset: 0,
+            backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
+            backgroundSize: "80px 80px",
+          }} />
+        </div>
+
+        <div className="lnd-hero-inner" style={{ position: "relative", zIndex: 1 }}>
 
           {/* Left column */}
           <div className="lnd-hero-left" style={{ animation: "fadein 0.7s ease-out both" }}>
@@ -290,31 +347,27 @@ export default function Landing() {
               display: "inline-flex",
               alignItems: "center",
               gap: 7,
-              background: `rgba(15,27,66,0.08)`,
-              border: `1px solid rgba(15,27,66,0.18)`,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.14)",
               borderRadius: 100,
               padding: "5px 14px 5px 8px",
               marginBottom: 28,
+              backdropFilter: "blur(12px)",
             }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: NAVY }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: NAVY, letterSpacing: "0.03em" }}>Distillery Operations Platform</span>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: WHITE }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.7)", letterSpacing: "0.03em" }}>Distillery Operations Platform</span>
             </div>
 
-            {/* Headline */}
-            <h1 style={{
+            {/* Headline — glass gradient shimmer */}
+            <h1 className="lnd-hero-gradient-text" style={{
               fontSize: "clamp(2.4rem, 4.5vw, 3.8rem)",
               fontWeight: 800,
               letterSpacing: "-0.035em",
               lineHeight: 1.08,
-              color: NAVY,
               marginBottom: 22,
             }}>
               The modern ERP for{" "}
-              <span style={{
-                textDecoration: "underline wavy",
-                textDecorationColor: NAVY,
-                textUnderlineOffset: "8px",
-              }}>
+              <span className="lnd-hero-gradient-span" style={{ display: "inline" }}>
                 craft spirits
               </span>
               <br />
@@ -325,7 +378,7 @@ export default function Landing() {
             <p style={{
               fontSize: 17,
               lineHeight: 1.7,
-              color: `${NAVY}99`,
+              color: "rgba(255,255,255,0.45)",
               marginBottom: 36,
               maxWidth: 480,
             }}>
@@ -351,7 +404,7 @@ export default function Landing() {
             </div>
 
             {/* Social proof micro-line */}
-            <p style={{ fontSize: 12.5, color: `${NAVY}66`, letterSpacing: "0.01em" }}>
+            <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.3)", letterSpacing: "0.01em" }}>
               ✓ No credit card required &nbsp;·&nbsp; 14-day free trial
             </p>
           </div>
@@ -360,43 +413,44 @@ export default function Landing() {
           <div className="lnd-hero-right" style={{ position: "relative" }}>
             {/* Screenshot frame */}
             <div style={{
-              background: "#fff",
+              background: "rgba(255,255,255,0.04)",
               borderRadius: 16,
-              border: `1px solid rgba(15,27,66,0.12)`,
-              boxShadow: "0 24px 80px rgba(15,27,66,0.18), 0 4px 20px rgba(15,27,66,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 24px 80px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)",
               overflow: "hidden",
               position: "relative",
+              backdropFilter: "blur(12px)",
             }}>
               {/* Browser chrome bar */}
               <div style={{
-                background: "#f4f4f5",
+                background: "rgba(255,255,255,0.05)",
                 padding: "9px 14px",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                borderBottom: "1px solid rgba(0,0,0,0.08)",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
               }}>
                 <div style={{ display: "flex", gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
                 </div>
                 <div style={{
                   flex: 1,
                   maxWidth: 280,
                   margin: "0 auto",
-                  background: "#fff",
-                  border: "1px solid rgba(0,0,0,0.1)",
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
                   borderRadius: 5,
                   padding: "3px 10px",
                   display: "flex",
                   alignItems: "center",
                   gap: 5,
                 }}>
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
-                  <span style={{ fontSize: 10, color: "rgba(0,0,0,0.38)", letterSpacing: "0.01em" }}>app.distillr.io/dashboard</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.01em" }}>app.distillr.io/dashboard</span>
                 </div>
               </div>
               <img
@@ -412,15 +466,16 @@ export default function Landing() {
               bottom: -16,
               left: 20,
               zIndex: 3,
-              background: "#fff",
-              border: `1px solid rgba(15,27,66,0.12)`,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.14)",
               borderRadius: 12,
               padding: "10px 16px",
-              boxShadow: "0 8px 28px rgba(15,27,66,0.14)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
               animation: "floatUp 5s ease-in-out infinite",
+              backdropFilter: "blur(16px)",
             }}>
-              <p style={{ fontSize: 9, color: `${NAVY}66`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Proof Gallons</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, lineHeight: 1, letterSpacing: "-0.03em" }}>265.4</p>
+              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Proof Gallons</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: WHITE, lineHeight: 1, letterSpacing: "-0.03em" }}>265.4</p>
             </div>
 
             {/* Floating stat chip — right */}
@@ -429,47 +484,47 @@ export default function Landing() {
               bottom: -16,
               right: 20,
               zIndex: 3,
-              background: "#fff",
-              border: `1px solid rgba(15,27,66,0.12)`,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.14)",
               borderRadius: 12,
               padding: "10px 16px",
-              boxShadow: "0 8px 28px rgba(15,27,66,0.14)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
               animation: "floatUp 5s ease-in-out 1.5s infinite",
+              backdropFilter: "blur(16px)",
             }}>
-              <p style={{ fontSize: 9, color: `${NAVY}66`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Cases Bottled</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: NAVY, lineHeight: 1, letterSpacing: "-0.03em" }}>248</p>
+              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Cases Bottled</p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: WHITE, lineHeight: 1, letterSpacing: "-0.03em" }}>248</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* ── TRUST STRIP ── */}
-      <section style={{ background: CREAM, paddingTop: 48, paddingBottom: 0 }}>
+      <section style={{ background: BLACK, paddingTop: 48, paddingBottom: 0 }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 48px", textAlign: "center" }}>
-          <p style={{ fontSize: 14, color: `${NAVY}77`, letterSpacing: "0.01em", marginBottom: 20 }}>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.28)", letterSpacing: "0.01em", marginBottom: 20 }}>
             Trusted by craft distilleries across the United States.
           </p>
-          <div style={{ height: 1, background: `rgba(15,27,66,0.12)` }} />
+          <div style={{ height: 1, background: "rgba(255,255,255,0.08)" }} />
         </div>
       </section>
 
-      {/* ── WAVE DIVIDER — cream → navy ── */}
-      <svg viewBox="0 0 1440 100" preserveAspectRatio="none" style={{ display: "block", width: "100%", height: 80, background: CREAM }}>
-        <path d="M0,70 Q120,10 240,70 Q360,10 480,70 Q600,10 720,70 Q840,10 960,70 Q1080,10 1200,70 Q1320,10 1440,70 L1440,100 L0,100 Z" fill={NAVY} />
-      </svg>
+      {/* ── DIVIDER ── */}
+      <div style={{ height: 80, background: BLACK }} />
 
-      {/* ── WHAT IS DISTILLR — navy section ── */}
-      <section style={{ background: NAVY }}>
+      {/* ── WHAT IS DISTILLR ── */}
+      <section style={{ background: OFF }}>
         <div className="lnd-what-inner">
 
           {/* Left: screenshot */}
           <div className="lnd-what-left">
             <div style={{
-              background: "#fff",
+              background: "rgba(255,255,255,0.04)",
               borderRadius: 14,
-              border: `2px solid rgba(250,240,226,0.18)`,
+              border: "1px solid rgba(255,255,255,0.1)",
               overflow: "hidden",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)",
+              backdropFilter: "blur(8px)",
             }}>
               <img
                 src="/dashboard-screenshot.png"
@@ -485,13 +540,13 @@ export default function Landing() {
               fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
               fontWeight: 800,
               letterSpacing: "-0.03em",
-              color: CREAM,
+              color: WHITE,
               lineHeight: 1.12,
               marginBottom: 18,
             }}>
               What is Distillr?
             </h2>
-            <p style={{ fontSize: 16, lineHeight: 1.75, color: "rgba(250,240,226,0.6)", marginBottom: 22 }}>
+            <p style={{ fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.45)", marginBottom: 22 }}>
               Distillr is an end-to-end distillery management platform — handling everything from batch production and barrel tracking to TTB compliance and state excise returns.
             </p>
             <a
@@ -499,12 +554,13 @@ export default function Landing() {
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: CREAM,
+                color: "rgba(255,255,255,0.7)",
                 textDecoration: "underline",
-                textDecorationColor: CREAM,
+                textDecorationColor: "rgba(255,255,255,0.3)",
                 textUnderlineOffset: "4px",
                 display: "inline-block",
                 marginBottom: 32,
+                transition: "color 0.15s",
               }}
             >
               See how it works →
@@ -517,7 +573,7 @@ export default function Landing() {
               ].map((item) => (
                 <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <CreamCheck />
-                  <span style={{ fontSize: 14.5, color: "rgba(250,240,226,0.85)", lineHeight: 1.5 }}>{item}</span>
+                  <span style={{ fontSize: 14.5, color: "rgba(255,255,255,0.7)", lineHeight: 1.5 }}>{item}</span>
                 </div>
               ))}
             </div>
@@ -525,15 +581,15 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── FEATURES GRID — navy section ── */}
-      <section id="features" style={{ background: NAVY, paddingBottom: 80 }}>
+      {/* ── FEATURES GRID ── */}
+      <section id="features" style={{ background: OFF, paddingBottom: 80 }}>
         <div style={{ maxWidth: 1060, margin: "0 auto", padding: "0 48px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(250,240,226,0.55)", marginBottom: 12 }}>Platform</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.5rem)", fontWeight: 800, letterSpacing: "-0.025em", color: CREAM, marginBottom: 14 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Platform</p>
+            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.5rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE, marginBottom: 14 }}>
               Built for every part of your operation.
             </h2>
-            <p style={{ fontSize: 15, color: "rgba(250,240,226,0.5)", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>
+            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>
               Every workflow, every compliance deadline, every TTB report — in one system.
             </p>
           </div>
@@ -546,30 +602,28 @@ export default function Landing() {
               { n: "05", t: "Regulatory Automation", d: "COLA registrations, all 50-state excise returns, permit renewals — tracked with deadline alerts." },
               { n: "06", t: "AI Assistant", d: "Ask about compliance deadlines, batch status, or barrel inventory in plain English and get instant data-backed answers." },
             ].map((f) => (
-              <div key={f.n} className="lnd-feature-card" style={{ background: "rgba(250,240,226,0.05)", border: `1px solid rgba(250,240,226,0.1)` }}>
-                <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: "rgba(250,240,226,0.4)", marginBottom: 12 }}>{f.n}</p>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: CREAM, marginBottom: 9 }}>{f.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.65, color: "rgba(250,240,226,0.45)", margin: 0 }}>{f.d}</p>
+              <div key={f.n} className="lnd-feature-card">
+                <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: "rgba(255,255,255,0.25)", marginBottom: 12 }}>{f.n}</p>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: WHITE, marginBottom: 9 }}>{f.t}</h3>
+                <p style={{ fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.4)", margin: 0 }}>{f.d}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── WAVE DIVIDER — navy → cream ── */}
-      <svg viewBox="0 0 1440 100" preserveAspectRatio="none" style={{ display: "block", width: "100%", height: 80, background: NAVY }}>
-        <path d="M0,30 Q120,90 240,30 Q360,90 480,30 Q600,90 720,30 Q840,90 960,30 Q1080,90 1200,30 Q1320,90 1440,30 L1440,0 L0,0 Z" fill={CREAM} />
-      </svg>
+      {/* ── DIVIDER ── */}
+      <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 48px" }} />
 
       {/* ── PRICING ── */}
-      <section id="pricing" className="lnd-section-pad" style={{ background: CREAM }}>
+      <section id="pricing" className="lnd-section-pad" style={{ background: BLACK }}>
         <div style={{ maxWidth: 1020, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: `${NAVY}88`, marginBottom: 12 }}>Pricing</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.6rem)", fontWeight: 800, letterSpacing: "-0.025em", color: NAVY, marginBottom: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Pricing</p>
+            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.6rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE, marginBottom: 12 }}>
               Simple, transparent pricing.
             </h2>
-            <p style={{ fontSize: 14, color: `${NAVY}88` }}>Month-to-month. No lock-in. 14-day free trial on all plans.</p>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Month-to-month. No lock-in. 14-day free trial on all plans.</p>
           </div>
           <div className="lnd-pricing-grid">
             {PLANS.map((p) => (
@@ -577,9 +631,10 @@ export default function Landing() {
                 borderRadius: 20,
                 padding: "36px 28px",
                 position: "relative",
-                background: p.featured ? NAVY : "#fff",
-                border: p.featured ? `2px solid ${NAVY}` : `1.5px solid rgba(15,27,66,0.12)`,
-                boxShadow: p.featured ? `0 20px 60px rgba(15,27,66,0.28)` : "0 2px 16px rgba(15,27,66,0.06)",
+                background: p.featured ? WHITE : "rgba(255,255,255,0.04)",
+                border: p.featured ? `1px solid rgba(255,255,255,0.9)` : "1px solid rgba(255,255,255,0.1)",
+                boxShadow: p.featured ? `0 0 0 1px rgba(255,255,255,0.2), 0 20px 60px rgba(255,255,255,0.08)` : "none",
+                backdropFilter: p.featured ? "none" : "blur(12px)",
               }}>
                 {p.featured && (
                   <div style={{
@@ -587,8 +642,8 @@ export default function Landing() {
                     top: -14,
                     left: "50%",
                     transform: "translateX(-50%)",
-                    background: CREAM,
-                    color: NAVY,
+                    background: BLACK,
+                    color: WHITE,
                     fontSize: 10,
                     fontWeight: 800,
                     padding: "5px 16px",
@@ -596,25 +651,25 @@ export default function Landing() {
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                     whiteSpace: "nowrap",
-                    boxShadow: `0 4px 16px rgba(15,27,66,0.3)`,
+                    border: "1px solid rgba(255,255,255,0.2)",
                   }}>
                     Most Popular
                   </div>
                 )}
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: p.featured ? "rgba(250,240,226,0.55)" : `${NAVY}88`, marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: p.featured ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.3)", marginBottom: 16 }}>
                   {p.name}
                 </p>
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 3, marginBottom: 8 }}>
-                  <span style={{ fontSize: 44, fontWeight: 900, color: p.featured ? CREAM : NAVY, lineHeight: 1, letterSpacing: "-0.04em" }}>{p.price}</span>
-                  {p.per && <span style={{ fontSize: 14, color: p.featured ? "rgba(250,240,226,0.45)" : `${NAVY}66`, marginBottom: 6 }}>{p.per}</span>}
+                  <span style={{ fontSize: 44, fontWeight: 900, color: p.featured ? BLACK : WHITE, lineHeight: 1, letterSpacing: "-0.04em" }}>{p.price}</span>
+                  {p.per && <span style={{ fontSize: 14, color: p.featured ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.35)", marginBottom: 6 }}>{p.per}</span>}
                 </div>
-                <p style={{ fontSize: 13, color: p.featured ? "rgba(250,240,226,0.55)" : `${NAVY}77`, lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
+                <p style={{ fontSize: 13, color: p.featured ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.4)", lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
                 <button
                   onClick={() => navigate("/signup")}
                   className="lnd-plan-btn"
                   style={{
-                    background: p.featured ? CREAM : NAVY,
-                    color: p.featured ? NAVY : "#fff",
+                    background: p.featured ? BLACK : WHITE,
+                    color: p.featured ? WHITE : BLACK,
                     border: "none",
                   }}
                 >
@@ -624,7 +679,7 @@ export default function Landing() {
                   {p.features.map((f) => (
                     <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
                       <PricingCheck featured={p.featured} />
-                      <span style={{ fontSize: 13, color: p.featured ? "rgba(250,240,226,0.75)" : `${NAVY}cc`, lineHeight: 1.5 }}>{f}</span>
+                      <span style={{ fontSize: 13, color: p.featured ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{f}</span>
                     </div>
                   ))}
                 </div>
@@ -635,11 +690,11 @@ export default function Landing() {
       </section>
 
       {/* ── FAQ ── */}
-      <section id="faq" className="lnd-section-pad" style={{ background: CREAM, paddingTop: 40 }}>
+      <section id="faq" className="lnd-section-pad" style={{ background: BLACK, paddingTop: 40 }}>
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: `${NAVY}88`, marginBottom: 12 }}>FAQ</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 800, letterSpacing: "-0.025em", color: NAVY }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>FAQ</p>
+            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE }}>
               Common questions.
             </h2>
           </div>
@@ -649,20 +704,21 @@ export default function Landing() {
                 key={i}
                 style={{
                   borderRadius: 12,
-                  border: `1.5px solid ${openFaq === i ? `rgba(15,27,66,0.28)` : "rgba(15,27,66,0.1)"}`,
-                  background: openFaq === i ? "rgba(15,27,66,0.04)" : "#fff",
+                  border: `1px solid ${openFaq === i ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`,
+                  background: openFaq === i ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
                   overflow: "hidden",
                   transition: "background 0.2s, border-color 0.2s",
+                  backdropFilter: "blur(8px)",
                 }}
               >
                 <button
                   className="lnd-faq-btn"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                 >
-                  <span style={{ fontSize: 14.5, fontWeight: 600, color: NAVY, lineHeight: 1.4 }}>{faq.q}</span>
+                  <span style={{ fontSize: 14.5, fontWeight: 600, color: openFaq === i ? WHITE : "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>{faq.q}</span>
                   <span style={{
                     fontSize: 20,
-                    color: openFaq === i ? NAVY : `${NAVY}66`,
+                    color: openFaq === i ? WHITE : "rgba(255,255,255,0.3)",
                     flexShrink: 0,
                     transition: "transform .2s, color .2s",
                     transform: openFaq === i ? "rotate(45deg)" : "none",
@@ -673,7 +729,7 @@ export default function Landing() {
                 </button>
                 {openFaq === i && (
                   <div style={{ padding: "0 22px 18px" }}>
-                    <p style={{ fontSize: 13.5, lineHeight: 1.75, color: `${NAVY}88`, margin: 0 }}>{faq.a}</p>
+                    <p style={{ fontSize: 13.5, lineHeight: 1.75, color: "rgba(255,255,255,0.45)", margin: 0 }}>{faq.a}</p>
                   </div>
                 )}
               </div>
@@ -683,36 +739,39 @@ export default function Landing() {
       </section>
 
       {/* ── CTA BANNER ── */}
-      <section className="lnd-section-pad" style={{ background: CREAM }}>
+      <section className="lnd-section-pad" style={{ background: BLACK }}>
         <div style={{ maxWidth: 700, margin: "0 auto" }}>
           <div style={{
-            background: NAVY,
+            background: "rgba(255,255,255,0.04)",
             borderRadius: 24,
             padding: "72px 48px",
             textAlign: "center",
             position: "relative",
             overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+            backdropFilter: "blur(20px)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 80px rgba(0,0,0,0.4)",
           }}>
-            {/* Subtle orb */}
+            {/* Glass highlight orb */}
             <div style={{
               position: "absolute",
-              top: "-30%",
+              top: "-40%",
               left: "50%",
               transform: "translateX(-50%)",
-              width: 500,
-              height: 320,
-              background: `radial-gradient(ellipse, rgba(250,240,226,0.08) 0%, transparent 70%)`,
+              width: 600,
+              height: 360,
+              background: "radial-gradient(ellipse, rgba(255,255,255,0.06) 0%, transparent 65%)",
               filter: "blur(40px)",
               pointerEvents: "none",
             }} />
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(250,240,226,0.5)", marginBottom: 18, position: "relative", zIndex: 1 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 18, position: "relative", zIndex: 1 }}>
               Start Today
             </p>
             <h2 style={{
               fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)",
               fontWeight: 900,
               letterSpacing: "-0.03em",
-              color: "#fff",
+              color: WHITE,
               lineHeight: 1.1,
               marginBottom: 16,
               position: "relative",
@@ -720,17 +779,17 @@ export default function Landing() {
             }}>
               Your distillery deserves<br />better than spreadsheets.
             </h2>
-            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", maxWidth: 420, margin: "0 auto 32px", lineHeight: 1.7, position: "relative", zIndex: 1 }}>
+            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", maxWidth: 420, margin: "0 auto 32px", lineHeight: 1.7, position: "relative", zIndex: 1 }}>
               Join craft distilleries that have replaced manual TTB filings, lost barrel records, and disconnected tools with one platform.
             </p>
             <button
               onClick={() => navigate("/signup")}
               className="lnd-btn-primary"
-              style={{ background: "#fff", color: NAVY, fontSize: 15, padding: "14px 40px", position: "relative", zIndex: 1 }}
+              style={{ fontSize: 15, padding: "14px 40px", position: "relative", zIndex: 1 }}
             >
               Request Access
             </button>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 16, position: "relative", zIndex: 1 }}>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 16, position: "relative", zIndex: 1 }}>
               We'll reach out within 24 hours
             </p>
           </div>
@@ -738,12 +797,12 @@ export default function Landing() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: NAVY, padding: "40px 48px" }}>
+      <footer style={{ background: OFF, padding: "40px 48px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="lnd-footer-inner" style={{ maxWidth: 1060, margin: "0 auto" }}>
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <FooterBarrelMark />
-            <span style={{ fontWeight: 800, fontSize: 15, color: CREAM, letterSpacing: "-0.03em" }}>Distillr</span>
+            <span style={{ fontWeight: 800, fontSize: 15, color: WHITE, letterSpacing: "-0.03em" }}>Distillr</span>
           </div>
           {/* Nav links */}
           <div className="lnd-footer-links">
@@ -751,30 +810,30 @@ export default function Landing() {
               <a
                 key={lk.l}
                 href={lk.h}
-                style={{ fontSize: 13, color: "rgba(250,240,226,0.45)", textDecoration: "none", transition: "color 0.15s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(250,240,226,0.85)")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(250,240,226,0.45)")}
+                style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none", transition: "color 0.15s" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
               >
                 {lk.l}
               </a>
             ))}
             <button
               onClick={() => navigate("/login")}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(250,240,226,0.45)", padding: 0, transition: "color 0.15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(250,240,226,0.85)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(250,240,226,0.45)")}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.3)", padding: 0, transition: "color 0.15s" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
             >
               Sign in
             </button>
           </div>
           {/* Copyright */}
-          <p style={{ fontSize: 12, color: "rgba(250,240,226,0.25)", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", margin: 0 }}>
             &copy; {new Date().getFullYear()} Distillr &middot; A Loogo Labs Software
           </p>
         </div>
 
         {/* Legal links row */}
-        <div style={{ maxWidth: 1060, margin: "20px auto 0", paddingTop: 20, borderTop: "1px solid rgba(250,240,226,0.07)", display: "flex", flexWrap: "wrap", gap: "8px 24px", justifyContent: "center" }}>
+        <div style={{ maxWidth: 1060, margin: "20px auto 0", paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: "8px 24px", justifyContent: "center" }}>
           {[
             { l: "Privacy Policy", h: "/privacy" },
             { l: "Terms of Service", h: "/terms" },
@@ -783,9 +842,9 @@ export default function Landing() {
             <a
               key={lk.l}
               href={lk.h}
-              style={{ fontSize: 11.5, color: "rgba(250,240,226,0.28)", textDecoration: "none", transition: "color 0.15s" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "rgba(250,240,226,0.65)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(250,240,226,0.28)")}
+              style={{ fontSize: 11.5, color: "rgba(255,255,255,0.18)", textDecoration: "none", transition: "color 0.15s" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.18)")}
             >
               {lk.l}
             </a>
