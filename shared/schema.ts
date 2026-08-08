@@ -587,6 +587,7 @@ export const distillingBatchRecordSchema = z.object({
   productionMonth: z.string().nullable().optional(),
   expectingOutcome: z.string().nullable().optional(),
   expectingDate: z.string().nullable().optional(),
+  pitorroFruit: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -628,6 +629,7 @@ export const insertDistillingBatchRecordSchema = distillingBatchRecordSchema.par
   productionMonth: true,
   expectingOutcome: true,
   expectingDate: true,
+  pitorroFruit: true,
   createdAt: true,
   updatedAt: true,
 });

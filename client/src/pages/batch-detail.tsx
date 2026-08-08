@@ -152,7 +152,7 @@ function calcExciseTax(proofGallons: number, taxClass: string): number {
 // ---------------------------------------------------------------------------
 // Stage Progress Bar
 // ---------------------------------------------------------------------------
-function StageProgressBar({ current }: { current: Stage }) {
+function StageProgressBar({ current, labelOverrides }: { current: Stage; labelOverrides?: Partial<Record<Stage, string>> }) {
   const currentIdx = STAGES.indexOf(current);
   const isClosed = current === "closed";
   const pct = STAGES.length > 1 ? Math.round((currentIdx / (STAGES.length - 1)) * 100) : 100;
@@ -169,7 +169,7 @@ function StageProgressBar({ current }: { current: Stage }) {
           </span>
           <div>
             <p className="text-[10px] text-[#737373] font-medium uppercase tracking-wider leading-none mb-0.5">Current Stage</p>
-            <p className="text-sm font-bold text-[#0a0a0a] leading-none">{STAGE_LABELS[current]}</p>
+            <p className="text-sm font-bold text-[#0a0a0a] leading-none">{(labelOverrides?.[current]) ?? STAGE_LABELS[current]}</p>
           </div>
         </div>
         <div className="text-right">
@@ -208,7 +208,7 @@ function StageProgressBar({ current }: { current: Stage }) {
                   done ? "text-[#22c55e] font-medium" :
                   "text-[#a3a3a3]"
                 }`}>
-                  {STAGE_LABELS[stage]}
+                  {(labelOverrides?.[stage]) ?? STAGE_LABELS[stage]}
                 </span>
               </div>
             );
@@ -321,11 +321,15 @@ function PlanningForm({ data }: { data: BatchFull }) {
         </div>
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Product Name</label>
-          <Input
+          <Select
             value={form.productName}
             onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
-            placeholder="e.g. Libertalia, Riskey, Pitorro…"
-          />
+          >
+            <option value="">— Select product —</option>
+            <option value="Libertalia">Libertalia</option>
+            <option value="Riskey">Riskey</option>
+            <option value="Pitorro">Pitorro</option>
+          </Select>
         </div>
 
         <FormSection title="Classification" />
@@ -910,6 +914,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             <option value="new_oak_barrel">New Oak Barrel</option>
             <option value="used_barrel">Used Oak Barrel</option>
             <option value="tank">Stainless Tank</option>
+            <option value="tote">Tote</option>
             <option value="other">Other</option>
           </Select>
         </div>
@@ -959,6 +964,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             <option value="#3">#3</option>
             <option value="#4">#4</option>
             <option value="Hybrid">Hybrid</option>
+            <option value="Fruit">Fruit</option>
             <option value="N/A">N/A</option>
           </Select>
         </div>
@@ -1020,6 +1026,7 @@ function AgingForm({ data }: { data: BatchFull }) {
   const { batch, barrel } = data;
   const barrelId = batch.barrelId as string | null;
   const [activeTab, setActiveTab] = useState<AgingTab>("gauge");
+  const isPitorro = (batch.productName ?? "").toLowerCase() === "pitorro";
 
   const today = new Date().toISOString().slice(0, 10);
   const [targetDumpDate, setTargetDumpDate] = useState((batch as any).targetDumpDate ?? "");
@@ -1027,6 +1034,21 @@ function AgingForm({ data }: { data: BatchFull }) {
   const [gauge, setGauge] = useState({ gaugeDate: today, currentProof: "", currentWineGallons: "", notes: "" });
   const [tempLog, setTempLog] = useState({ tempDate: today, outdoorTemp: "", notes: "" });
   const [dump, setDump] = useState({ dumpDate: today, amountReceived: "", proofAtDump: "", notes: "" });
+
+  // Pitorro-specific barreling fields (embedded in Aging for Pitorro batches)
+  const [pitorroFruit, setPitorroFruit] = useState((batch as any).pitorroFruit ?? "");
+  const [pitorroBarrel, setPitorroBarrel] = useState({
+    fillNumber: batch.fillNumber ?? "",
+    fillDate: barrel?.fillDate ?? today,
+    fillProof: String(batch.fillProof ?? barrel?.fillProof ?? ""),
+    fillWineGallons: String(batch.fillWineGallons ?? barrel?.fillVolume ?? ""),
+    charLevel: barrel?.charLevel ?? "Fruit",
+    warehouseZone: barrel?.warehouseZone ?? "",
+    notes: barrel?.notes ?? "",
+  });
+  const pitorroWg = parseFloat(pitorroBarrel.fillWineGallons);
+  const pitorroFp = parseFloat(pitorroBarrel.fillProof);
+  const pitorroFpg = pitorroWg && pitorroFp ? ((pitorroWg * pitorroFp * 2) / 100).toFixed(2) : null;
 
   const { data: events = [] } = useQuery<BarrelEvent[]>({
     queryKey: [`/api/barrels/${barrelId}/events`],
@@ -1073,6 +1095,48 @@ function AgingForm({ data }: { data: BatchFull }) {
       ? apiRequest(`/api/barrels/${barrelId}`, { method: "PATCH", body: JSON.stringify({ serialNumber: serialNumber || null }) })
       : Promise.reject(new Error("No barrel record yet")),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Serial number saved"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const savePitorroData = useMutation({
+    mutationFn: async () => {
+      const fpg = pitorroFpg ? parseFloat(pitorroFpg) : null;
+      await apiRequest(`/api/distilling/batch-records/${batch.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          pitorroFruit: pitorroFruit || null,
+          fillNumber: pitorroBarrel.fillNumber || null,
+          batchCode: pitorroBarrel.fillNumber || undefined,
+          fillProof: pitorroFp || null,
+          fillWineGallons: pitorroWg || null,
+          fillProofGallons: fpg,
+          containerType: "tote",
+          fillDate: pitorroBarrel.fillDate || null,
+        }),
+      });
+      const barrelBody = {
+        serialNumber: serialNumber || null,
+        fillDate: pitorroBarrel.fillDate || null,
+        fillProof: pitorroFp || null,
+        fillVolume: pitorroWg || null,
+        fillProofGallons: fpg,
+        warehouseZone: pitorroBarrel.warehouseZone || null,
+        charLevel: pitorroBarrel.charLevel || null,
+        notes: pitorroBarrel.notes || null,
+        status: "Aging",
+        originBatchId: batch.id,
+        productName: batch.productName || null,
+      };
+      let bId = batch.barrelId as string | null | undefined;
+      if (bId) {
+        await apiRequest(`/api/barrels/${bId}`, { method: "PATCH", body: JSON.stringify(barrelBody) });
+      } else {
+        const created = await apiRequest<{ id: string }>("/api/barrels", { method: "POST", body: JSON.stringify(barrelBody) });
+        bId = created.id;
+        await apiRequest(`/api/distilling/batch-records/${batch.id}`, { method: "PATCH", body: JSON.stringify({ barrelId: bId }) });
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Pitorro data saved"); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -1144,9 +1208,80 @@ function AgingForm({ data }: { data: BatchFull }) {
         ℹ️ Gauge records support TTB bonded storage balance calculations (Form 5110.40, Part III)
       </TtbInfoBox>
 
+      {/* Pitorro Barreling/Aging Fields */}
+      {isPitorro && (
+        <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 space-y-4">
+          <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Barreling / Aging Details</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Pitorro Fruit</label>
+              <Select value={pitorroFruit} onChange={(e) => setPitorroFruit(e.target.value)}>
+                <option value="">— Select fruit —</option>
+                <option value="Original">Original</option>
+                <option value="Coconut">Coconut</option>
+                <option value="Citrus">Citrus</option>
+                <option value="Coffee">Coffee</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Fill Number *</label>
+              <Input value={pitorroBarrel.fillNumber} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillNumber: e.target.value }))} placeholder="TTB fill number / container ID" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Container Type</label>
+              <Input value="Tote" disabled className="bg-[#f5f5f5] text-[#737373]" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Date of Fill *</label>
+              <Input type="date" value={pitorroBarrel.fillDate} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillDate: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">ABV% at Fill *</label>
+              <Input type="number" step="0.1" max="100" value={pitorroBarrel.fillProof} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillProof: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Wine Gallons Filled *</label>
+              <Input type="number" step="0.01" value={pitorroBarrel.fillWineGallons} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillWineGallons: e.target.value }))} />
+            </div>
+            <div>
+              <CalcField label="Proof Gallons Deposited to Bond" value={pitorroFpg} subNote="= wine gallons × ABV% × 2 / 100" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Char Level</label>
+              <Select value={pitorroBarrel.charLevel} onChange={(e) => setPitorroBarrel(f => ({ ...f, charLevel: e.target.value }))}>
+                <option value="#1">#1</option>
+                <option value="#2">#2</option>
+                <option value="#3">#3</option>
+                <option value="#4">#4</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="Fruit">Fruit</option>
+                <option value="N/A">N/A</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Container Serial Number</label>
+              <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="e.g. TOTE-001" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Storage Zone / Rack</label>
+              <Input value={pitorroBarrel.warehouseZone} onChange={(e) => setPitorroBarrel(f => ({ ...f, warehouseZone: e.target.value }))} placeholder="e.g. Zone A" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
+              <Input value={pitorroBarrel.notes} onChange={(e) => setPitorroBarrel(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => savePitorroData.mutate()} disabled={savePitorroData.isPending}>
+              {savePitorroData.isPending ? "Saving…" : "Save Barreling/Aging Data"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Aging Summary */}
       <div className="bg-[#f7f7f7] rounded-xl border border-[#e5e5e5] p-4">
-        <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-3">Aging Summary</p>
+        <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-3">{isPitorro ? "Barreling/Aging Summary" : "Aging Summary"}</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-[#737373]">Product</p>
@@ -2150,6 +2285,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     exciseTaxDue:           String((batch as any).exciseTaxDue ?? ""),
     expectingOutcome:       (batch as any).expectingOutcome ?? "",
     expectingDate:          (batch as any).expectingDate ?? "",
+    pitorroFruit:           (batch as any).pitorroFruit ?? "",
   });
 
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -2202,6 +2338,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
           exciseTaxDue:         form.exciseTaxDue ? +form.exciseTaxDue : null,
           expectingOutcome:     form.expectingOutcome || null,
           expectingDate:        form.expectingDate || null,
+          pitorroFruit:         form.pitorroFruit || null,
         }),
       });
       // 2. PATCH production record (mash + distillation) if it exists
@@ -2327,8 +2464,20 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
 
       {/* Barreling */}
       <div>
-        <SectionTitle title="Barreling" />
+        <SectionTitle title={form.productName.toLowerCase() === "pitorro" ? "Barreling / Aging" : "Barreling"} />
         <div className="grid grid-cols-2 gap-4">
+          {form.productName.toLowerCase() === "pitorro" && (
+            <div>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Pitorro Fruit</label>
+              <Select value={form.pitorroFruit} onChange={f("pitorroFruit")}>
+                <option value="">— Select fruit —</option>
+                <option value="Original">Original</option>
+                <option value="Coconut">Coconut</option>
+                <option value="Citrus">Citrus</option>
+                <option value="Coffee">Coffee</option>
+              </Select>
+            </div>
+          )}
           {inp("Fill Number", "fillNumber", { placeholder: "TTB fill number" })}
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Container Type</label>
@@ -2337,6 +2486,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               <option value="new_oak_barrel">New Oak Barrel</option>
               <option value="used_barrel">Used Oak Barrel</option>
               <option value="tank">Stainless Tank</option>
+              <option value="tote">Tote</option>
               <option value="other">Other</option>
             </Select>
           </div>
@@ -2360,6 +2510,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               <option value="#3">#3</option>
               <option value="#4">#4</option>
               <option value="Hybrid">Hybrid</option>
+              <option value="Fruit">Fruit</option>
             </Select>
           </div>
         </div>
@@ -2677,7 +2828,10 @@ export default function BatchDetail() {
       </div>
 
       {/* Stage Progress Bar */}
-      <StageProgressBar current={currentStage} />
+      <StageProgressBar
+        current={currentStage}
+        labelOverrides={(batch.productName ?? "").toLowerCase() === "pitorro" ? { aging: "Barreling/Aging" } : undefined}
+      />
 
       {/* Main Tabs */}
       <div className="flex gap-1 px-6 border-b border-[#e5e5e5] bg-white">
@@ -2702,7 +2856,9 @@ export default function BatchDetail() {
             {currentStage !== "closed" && (
               <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
                 <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">
-                  {STAGE_LABELS[currentStage]}
+                  {currentStage === "aging" && (batch.productName ?? "").toLowerCase() === "pitorro"
+                    ? "Barreling / Aging"
+                    : STAGE_LABELS[currentStage]}
                 </h2>
                 {renderCurrentForm()}
               </div>
