@@ -1,40 +1,40 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 
-const CREAM = "#FAF0E2";
-const NAVY = "#0F1B42";
+const WHITE = "#ffffff";
+const BLACK = "#000000";
 
 const NAV_STYLES = `
   @keyframes slidedown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
 
   .lnd-nav-link {
     font-size: 13px;
-    color: ${NAVY};
+    color: rgba(255,255,255,0.55);
     text-decoration: none;
     padding: 6px 14px;
     border-radius: 8px;
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
   }
-  .lnd-nav-link:hover { background: rgba(15,27,66,0.08); }
+  .lnd-nav-link:hover { background: rgba(255,255,255,0.07); color: #fff; }
 
   .lnd-btn-signin {
     background: transparent;
-    color: ${NAVY};
+    color: rgba(255,255,255,0.55);
     border: none;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
     padding: 8px 14px;
     border-radius: 8px;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
     line-height: 1;
   }
-  .lnd-btn-signin:hover { background: rgba(15,27,66,0.08); }
+  .lnd-btn-signin:hover { background: rgba(255,255,255,0.07); color: #fff; }
 
   .lnd-btn-getstarted {
-    background: ${NAVY};
-    color: #fff;
+    background: ${WHITE};
+    color: ${BLACK};
     border: none;
     cursor: pointer;
     font-size: 13px;
@@ -44,11 +44,11 @@ const NAV_STYLES = `
     transition: transform 0.18s, box-shadow 0.18s;
     line-height: 1;
   }
-  .lnd-btn-getstarted:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,27,66,0.3); }
+  .lnd-btn-getstarted:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,255,255,0.2); }
 
   .lnd-btn-primary {
-    background: ${NAVY};
-    color: #fff;
+    background: ${WHITE};
+    color: ${BLACK};
     border: none;
     cursor: pointer;
     font-size: 14px;
@@ -59,7 +59,7 @@ const NAV_STYLES = `
     line-height: 1;
     letter-spacing: -0.01em;
   }
-  .lnd-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.28); }
+  .lnd-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(255,255,255,0.2); }
 
   .lnd-nav-links { display: flex; align-items: center; }
   .lnd-nav-ctas  { display: flex; align-items: center; gap: 4px; }
@@ -74,9 +74,9 @@ const NAV_STYLES = `
   }
 `;
 
-function WordMark({ color = NAVY }: { color?: string }) {
+function WordMark() {
   return (
-    <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 22, color, letterSpacing: "-0.02em", lineHeight: 1 }}>
+    <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 22, color: WHITE, letterSpacing: "-0.02em", lineHeight: 1 }}>
       Distillr
     </span>
   );
@@ -123,9 +123,9 @@ export function LandingNav() {
         justifyContent: "space-between",
         padding: "0 40px",
         height: 64,
-        background: scrolled ? `${CREAM}ee` : "transparent",
-        backdropFilter: scrolled ? "blur(16px)" : "none",
-        borderBottom: scrolled ? `1px solid rgba(15,27,66,0.1)` : "1px solid transparent",
+        background: scrolled ? "rgba(0,0,0,0.85)" : "transparent",
+        backdropFilter: scrolled ? "blur(20px)" : "none",
+        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
         transition: "background 0.3s, border-color 0.3s, backdrop-filter 0.3s",
       }}>
         {/* Left: logo */}
@@ -133,7 +133,7 @@ export function LandingNav() {
           onClick={() => navigate("/")}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 8 }}
         >
-          <WordMark color={NAVY} />
+          <WordMark />
         </button>
 
         {/* Center: nav links */}
@@ -145,8 +145,8 @@ export function LandingNav() {
                 key={n.l}
                 onClick={() => navigate(n.h)}
                 style={{
-                  background: isActive ? NAVY : "transparent",
-                  color: isActive ? CREAM : NAVY,
+                  background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+                  color: isActive ? WHITE : "rgba(255,255,255,0.55)",
                   borderRadius: isActive ? 100 : 8,
                   padding: isActive ? "6px 18px" : "6px 14px",
                   fontWeight: isActive ? 700 : 500,
@@ -158,12 +158,14 @@ export function LandingNav() {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    (e.currentTarget as HTMLButtonElement).style.background = "rgba(15,27,66,0.08)";
+                    (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.07)";
+                    (e.currentTarget as HTMLButtonElement).style.color = WHITE;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.55)";
                   }
                 }}
               >
@@ -185,7 +187,7 @@ export function LandingNav() {
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           style={{
             background: "none",
-            border: `1px solid rgba(15,27,66,0.18)`,
+            border: "1px solid rgba(255,255,255,0.18)",
             cursor: "pointer",
             padding: "8px 10px",
             borderRadius: 9,
@@ -195,9 +197,9 @@ export function LandingNav() {
             flexDirection: "column",
           }}
         >
-          <span style={{ display: "block", width: 18, height: 1.5, background: NAVY, borderRadius: 2, transition: "transform .2s", transform: mobileMenuOpen ? "translateY(3.5px) rotate(45deg)" : "none" }} />
-          <span style={{ display: "block", width: 18, height: 1.5, background: NAVY, borderRadius: 2, transition: "opacity .2s", opacity: mobileMenuOpen ? 0 : 1 }} />
-          <span style={{ display: "block", width: 18, height: 1.5, background: NAVY, borderRadius: 2, transition: "transform .2s", transform: mobileMenuOpen ? "translateY(-3.5px) rotate(-45deg)" : "none" }} />
+          <span style={{ display: "block", width: 18, height: 1.5, background: WHITE, borderRadius: 2, transition: "transform .2s", transform: mobileMenuOpen ? "translateY(3.5px) rotate(45deg)" : "none" }} />
+          <span style={{ display: "block", width: 18, height: 1.5, background: WHITE, borderRadius: 2, transition: "opacity .2s", opacity: mobileMenuOpen ? 0 : 1 }} />
+          <span style={{ display: "block", width: 18, height: 1.5, background: WHITE, borderRadius: 2, transition: "transform .2s", transform: mobileMenuOpen ? "translateY(-3.5px) rotate(-45deg)" : "none" }} />
         </button>
       </nav>
 
@@ -211,13 +213,13 @@ export function LandingNav() {
             left: 0,
             right: 0,
             zIndex: 99,
-            background: `${CREAM}f5`,
-            backdropFilter: "blur(16px)",
-            borderBottom: `1px solid rgba(15,27,66,0.12)`,
+            background: "rgba(10,10,10,0.95)",
+            backdropFilter: "blur(20px)",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
             flexDirection: "column",
             padding: "12px 16px 20px",
             animation: "slidedown 0.18s ease-out both",
-            boxShadow: "0 12px 32px rgba(15,27,66,0.12)",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
           }}
         >
           {navLinks.map((n) => {
@@ -233,8 +235,8 @@ export function LandingNav() {
                   padding: "14px 16px",
                   fontSize: 15,
                   fontWeight: isActive ? 700 : 500,
-                  background: isActive ? `rgba(15,27,66,0.08)` : "transparent",
-                  color: NAVY,
+                  background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                  color: isActive ? WHITE : "rgba(255,255,255,0.65)",
                   border: "none",
                   borderRadius: 10,
                   cursor: "pointer",
@@ -245,10 +247,10 @@ export function LandingNav() {
               </button>
             );
           })}
-          <div style={{ height: 1, background: "rgba(15,27,66,0.1)", margin: "8px 8px" }} />
+          <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 8px" }} />
           <button
             onClick={() => { navigate("/login"); setMobileMenuOpen(false); }}
-            style={{ width: "100%", padding: "13px 16px", borderRadius: 10, background: "transparent", border: `1px solid rgba(15,27,66,0.18)`, color: NAVY, cursor: "pointer", fontSize: 14, fontWeight: 600, marginBottom: 8, textAlign: "left" }}
+            style={{ width: "100%", padding: "13px 16px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)", cursor: "pointer", fontSize: 14, fontWeight: 600, marginBottom: 8, textAlign: "left" }}
           >
             Log in
           </button>
