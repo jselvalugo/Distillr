@@ -7,7 +7,12 @@ export function cn(...inputs: ClassValue[]) {
 
 export function fmt(date: string | null | undefined) {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", {
+  // Date-only strings (YYYY-MM-DD) are parsed as UTC midnight by Date(),
+  // causing off-by-one in any timezone behind UTC. Append local midnight instead.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? new Date(date + "T00:00:00")
+    : new Date(date);
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
