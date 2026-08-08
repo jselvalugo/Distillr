@@ -1555,6 +1555,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader("X-CSRF-Token", req.session.csrfToken);
       loginRateLimiter.registerSuccess(clientKey);
       res.json({ user, csrfToken: req.session.csrfToken });
+      // Fire-and-forget: log login event for super-admin activity view
+      query(
+        `INSERT INTO tenant_activity_logs (id, tenant_id, event_type, user_id, user_email, user_name, ip_address, occurred_at, details)
+         VALUES ($1, $2, 'login', $3, $4, $5, $6, NOW(), '{}'::jsonb)`,
+        [`ACT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, user.tenantId, user.id, user.email, user.name, req.ip ?? null]
+      ).catch(() => {});
     } catch (error: unknown) {
       if (error && typeof error === "object" && "name" in error && error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid login data" });
@@ -4608,6 +4614,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(updated);
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/tenants/:id/activity", requireAdminSession, async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit ?? "200")), 500);
+      const rows = await query(
+        `SELECT id, tenant_id, event_type, user_id, user_email, user_name, ip_address, occurred_at, details
+         FROM tenant_activity_logs
+         WHERE tenant_id = $1
+         ORDER BY occurred_at DESC
+         LIMIT $2`,
+        [req.params.id, limit]
+      );
+      res.json(rows);
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });

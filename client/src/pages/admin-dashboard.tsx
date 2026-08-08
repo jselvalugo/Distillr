@@ -33,6 +33,18 @@ interface TenantUser {
   createdAt: string;
 }
 
+interface ActivityEntry {
+  id: string;
+  tenant_id: string;
+  event_type: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_name: string | null;
+  ip_address: string | null;
+  occurred_at: string;
+  details: Record<string, unknown>;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAN_META: Record<string, { label: string; color: string; defaultLimit: number; price: number }> = {
@@ -323,6 +335,7 @@ function EditLicenseModal({ tenant, onClose }: { tenant: Tenant; onClose: () => 
 
 function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
   const qc = useQueryClient();
+  const [panelTab, setPanelTab] = useState<"users" | "activity">("users");
   const [editUser, setEditUser] = useState<TenantUser | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", role: "operator" });
   const [resetUser, setResetUser] = useState<TenantUser | null>(null);
@@ -332,6 +345,13 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
   const { data: users = [], isLoading } = useQuery<TenantUser[]>({
     queryKey: [`/api/admin/tenants/${tenant.id}/users`],
     queryFn: () => apiRequest<TenantUser[]>(`/api/admin/tenants/${tenant.id}/users`),
+  });
+
+  const { data: activity = [], isLoading: actLoading } = useQuery<ActivityEntry[]>({
+    queryKey: [`/api/admin/tenants/${tenant.id}/activity`],
+    queryFn: () => apiRequest<ActivityEntry[]>(`/api/admin/tenants/${tenant.id}/activity`),
+    enabled: panelTab === "activity",
+    staleTime: 30_000,
   });
 
   const editMut = useMutation({
@@ -361,16 +381,19 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
     <tr>
       <td colSpan={9} style={{ padding: 0, background: "rgba(255,255,255,0.015)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div style={{ padding: "16px 24px 20px" }}>
+
+          {/* Tab bar */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0 }}>
-                Users in <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>{tenant.name}</span>
-              </p>
-              {atCap && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: "#f87171", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "2px 8px" }}>
-                  At user limit — upgrage plan to add more
-                </span>
-              )}
+            <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: 3, border: "1px solid rgba(255,255,255,0.07)" }}>
+              {(["users", "activity"] as const).map(tab => (
+                <button key={tab} onClick={() => setPanelTab(tab)}
+                  style={{ fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer", transition: "all .15s",
+                    background: panelTab === tab ? "rgba(255,255,255,0.1)" : "transparent",
+                    color: panelTab === tab ? "#fff" : "rgba(255,255,255,0.35)",
+                    textTransform: "capitalize" }}>
+                  {tab === "users" ? "Users" : "Activity Log"}
+                </button>
+              ))}
             </div>
             <a href={instanceUrl} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 11, fontWeight: 600, color: "#60a5fa", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 7, padding: "4px 11px" }}>
@@ -379,7 +402,16 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
             </a>
           </div>
 
-          {isLoading ? (
+          {/* Users tab */}
+          {panelTab === "users" && atCap && (
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#f87171", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "2px 8px" }}>
+                At user limit — upgrade plan to add more
+              </span>
+            </div>
+          )}
+
+          {panelTab === "users" && (isLoading ? (
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: 0 }}>Loading…</p>
           ) : users.length === 0 ? (
             <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: 0 }}>No users in this tenant.</p>
@@ -425,6 +457,58 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
                 ))}
               </tbody>
             </table>
+          ))}
+
+          {/* Activity Log tab */}
+          {panelTab === "activity" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0 }}>
+                  Login events for <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>{tenant.name}</span>
+                </p>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>Last 200 events · visible only to super-admin</span>
+              </div>
+              {actLoading ? (
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: 0 }}>Loading…</p>
+              ) : activity.length === 0 ? (
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: 0 }}>No activity recorded yet. Login events will appear here.</p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, overflow: "hidden" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(255,255,255,0.04)" }}>
+                      {["Event", "User", "Email", "IP Address", "Date & Time"].map(h => (
+                        <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.28)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activity.map((entry, i) => {
+                      const dt = new Date(entry.occurred_at);
+                      const dateStr = dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                      const timeStr = dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+                      const eventColors: Record<string, { bg: string; tc: string }> = {
+                        login: { bg: "rgba(34,197,94,0.1)", tc: "#4ade80" },
+                      };
+                      const ec = eventColors[entry.event_type] ?? { bg: "rgba(255,255,255,0.06)", tc: "rgba(255,255,255,0.5)" };
+                      return (
+                        <tr key={entry.id} style={{ borderTop: i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: ec.tc, background: ec.bg, borderRadius: 5, padding: "2px 8px", textTransform: "capitalize" }}>{entry.event_type}</span>
+                          </td>
+                          <td style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "#fff" }}>{entry.user_name ?? "—"}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 12, color: "rgba(255,255,255,0.45)", fontFamily: "monospace" }}>{entry.user_email ?? "—"}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>{entry.ip_address ?? "—"}</td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{dateStr}</span>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginLeft: 6 }}>{timeStr}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           )}
         </div>
 

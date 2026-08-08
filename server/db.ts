@@ -411,6 +411,20 @@ export async function initDatabase(): Promise<void> {
       details JSONB NOT NULL DEFAULT '{}'::jsonb
     );
 
+    CREATE TABLE IF NOT EXISTS tenant_activity_logs (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      user_id TEXT,
+      user_email TEXT,
+      user_name TEXT,
+      ip_address TEXT,
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      details JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+    CREATE INDEX IF NOT EXISTS idx_tenant_activity_tenant_occurred
+      ON tenant_activity_logs(tenant_id, occurred_at DESC);
+
     CREATE TABLE IF NOT EXISTS sales_orders (
       tenant_id TEXT NOT NULL DEFAULT 'default',
       id TEXT PRIMARY KEY,
