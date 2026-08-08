@@ -1036,13 +1036,14 @@ function AgingForm({ data }: { data: BatchFull }) {
 
   const fillPg = batch.fillProofGallons ?? (barrel?.fillProofGallons ?? null);
   const fillWg = batch.fillWineGallons ?? barrel?.fillVolume ?? null;
-  const fillProof = batch.fillProof ?? barrel?.fillProof ?? null;
-  const fillAbv = fillProof || null; // fillProof stored as ABV%
+  const fillProof = batch.fillProof ?? barrel?.fillProof ?? null; // stored as ABV%
+  // Convert fill ABV% → proof degrees so it's on the same scale as proofAtEvent (gauge entries)
+  const fillProofDeg = fillProof != null ? fillProof * 2 : null;
 
-  // Latest gauge reading
+  // Latest gauge reading — proofAtEvent is always in proof degrees (0–200)
   const latestGauge = events.filter(e => e.eventType === "gauge").at(0);
   const latestWg = latestGauge?.wineGallons ?? fillWg;
-  const latestPrf = latestGauge?.proofAtEvent ?? fillProof;
+  const latestPrf = latestGauge?.proofAtEvent ?? fillProofDeg; // proof degrees in all cases
   const latestPg = latestWg && latestPrf ? (latestWg * latestPrf / 100) : null;
   const currentAbv = latestPrf ? latestPrf / 2 : null;
   const angelSharePg = fillPg != null && latestPg != null ? fillPg - latestPg : null;
