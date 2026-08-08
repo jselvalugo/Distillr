@@ -851,7 +851,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
   const qc = useQueryClient();
   const { batch, barrel } = data;
   const [form, setForm] = useState({
-    fillNumber: batch.fillNumber ?? "",
+    fillNumber: batch.fillNumber ?? batch.batchCode ?? "",
     containerType: batch.containerType ?? "",
     serialNumber: barrel?.serialNumber ?? "",
     fillDate: barrel?.fillDate ?? new Date().toISOString().slice(0, 10),
