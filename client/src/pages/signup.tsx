@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "../lib/queryClient";
 
-const CREAM = "#FAF0E2";
-const NAVY  = "#0F1B42";
-const NAVY2 = "#162050";
+const WHITE = "#ffffff";
+const BLACK = "#000000";
+const OFF   = "#0a0a0a";
 
 const STYLES = `
   @keyframes fadeUp  { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
   @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+  @keyframes shimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
 
   .wl-input {
     width: 100%;
@@ -16,18 +17,19 @@ const STYLES = `
     border-radius: 8px;
     font-size: 14px;
     outline: none;
-    transition: border-color 0.18s, box-shadow 0.18s;
-    background: rgba(15,27,66,0.04);
-    border: 1.5px solid rgba(15,27,66,0.16);
-    color: ${NAVY};
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: ${WHITE};
     font-family: inherit;
     box-sizing: border-box;
+    backdrop-filter: blur(8px);
   }
-  .wl-input::placeholder { color: rgba(15,27,66,0.32); }
+  .wl-input::placeholder { color: rgba(255,255,255,0.2); }
   .wl-input:focus {
-    border-color: rgba(15,27,66,0.5);
-    box-shadow: 0 0 0 3px rgba(15,27,66,0.07);
-    background: rgba(15,27,66,0.02);
+    border-color: rgba(255,255,255,0.35);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.06);
   }
   .wl-btn {
     width: 100%;
@@ -37,18 +39,27 @@ const STYLES = `
     font-weight: 700;
     border: none;
     cursor: pointer;
-    background: ${NAVY};
-    color: #fff;
+    background: ${WHITE};
+    color: ${BLACK};
     transition: transform 0.18s, box-shadow 0.18s, opacity 0.18s;
     font-family: inherit;
   }
-  .wl-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,27,66,0.3); }
+  .wl-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(255,255,255,0.15); }
   .wl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .wl-shimmer {
+    background: linear-gradient(110deg,#fff 0%,#c8c8c8 20%,#fff 35%,#8a8a8a 50%,#fff 65%,#c8c8c8 80%,#fff 100%);
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 6s linear infinite;
+  }
 `;
 
-function WordMark({ color }: { color: string }) {
+function WordMark() {
   return (
-    <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 26, color, letterSpacing: "-0.02em", lineHeight: 1 }}>
+    <span style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 26, color: WHITE, letterSpacing: "-0.02em", lineHeight: 1 }}>
       Distillr
     </span>
   );
@@ -82,10 +93,7 @@ export default function Signup() {
     setLoading(true);
     setError("");
     try {
-      await apiRequest("/api/waitlist", {
-        method: "POST",
-        body: JSON.stringify(form),
-      });
+      await apiRequest("/api/waitlist", { method: "POST", body: JSON.stringify(form) });
       setDone(true);
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
@@ -104,41 +112,48 @@ export default function Signup() {
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
       }}>
 
-        {/* ── Left panel (navy) ── */}
+        {/* ── Left panel ── */}
         <div style={{
           width: "45%",
-          background: `linear-gradient(160deg, ${NAVY2} 0%, ${NAVY} 100%)`,
+          background: BLACK,
           display: "flex",
           flexDirection: "column",
           padding: "48px 52px",
           position: "relative",
           overflow: "hidden",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
         }} className="hidden md:flex">
 
-          {/* Subtle grid texture */}
-          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04 }} aria-hidden>
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)"/>
-          </svg>
+          {/* Grid texture */}
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)",
+            backgroundSize: "48px 48px",
+          }} />
+          {/* Aura */}
+          <div style={{
+            position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)",
+            width: 500, height: 400,
+            background: "radial-gradient(ellipse,rgba(255,255,255,0.04) 0%,transparent 70%)",
+            pointerEvents: "none",
+          }} />
 
           {/* Brand */}
           <div style={{ position: "relative", zIndex: 1, animation: "fadeIn 0.6s ease-out both" }}>
-            <WordMark color={CREAM} />
+            <WordMark />
           </div>
 
           {/* Center content */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", zIndex: 1 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(250,240,226,0.4)", marginBottom: 16, animation: "fadeUp 0.6s ease-out 0.1s both" }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 16, animation: "fadeUp 0.6s ease-out 0.1s both" }}>
               Early Access
             </p>
-            <h1 style={{ fontSize: "clamp(1.8rem, 2.8vw, 2.6rem)", fontWeight: 800, color: CREAM, letterSpacing: "-0.035em", lineHeight: 1.12, marginBottom: 20, animation: "fadeUp 0.6s ease-out 0.15s both" }}>
-              Built for craft<br />distilleries.
+            <h1 style={{ animation: "fadeUp 0.6s ease-out 0.15s both", marginBottom: 20 }}>
+              <span className="wl-shimmer" style={{ fontSize: "clamp(1.8rem, 2.8vw, 2.6rem)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.12, display: "block" }}>
+                Built for craft<br />distilleries.
+              </span>
             </h1>
-            <p style={{ fontSize: 14, color: "rgba(250,240,226,0.55)", lineHeight: 1.75, maxWidth: 340, marginBottom: 40, animation: "fadeUp 0.6s ease-out 0.2s both" }}>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.75, maxWidth: 340, marginBottom: 40, animation: "fadeUp 0.6s ease-out 0.2s both" }}>
               TTB compliance, barrel tracking, excise tax automation, and AI-powered operations — all in one platform.
             </p>
 
@@ -150,24 +165,23 @@ export default function Signup() {
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12, animation: `fadeUp 0.6s ease-out ${0.25 + i * 0.05}s both` }}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ marginTop: 1, flexShrink: 0 }}>
-                  <circle cx="8" cy="8" r="8" fill="rgba(250,240,226,0.12)"/>
-                  <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={CREAM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="8" cy="8" r="8" fill="rgba(255,255,255,0.08)"/>
+                  <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={WHITE} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <span style={{ fontSize: 13, color: "rgba(250,240,226,0.7)", lineHeight: 1.5 }}>{item}</span>
+                <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{item}</span>
               </div>
             ))}
           </div>
 
-          {/* Bottom tagline */}
-          <p style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(250,240,226,0.2)", animation: "fadeIn 0.8s ease-out 0.5s both" }}>
+          <p style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.15)", animation: "fadeIn 0.8s ease-out 0.5s both" }}>
             A Loogo Labs Software
           </p>
         </div>
 
-        {/* ── Right panel (cream) ── */}
+        {/* ── Right panel ── */}
         <div style={{
           flex: 1,
-          background: CREAM,
+          background: OFF,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -179,74 +193,72 @@ export default function Signup() {
 
           {/* Mobile brand */}
           <div className="md:hidden" style={{ marginBottom: 32 }}>
-            <WordMark color={NAVY} />
+            <WordMark />
           </div>
 
           <div style={{ width: "100%", maxWidth: 400, animation: "fadeUp 0.5s ease-out both" }}>
 
             {done ? (
-              /* ── Success state ── */
               <div style={{ textAlign: "center", padding: "40px 0" }}>
-                <div style={{ width: 64, height: 64, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+                <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
                   <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                    <path d="M6 14l6 6 10-10" stroke={CREAM} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M6 14l6 6 10-10" stroke={WHITE} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <h2 style={{ fontSize: 26, fontWeight: 800, color: NAVY, letterSpacing: "-0.03em", marginBottom: 12 }}>
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: WHITE, letterSpacing: "-0.03em", marginBottom: 12 }}>
                   You're on the list.
                 </h2>
-                <p style={{ fontSize: 14, color: "rgba(15,27,66,0.55)", lineHeight: 1.7, marginBottom: 32 }}>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, marginBottom: 32 }}>
                   Thanks for your interest in Distillr. We'll be in touch shortly to get you set up.
                 </p>
                 <button
                   onClick={() => navigate("/")}
-                  style={{ fontSize: 13, color: NAVY, fontWeight: 600, background: "none", border: `1.5px solid rgba(15,27,66,0.2)`, borderRadius: 100, padding: "9px 24px", cursor: "pointer" }}
+                  style={{ fontSize: 13, color: WHITE, fontWeight: 600, background: "none", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 100, padding: "9px 24px", cursor: "pointer" }}
                 >
                   ← Back to home
                 </button>
               </div>
             ) : (
-              /* ── Form ── */
               <>
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(15,27,66,0.4)", marginBottom: 12 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>
                   Request Access
                 </p>
-                <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 800, color: NAVY, letterSpacing: "-0.035em", lineHeight: 1.1, marginBottom: 8 }}>
+                <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 800, color: WHITE, letterSpacing: "-0.035em", lineHeight: 1.1, marginBottom: 8 }}>
                   Join the waitlist.
                 </h2>
-                <p style={{ fontSize: 13.5, color: "rgba(15,27,66,0.5)", lineHeight: 1.65, marginBottom: 32 }}>
+                <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.4)", lineHeight: 1.65, marginBottom: 32 }}>
                   Tell us about your distillery and we'll reach out to get you started.
                 </p>
 
                 <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Your Name *</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Your Name *</label>
                       <input className="wl-input" placeholder="Jane Smith" value={form.name} onChange={e => set("name", e.target.value)} required />
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Email Address *</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Email Address *</label>
                     <input className="wl-input" type="email" placeholder="jane@distillery.com" value={form.email} onChange={e => set("email", e.target.value)} required />
                   </div>
 
                   <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Distillery Name</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Distillery Name</label>
                       <input className="wl-input" placeholder="Lugo's Craft Distillery" value={form.distilleryName} onChange={e => set("distilleryName", e.target.value)} />
                     </div>
                     <div style={{ width: 90 }}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>State</label>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>State</label>
                       <select className="wl-input" value={form.state} onChange={e => set("state", e.target.value)} style={{ cursor: "pointer" }}>
-                        <option value="">—</option>
-                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                        <option value="" style={{ background: "#1a1a1a" }}>—</option>
+                        {US_STATES.map(s => <option key={s} value={s} style={{ background: "#1a1a1a" }}>{s}</option>)}
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(15,27,66,0.5)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Anything you'd like us to know?</label>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Anything you'd like us to know?</label>
                     <textarea
                       className="wl-input"
                       placeholder="Current TTB pain points, production volume, tech stack…"
@@ -258,7 +270,7 @@ export default function Signup() {
                   </div>
 
                   {error && (
-                    <p style={{ fontSize: 12.5, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", margin: 0 }}>
+                    <p style={{ fontSize: 12.5, color: "#f87171", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, padding: "8px 12px", margin: 0 }}>
                       {error}
                     </p>
                   )}
@@ -269,9 +281,9 @@ export default function Signup() {
                 </form>
 
                 <div style={{ marginTop: 28, textAlign: "center" }}>
-                  <p style={{ fontSize: 12, color: "rgba(15,27,66,0.35)" }}>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
                     Already have an account?{" "}
-                    <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: NAVY, fontWeight: 700, cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
+                    <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: WHITE, fontWeight: 700, cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
                       Sign in
                     </button>
                   </p>
