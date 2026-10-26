@@ -25,3 +25,8 @@ vite.config.ts.*
 npm-debug.log*
 # Local Netlify folder
 .netlify
+
+# Claude Code local state
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
