@@ -96,7 +96,75 @@ const netlifyHandler = serverless(app, {
   ],
 });
 
-export const handler = async (event: unknown, context: unknown) => {
+type LambdaResult = {
+  statusCode?: number;
+  headers?: Record<string, string | number | boolean>;
+  multiValueHeaders?: Record<string, Array<string | number | boolean>>;
+  body?: string;
+  isBase64Encoded?: boolean;
+};
+
+/**
+ * Netlify Functions (modern format) entry point.
+ * The modern format is required for Netlify Database to inject NETLIFY_DB_URL.
+ * We translate the Web Request into the event shape serverless-http expects,
+ * then translate its result back into a Web Response.
+ */
+export default async (req: globalThis.Request, context: { ip?: string }) => {
   await ensureInit();
-  return netlifyHandler(event, context);
+
+  const url = new URL(req.url);
+  const headers: Record<string, string> = {};
+  const multiValueHeaders: Record<string, string[]> = {};
+  req.headers.forEach((value, key) => {
+    headers[key] = value;
+    multiValueHeaders[key] = [value];
+  });
+
+  const queryStringParameters: Record<string, string> = {};
+  const multiValueQueryStringParameters: Record<string, string[]> = {};
+  url.searchParams.forEach((value, key) => {
+    queryStringParameters[key] = value;
+    (multiValueQueryStringParameters[key] ??= []).push(value);
+  });
+
+  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const bodyBuffer = hasBody ? Buffer.from(await req.arrayBuffer()) : null;
+
+  const event = {
+    httpMethod: req.method,
+    path: url.pathname,
+    rawUrl: req.url,
+    headers,
+    multiValueHeaders,
+    queryStringParameters,
+    multiValueQueryStringParameters,
+    body: bodyBuffer && bodyBuffer.length ? bodyBuffer.toString("base64") : null,
+    isBase64Encoded: Boolean(bodyBuffer && bodyBuffer.length),
+    requestContext: { identity: { sourceIp: context?.ip ?? headers["x-nf-client-connection-ip"] ?? "" } },
+  };
+
+  const result = (await netlifyHandler(event, {})) as LambdaResult;
+
+  const responseHeaders = new Headers();
+  for (const [key, value] of Object.entries(result.multiValueHeaders ?? {})) {
+    for (const v of value) responseHeaders.append(key, String(v));
+  }
+  for (const [key, value] of Object.entries(result.headers ?? {})) {
+    if (!responseHeaders.has(key)) responseHeaders.set(key, String(value));
+  }
+
+  const status = result.statusCode ?? 200;
+  const noBody = req.method === "HEAD" || status === 204 || status === 304;
+  const body = noBody || !result.body
+    ? null
+    : result.isBase64Encoded
+      ? Buffer.from(result.body, "base64")
+      : result.body;
+
+  return new globalThis.Response(body, { status, headers: responseHeaders });
+};
+
+export const config = {
+  path: "/api/*",
 };
