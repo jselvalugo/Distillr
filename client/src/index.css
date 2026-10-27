@@ -13,3 +13,11 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Launchpad popover entrance */
+@keyframes launchpad-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.launchpad-pop { animation: launchpad-pop 140ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .launchpad-pop { animation: none; } }
