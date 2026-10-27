@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useRef, useEffect } from "react";
+import { type ReactNode, useState, useRef, useEffect, useLayoutEffect } from "react";
 import { AiChatPanel } from "./ai-chat-panel";
 import { Link, useLocation } from "wouter";
 import {
@@ -18,6 +18,11 @@ import {
   ChevronDown,
   LogOut,
   Menu,
+  Factory,
+  Handshake,
+  SlidersHorizontal,
+  ArrowUpRight,
+  type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
@@ -30,9 +35,22 @@ type PlatformConfig = {
   dashboardColor: string | null;
 };
 
-const APP_GROUPS = [
+type AppItem = {
+  href: string;
+  label: string;
+  sub: string;
+  icon: LucideIcon;
+  /** Extra route prefixes that belong to this page (forms, detail pages). */
+  match?: string[];
+};
+
+type AppGroup = { label: string; blurb: string; icon: LucideIcon; items: AppItem[] };
+
+const APP_GROUPS: AppGroup[] = [
   {
     label: "Operations",
+    blurb: "Production, aging & stock",
+    icon: Factory,
     items: [
       { href: "/production", label: "Production", sub: "Batches & distilling runs", icon: FlaskConical },
       { href: "/barrels", label: "Aging", sub: "Aging & warehouse tracking", icon: Layers },
@@ -42,6 +60,8 @@ const APP_GROUPS = [
   },
   {
     label: "Sales",
+    blurb: "Orders, partners & facilities",
+    icon: Handshake,
     items: [
       { href: "/sales-orders", label: "Sales Orders", sub: "Orders & fulfillment", icon: ShoppingCart },
       { href: "/clients", label: "Trading Partners", sub: "Distributors & retailers", icon: Users },
@@ -50,14 +70,24 @@ const APP_GROUPS = [
   },
   {
     label: "Compliance & Reporting",
+    blurb: "Filings, permits & TTB",
+    icon: ShieldCheck,
     items: [
       { href: "/compliance", label: "Compliance", sub: "Records & filings", icon: ShieldCheck },
-      { href: "/compliance-regulatory", label: "Regulatory", sub: "Permits & licenses", icon: FileText },
+      {
+        href: "/compliance-regulatory",
+        label: "Regulatory",
+        sub: "Permits & licenses",
+        icon: FileText,
+        match: ["/permits", "/cola", "/labels", "/excise"],
+      },
       { href: "/reports", label: "Reports", sub: "TTB & excise tax", icon: BarChart3 },
     ],
   },
   {
     label: "Admin",
+    blurb: "Team, access & settings",
+    icon: SlidersHorizontal,
     items: [
       { href: "/staff", label: "Staff", sub: "Team & scheduling", icon: UserCog },
       { href: "/users", label: "Users", sub: "Accounts & access", icon: Users },
@@ -66,18 +96,38 @@ const APP_GROUPS = [
   },
 ];
 
+/** True when `location` is `prefix` itself or a sub-path of it (segment-aware). */
+function isUnder(location: string, prefix: string): boolean {
+  return location === prefix || location.startsWith(prefix + "/");
+}
+
+function itemMatches(item: AppItem, location: string): boolean {
+  return [item.href, ...(item.match ?? [])].some((p) => isUnder(location, p));
+}
+
+function findActive(location: string): { group: AppGroup; item: AppItem } | null {
+  for (const group of APP_GROUPS) {
+    for (const item of group.items) {
+      if (itemMatches(item, location)) return { group, item };
+    }
+  }
+  return null;
+}
+
+const tint = (pct: number) => `color-mix(in srgb, var(--brand, #0F1B42) ${pct}%, white)`;
+
 function AppLauncher() {
   const [open, setOpen] = useState(false);
-  const [, navigate] = useLocation();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const ref = useRef<HTMLDivElement>(null);
+  const active = findActive(location);
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
     }
-    if (open) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    if (open) document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [open]);
 
   // Close on navigation
@@ -89,6 +139,7 @@ function AppLauncher() {
         onClick={() => setOpen((v) => !v)}
         className={`p-2 rounded-md transition-colors ${open ? "text-white bg-white/15" : "text-white/60 hover:text-white hover:bg-white/10"}`}
         aria-label="App launcher"
+        aria-expanded={open}
       >
         <LayoutGrid size={18} />
       </button>
@@ -96,61 +147,146 @@ function AppLauncher() {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-2 z-50 w-[min(400px,calc(100vw-24px))] bg-white rounded-xl shadow-2xl border border-[#e5e5e5] overflow-hidden">
-
-            {/* Groups */}
-            <div className="p-3 space-y-0.5 max-h-[80vh] overflow-y-auto">
-              {APP_GROUPS.map((group, gi) => (
-                <div key={group.label}>
-                  {/* Group label */}
-                  <p className="px-2 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#b0b0b0]">
-                    {group.label}
-                  </p>
-                  {/* Items */}
-                  {group.items.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location === item.href;
-                    return (
-                      <button
-                        key={item.href}
-                        onClick={() => { navigate(item.href); setOpen(false); }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors group ${
-                          isActive
-                            ? "bg-[var(--brand)] text-white"
-                            : "hover:bg-[#f5f5f5] text-[#0a0a0a]"
-                        }`}
+          <div
+            className="absolute left-0 top-full mt-2 z-50 w-[min(480px,calc(100vw-24px))] rounded-2xl bg-white p-2 shadow-[0_24px_60px_-20px_rgba(15,27,66,0.45)] ring-1 ring-black/5 origin-top-left launchpad-pop"
+          >
+            <p className="px-3 pt-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a3a3a3]">
+              Launchpad
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {APP_GROUPS.map((group) => {
+                const Icon = group.icon;
+                const isActive = active?.group.label === group.label;
+                return (
+                  <button
+                    key={group.label}
+                    onClick={() => {
+                      if (isActive) setOpen(false);
+                      else navigate(group.items[0].href);
+                    }}
+                    className={`group relative flex flex-col items-start gap-3 rounded-xl p-3.5 text-left transition-all duration-150 ${
+                      isActive ? "ring-1 ring-[var(--brand,#0F1B42)]/25" : "hover:bg-[#f6f6f7]"
+                    }`}
+                    style={isActive ? { background: tint(7) } : undefined}
+                  >
+                    <div className="flex w-full items-center justify-between">
+                      <span
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-white shadow-sm transition-transform duration-150 group-hover:scale-105"
+                        style={{ background: "var(--brand, #0F1B42)" }}
                       >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          isActive ? "bg-white/15" : "bg-[#f0f0f0] group-hover:bg-[#e8e8e8]"
-                        }`}>
-                          <Icon size={15} className={isActive ? "text-white" : "text-[#555]"} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-xs font-semibold leading-none mb-0.5 ${isActive ? "text-white" : "text-[#0a0a0a]"}`}>
-                            {item.label}
-                          </p>
-                          <p className={`text-[10px] leading-none truncate ${isActive ? "text-white/50" : "text-[#a3a3a3]"}`}>
-                            {item.sub}
-                          </p>
-                        </div>
-                        {isActive && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-white/60 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                  {/* Divider between groups */}
-                  {gi < APP_GROUPS.length - 1 && (
-                    <div className="mt-2 border-t border-[#f0f0f0]" />
-                  )}
-                </div>
-              ))}
-
+                        <Icon size={17} strokeWidth={2} />
+                      </span>
+                      <ArrowUpRight
+                        size={14}
+                        className="text-[#c4c4c4] opacity-0 -translate-x-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-[#0a0a0a] leading-tight">{group.label}</p>
+                      <p className="mt-0.5 text-[11px] text-[#8a8a8a] leading-snug">{group.blurb}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {group.items.map((item) => (
+                        <span
+                          key={item.href}
+                          className="rounded-md bg-black/[0.04] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b6b]"
+                        >
+                          {item.label}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Thin secondary bar listing the pages of the current category. The active
+ * page gets a brand-colored underline that slides between tabs.
+ */
+function CategoryNav() {
+  const [location, navigate] = useLocation();
+  const active = findActive(location);
+  const barRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  const activeHref = active?.item.href;
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const tab = activeHref ? tabRefs.current[activeHref] : null;
+      const bar = barRef.current;
+      if (!tab || !bar) return setIndicator(null);
+      setIndicator({ left: tab.offsetLeft, width: tab.offsetWidth });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [activeHref, active?.group.label]);
+
+  useEffect(() => {
+    // Keep the active tab in view on narrow screens.
+    if (activeHref) tabRefs.current[activeHref]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeHref]);
+
+  if (!active) return null;
+  const GroupIcon = active.group.icon;
+
+  return (
+    <nav
+      aria-label={`${active.group.label} pages`}
+      className="h-10 shrink-0 border-b border-[#ececec] bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/70"
+    >
+      <div className="flex h-full items-stretch px-2 sm:px-4">
+        <div className="hidden sm:flex items-center gap-1.5 pr-3 mr-1 border-r border-[#efefef]">
+          <GroupIcon size={13} className="text-[var(--brand,#0F1B42)]" strokeWidth={2.25} />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a9a9a] whitespace-nowrap">
+            {active.group.label}
+          </span>
+        </div>
+        <div
+          ref={barRef}
+          className="relative flex h-full items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {active.group.items.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.href === activeHref;
+            return (
+              <button
+                key={item.href}
+                ref={(el) => { tabRefs.current[item.href] = el; }}
+                onClick={() => { if (location !== item.href) navigate(item.href); }}
+                aria-current={isActive ? "page" : undefined}
+                className={`relative flex items-center gap-1.5 px-3 text-[12.5px] whitespace-nowrap transition-colors duration-150 ${
+                  isActive ? "text-[#0a0a0a] font-semibold" : "text-[#7a7a7a] font-medium hover:text-[#0a0a0a]"
+                }`}
+              >
+                <Icon
+                  size={13}
+                  strokeWidth={2.25}
+                  className={isActive ? "text-[var(--brand,#0F1B42)]" : "text-[#a8a8a8]"}
+                />
+                {item.label}
+              </button>
+            );
+          })}
+          {indicator && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-[var(--brand,#0F1B42)] transition-all duration-300 ease-out"
+              style={{ left: indicator.left + 8, width: Math.max(indicator.width - 16, 12) }}
+            />
+          )}
+        </div>
+      </div>
+    </nav>
   );
 }
 
@@ -253,7 +389,7 @@ function MobileDrawer({ open, onClose, navColor }: { open: boolean; onClose: () 
               </p>
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = location === item.href;
+                const isActive = itemMatches(item, location);
                 return (
                   <button
                     key={item.href}
@@ -358,6 +494,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col h-screen bg-[#f7f7f7]">
       <TopNav />
+      <CategoryNav />
       <main className="flex-1 overflow-y-auto">{children}</main>
       <AiChatPanel />
     </div>
