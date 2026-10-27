@@ -794,6 +794,7 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE state_excise_returns ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE distillery_equipment ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 
     -- Data backfill for existing records
     UPDATE compliance

@@ -146,6 +146,7 @@ export function AiChatPanel() {
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Distillr AI"
+        data-tour="ai-assistant"
         className="fixed bottom-6 right-6 z-50 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95"
         style={{
           width: 52, height: 52,

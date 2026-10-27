@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
   ArrowUpRight,
   type LucideIcon,
+  Compass,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
@@ -142,6 +143,7 @@ function AppLauncher() {
         className={`p-2 rounded-md transition-colors ${open ? "text-white bg-white/15" : "text-white/60 hover:text-white hover:bg-white/10"}`}
         aria-label="App launcher"
         aria-expanded={open}
+        data-tour="launchpad"
       >
         <LayoutGrid size={18} />
       </button>
@@ -150,6 +152,7 @@ function AppLauncher() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
+            data-tour="launchpad-panel"
             className="absolute left-0 top-full mt-2 z-50 w-[min(480px,calc(100vw-24px))] rounded-2xl bg-white p-2 shadow-[0_24px_60px_-20px_rgba(15,27,66,0.45)] ring-1 ring-black/5 origin-top-left launchpad-pop"
           >
             <div className="flex items-center justify-between px-3 pt-2 pb-2">
@@ -245,6 +248,7 @@ function CategoryNav() {
   return (
     <nav
       aria-label={`${active.group.label} pages`}
+      data-tour="category-nav"
       className="h-10 shrink-0 border-b border-[#ececec] bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/70"
     >
       <div className="flex h-full items-stretch px-2 sm:px-4">
@@ -316,6 +320,7 @@ function UserMenu() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+        data-tour="user-menu"
       >
         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#4a1a6b] to-[#1a3a6b] flex items-center justify-center">
           <span className="text-[10px] font-bold text-white">{initials}</span>
@@ -350,6 +355,13 @@ function UserMenu() {
                 Settings
               </button>
             )}
+            <button
+              onClick={() => { setOpen(false); window.dispatchEvent(new Event("distillr:replay-tour")); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#0a0a0a] rounded-md hover:bg-[#f7f7f7] transition-colors text-left"
+            >
+              <Compass size={13} className="text-[#737373]" />
+              Take the tour
+            </button>
             <button
               onClick={() => { logout.mutate(); setOpen(false); }}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-red-600 rounded-md hover:bg-red-50 transition-colors text-left"
@@ -465,6 +477,7 @@ function TopNav() {
           href="/"
           className={`p-2 rounded-md transition-colors ${location === "/" ? "text-white bg-white/15" : "text-white/40 hover:text-white hover:bg-white/10"}`}
           title="Dashboard"
+          data-tour="dashboard-home"
         >
           <BarChart3 size={15} />
         </Link>

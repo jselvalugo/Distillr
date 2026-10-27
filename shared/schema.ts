@@ -861,6 +861,8 @@ export const userSchema = z.object({
   role: roleSchema,
   status: z.enum(["active", "inactive"]),
   createdAt: z.string(),
+  /** When the user finished (or skipped) the first-login tour; null shows it. */
+  onboardedAt: z.string().nullable().optional(),
 });
 
 export const insertUserSchema = userSchema.omit({ id: true, createdAt: true, passwordHash: true }).extend({

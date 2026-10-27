@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { OnboardingTour } from "./components/onboarding/tour";
 import { Route, Switch, useLocation } from "wouter";
 import { useAuth } from "./hooks/use-auth";
 import Landing from "./pages/landing";
@@ -78,6 +79,7 @@ function RootRoute() {
 
 export default function App() {
   return (
+    <>
     <Switch>
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
@@ -136,5 +138,8 @@ export default function App() {
         </AuthGuard>
       </Route>
     </Switch>
+    {/* Mounted once, above the routes, so the tour survives page changes. */}
+    <OnboardingTour />
+    </>
   );
 }

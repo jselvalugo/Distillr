@@ -30,6 +30,7 @@ function mapRowToUser(row: Record<string, unknown>): User & { tenantId: string }
     role: row.role as User["role"],
     status: row.status as User["status"],
     createdAt: new Date(String(row.created_at)).toISOString(),
+    onboardedAt: row.onboarded_at ? new Date(String(row.onboarded_at)).toISOString() : null,
     tenantId: String(row.tenant_id),
   };
 }
@@ -150,8 +151,20 @@ export class AuthStorage {
       role: user.role,
       status: user.status,
       createdAt: user.createdAt,
+      onboardedAt: user.onboardedAt ?? null,
       tenantId: user.tenantId,
     };
+  }
+
+  /** Marks the first-login tour as seen (or clears it to replay). Returns the new timestamp. */
+  async setOnboarded(id: string, done: boolean): Promise<string | null> {
+    const tenantId = getCurrentTenantId();
+    const rows = await query(
+      `UPDATE users SET onboarded_at = ${done ? "NOW()" : "NULL"} WHERE id = $1 AND tenant_id = $2 RETURNING onboarded_at`,
+      [id, tenantId],
+    );
+    const v = rows[0]?.onboarded_at;
+    return v ? new Date(String(v)).toISOString() : null;
   }
 
   async updateUser(id: string, updates: Partial<Omit<User, "id" | "passwordHash" | "createdAt">>): Promise<SafeUser> {
