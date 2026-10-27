@@ -1635,6 +1635,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ status: "ok" });
   });
 
+  // First-login tour: remember that the user has seen it (or reset to replay).
+  app.post("/api/auth/onboarding", async (req, res) => {
+    if (!req.session?.user) return res.status(401).json({ error: "Not authenticated" });
+    try {
+      const { done } = z.object({ done: z.boolean().default(true) }).parse(req.body ?? {});
+      const onboardedAt = await authStorage.setOnboarded(req.session.user.id, done);
+      req.session.user = { ...req.session.user, onboardedAt };
+      res.json({ onboardedAt });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   app.get("/api/auth/me", (req, res) => {
     if (!req.session?.user) {
       return res.status(401).json({ error: "Not authenticated" });
