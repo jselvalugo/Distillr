@@ -288,16 +288,17 @@ function PermitAlert({ permits }: { permits: PermitRow[] }) {
   if (!alertList.length) return null;
 
   return (
-    <div className="rounded-xl p-4 space-y-2.5 mb-3" style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
-      <p className="text-[9px] font-bold uppercase tracking-widest text-amber-400 mb-2">Permit Alerts</p>
+    <div className="rounded-xl p-4 space-y-2.5 mb-3" style={{ background: "var(--dash-warn-bg)", border: "1px solid var(--dash-warn-border)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+      <p className="text-[9px] font-bold uppercase tracking-widest mb-2" style={{ color: "var(--dash-warn-label)" }}>Permit Alerts</p>
       {alertList.map(p => {
-        const urgency = p.days <= 0 ? "#ef4444" : p.days <= 30 ? "#f97316" : "#f59e0b";
+        // Red when expired, orange inside 30 days, amber otherwise — each in a shade that reads on the current canvas.
+        const urgency = p.days <= 0 ? "var(--dash-danger)" : p.days <= 30 ? "var(--dash-urgent)" : "var(--dash-warn)";
         const urgencyPct = p.days <= 0 ? 100 : Math.max(10, 100 - (p.days / 90) * 100);
         return (
           <div key={p.id} className="space-y-1 cursor-pointer" onClick={() => navigate("/compliance-regulatory")}>
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-amber-200">{p.permitType}{p.permitNumber ? ` — ${p.permitNumber}` : ""}</p>
-              <span className="text-[9px] font-bold" style={{ color: urgency }}>
+              <p className="text-xs font-semibold truncate" style={{ color: "var(--dash-warn-text)" }}>{p.permitType}{p.permitNumber ? ` — ${p.permitNumber}` : ""}</p>
+              <span className="text-[10px] font-bold shrink-0 ml-2 tabular-nums" style={{ color: urgency }}>
                 {p.days <= 0 ? "EXPIRED" : `${p.days}d left`}
               </span>
             </div>
@@ -459,7 +460,7 @@ function NotificationCenter({ permits, colas }: { permits: PermitRow[]; colas: C
 
           {count === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <CheckCircle2 size={20} className="text-emerald-400/60" />
+              <CheckCircle2 size={20} style={{ color: "var(--dash-ok)" }} />
               <p className="text-xs text-dashfg/40">All clear — no active alerts</p>
             </div>
           ) : (
@@ -986,12 +987,16 @@ export default function Dashboard() {
         "--dash-card": "#ffffff", "--dash-card-border": "rgba(15,23,42,0.08)",
         "--dash-card-strong": "#ffffff", "--dash-card-border-strong": "rgba(15,23,42,0.14)",
         "--dash-accent": "#4F46E5", "--dash-accent-soft": "rgba(79,70,229,0.75)",
-        "--dash-popover": "#ffffff", "--dash-float-shadow": "0 1px 2px rgba(15,23,42,0.05), 0 12px 32px -16px rgba(15,23,42,0.3)" }
+        "--dash-popover": "#ffffff", "--dash-float-shadow": "0 1px 2px rgba(15,23,42,0.05), 0 12px 32px -16px rgba(15,23,42,0.3)",
+        "--dash-warn-bg": "#FFFBEB", "--dash-warn-border": "#FDE68A", "--dash-warn-label": "#B45309", "--dash-warn-text": "#78350F",
+        "--dash-warn": "#D97706", "--dash-urgent": "#EA580C", "--dash-danger": "#DC2626", "--dash-ok": "#059669" }
     : { "--dash-fg": "#ffffff", "--dash-fg-rgb": "255,255,255", "--dash-bg": heroBg,
         "--dash-card": "rgba(255,255,255,0.07)", "--dash-card-border": "rgba(255,255,255,0.12)",
         "--dash-card-strong": "rgba(255,255,255,0.11)", "--dash-card-border-strong": "rgba(255,255,255,0.18)",
         "--dash-accent": "#FAF0E2", "--dash-accent-soft": "rgba(250,240,226,0.55)",
-        "--dash-popover": "rgba(15,27,66,0.97)", "--dash-float-shadow": "none" };
+        "--dash-popover": "rgba(15,27,66,0.97)", "--dash-float-shadow": "none",
+        "--dash-warn-bg": "rgba(251,191,36,0.1)", "--dash-warn-border": "rgba(251,191,36,0.25)", "--dash-warn-label": "#FBBF24", "--dash-warn-text": "#FDE68A",
+        "--dash-warn": "#F59E0B", "--dash-urgent": "#F97316", "--dash-danger": "#EF4444", "--dash-ok": "rgba(52,211,153,0.6)" };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1415,7 +1420,7 @@ export default function Dashboard() {
                               <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.cases1750 > 0 ? fmtNum(row.cases1750, 0) : "—"}</td>
                               <td className="px-4 py-3 text-right font-bold text-dashfg tabular-nums">{row.total > 0 ? fmtNum(row.total, 0) : "—"}</td>
                               <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.pg > 0 ? fmtNum(row.pg, 2) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-amber-300 tabular-nums">{row.excise > 0 ? `$${fmtNum(row.excise, 0)}` : "—"}</td>
+                              <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--dash-warn-text)" }}>{row.excise > 0 ? `$${fmtNum(row.excise, 0)}` : "—"}</td>
                               <td className="px-4 py-3 text-right text-dashfg/40 tabular-nums">{row.count}</td>
                             </tr>
                           ))}
