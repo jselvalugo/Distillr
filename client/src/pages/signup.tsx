@@ -86,7 +86,7 @@ export default function Signup() {
             </div>
             <div className="auth__field">
               <label className="auth__label" htmlFor="distilleryName">Distillery name</label>
-              <input id="distilleryName" className="auth__input" placeholder="Oak Cellar Distilling Co." value={form.distilleryName} onChange={(e) => set("distilleryName", e.target.value)} />
+              <input id="distilleryName" className="auth__input" placeholder="Your Distillery Co." value={form.distilleryName} onChange={(e) => set("distilleryName", e.target.value)} />
             </div>
             <div className="auth__field">
               <label className="auth__label" htmlFor="message">Anything we should know? <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span></label>

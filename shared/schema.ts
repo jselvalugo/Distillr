@@ -798,18 +798,23 @@ export const updatePlatformConfigSchema = platformConfigSchema.partial();
 export type PlatformConfig = z.infer<typeof platformConfigSchema>;
 export type UpdatePlatformConfig = z.infer<typeof updatePlatformConfigSchema>;
 
+/**
+ * Defaults for a new organization. The name is intentionally blank: until the
+ * org fills in Settings → Company Info, the app shows the Distillr logo and
+ * reports flag the missing name instead of inventing one.
+ */
 export const defaultPlatformConfig: PlatformConfig = {
-  organizationName: "OakCellar",
+  organizationName: "",
   platformTagline: "Distillery operations and compliance command center",
   industry: "Craft Distillery",
-  supportEmail: "support@oakcellar.com",
-  supportPhone: "(512) 555-0137",
-  website: "https://oakcellar.com",
-  primaryAddress: "100 Copper Still Lane, Austin, TX 78701",
-  timeZone: "America/Chicago",
+  supportEmail: "",
+  supportPhone: "",
+  website: "",
+  primaryAddress: "",
+  timeZone: "America/New_York",
   ein: null,
   inventoryLossRates: { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 },
-  productLabelCounts: { "Pitorro": 4, "Riskey": 2 },
+  productLabelCounts: {},
   accountTypes: ["Distributor", "Retailer", "Supplier", "Contract Partner", "Regulatory"],
   accountStatuses: ["Active", "Prospective", "Inactive"],
   accountIndustries: ["Spirits", "Beverage", "Packaging", "Logistics", "Regulatory"],

@@ -160,7 +160,7 @@ const IN_BOND_STATUSES = new Set(["Filled", "Aging", "Ready"]);
 
 function organizationFrom(config: PlatformConfig): ReportOrganization {
   return {
-    name: config.organizationNameOverride || config.organizationName || "Distillery",
+    name: (config.organizationNameOverride || config.organizationName || "").trim() || "Your distillery",
     dspNumber: config.dspNumber ?? null,
     ein: config.ein ?? null,
     address: config.primaryAddress ?? null,
@@ -1243,6 +1243,9 @@ export async function buildReport(kind: ReportKind, range: { start: string; end:
     case "state-excise":
       doc = await buildStateExcise(ctx);
       break;
+  }
+  if (ctx.org.name === "Your distillery") {
+    doc.warnings.unshift("No company name is set. Add it under Settings → Company Info so it prints on this report.");
   }
   // Round every numeric cell so screen and exports agree to the cent / hundredth.
   for (const kpi of doc.kpis) if (typeof kpi.value === "number") kpi.value = round(kpi.value, kpi.format === "number4" ? 4 : 2);

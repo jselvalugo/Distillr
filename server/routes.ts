@@ -1230,7 +1230,7 @@ function buildTtbPacketPdfLines(report: {
   const lines: string[] = [];
 
   const org = (payload.organization || {}) as Record<string, unknown>;
-  const orgName = typeof org.name === "string" ? org.name : "OakCellar";
+  const orgName = typeof org.name === "string" && org.name.trim() ? org.name : "Distillery";
   const orgAddress = typeof org.address === "string" ? org.address : "";
 
   lines.push(`${orgName} | TTB Compliance Packet`);
@@ -1592,15 +1592,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const tenant = await createTenant({ name: data.distilleryName, slug });
 
-      const user = await runWithTenant(tenant.id, () =>
-        authStorage.createUser({
+      const user = await runWithTenant(tenant.id, async () => {
+        // Start the org's settings with the name they signed up with.
+        await storage.updatePlatformConfig({ organizationName: data.distilleryName });
+        return authStorage.createUser({
           email: data.email,
           password: data.password,
           name: data.adminName,
           role: "admin",
           status: "active",
-        }),
-      );
+        });
+      });
 
       await regenerateSession(req);
       req.session.user = user;
