@@ -11,7 +11,23 @@
   --distillr-night: #0B0D12;
   /* Organization dashboard color; overridden at runtime from Settings → Branding */
   --brand: #4F46E5;
+  /* Dashboard canvas foreground; flipped by Settings → Branding → Appearance */
+  --dash-fg: #ffffff;
+  --dash-fg-rgb: 255,255,255;
+  --dash-bg: #0B0D12;
+  --dash-card: rgba(255,255,255,0.07);
+  --dash-card-border: rgba(255,255,255,0.12);
+  --dash-card-strong: rgba(255,255,255,0.11);
+  --dash-card-border-strong: rgba(255,255,255,0.18);
 }
+
+/* `text-dashfg/40`, `bg-dashfg/10`… resolve against the live --dash-fg. */
+@theme inline {
+  --color-dashfg: var(--dash-fg);
+}
+
+/* Light dashboard: lift cards off the paper canvas with a soft shadow. */
+[data-dash-theme="light"] .rounded-xl[style*="backdrop-filter"], [data-dash-theme="light"] .rounded-2xl[style*="backdrop-filter"] { box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 10px 28px -18px rgba(15,23,42,0.22); }
 
 h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 

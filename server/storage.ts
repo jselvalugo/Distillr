@@ -697,6 +697,7 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     ein: row.ein != null ? String(row.ein) : null,
     logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
     dashboardColor: row.dashboard_color != null ? String(row.dashboard_color) : null,
+    theme: row.theme === "light" || row.theme === "dark" ? row.theme : null,
     inventoryLossRates: (() => {
       try {
         const raw = row.inventory_loss_rates;
@@ -3001,12 +3002,12 @@ export class PostgresStorage implements IStorage {
     await query(
       `INSERT INTO platform_config (
         tenant_id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
-        website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color,
+        website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color, theme,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities, inventory_loss_rates, product_label_counts
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28
       )
       ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
@@ -3022,6 +3023,7 @@ export class PostgresStorage implements IStorage {
         ein = EXCLUDED.ein,
         logo_data_url = EXCLUDED.logo_data_url,
         dashboard_color = EXCLUDED.dashboard_color,
+        theme = EXCLUDED.theme,
         account_types = EXCLUDED.account_types,
         account_statuses = EXCLUDED.account_statuses,
         account_industries = EXCLUDED.account_industries,
@@ -3050,6 +3052,7 @@ export class PostgresStorage implements IStorage {
         next.ein ?? null,
         next.logoDataUrl ?? null,
         next.dashboardColor ?? null,
+        next.theme ?? null,
         next.accountTypes,
         next.accountStatuses,
         next.accountIndustries,

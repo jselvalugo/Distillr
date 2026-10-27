@@ -1,6 +1,6 @@
 import path from "node:path";
 import multer from "multer";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { type Express, type NextFunction, type Request, type Response } from "express";
 import type { Server } from "http";
 import { z } from "zod";
@@ -4123,6 +4123,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ─── Admin Panel: Session-based super-admin UI ───────────────────────────
   // Auth against SUPER_ADMIN_EMAIL + SUPER_ADMIN_PASSWORD env vars.
 
+  function safeEqual(a: string, b: string) {
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
+  }
+
   function requireAdminSession(req: Request, res: Response, next: NextFunction) {
     if (!req.session.isSuperAdmin) return res.status(401).json({ error: "Unauthorized" });
     next();
@@ -4130,15 +4136,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/login", async (req, res) => {
     try {
-      const adminEmail = process.env.SUPER_ADMIN_EMAIL;
-      const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
-      if (!adminEmail || !adminPassword) {
+      const { email, password } = z.object({ email: z.string(), password: z.string() }).parse(req.body);
+      const normalized = email.trim().toLowerCase();
+      const superEmail = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+      const superPassword = process.env.SUPER_ADMIN_PASSWORD;
+      // Platform owner: the ADMIN_EMAIL account seeded on first boot. Verified
+      // against the password stored for that user, so it keeps working after
+      // the user changes their password in-app.
+      const ownerEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+      if (!superEmail && !ownerEmail) {
         return res.status(503).json({ error: "Admin credentials not configured" });
       }
-      const { email, password } = z.object({ email: z.string(), password: z.string() }).parse(req.body);
-      if (email !== adminEmail || password !== adminPassword) {
-        return res.status(401).json({ error: "Invalid credentials" });
+      let ok = false;
+      if (superEmail && superPassword && normalized === superEmail && safeEqual(password, superPassword)) ok = true;
+      if (!ok && ownerEmail && normalized === ownerEmail) {
+        const user = await authStorage.validateCredentials(normalized, password);
+        ok = !!user && user.role === "admin";
       }
+      if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+      await regenerateSession(req);
       req.session.isSuperAdmin = true;
       return res.json({ ok: true });
     } catch (err: any) {

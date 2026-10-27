@@ -25,6 +25,7 @@ type PlatformConfig = {
   dspNumber: string | null;
   ein: string | null;
   dashboardColor: string | null;
+  theme?: "light" | "dark" | null;
   inventoryLossRates: Record<string, number> | null;
   productLabelCounts: Record<string, number> | null;
 };
@@ -266,7 +267,18 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
       qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
       setColorSaved(true);
       setTimeout(() => setColorSaved(false), 2500);
-      toast.success("Dashboard color updated — reload to see changes");
+      toast.success("Dashboard color updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const currentTheme: "light" | "dark" = config?.theme === "light" ? "light" : "dark";
+  const themeMut = useMutation({
+    mutationFn: (theme: "light" | "dark") =>
+      apiRequest<PlatformConfig>("/api/platform-config", { method: "PATCH", body: JSON.stringify({ theme }) }),
+    onSuccess: (_d, theme) => {
+      qc.invalidateQueries({ queryKey: ["/api/platform-config"] });
+      toast.success(theme === "light" ? "Light dashboard enabled" : "Dark dashboard enabled");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -292,6 +304,51 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
 
   return (
     <div className="p-5 sm:p-8 space-y-5 max-w-3xl">
+
+      {/* Appearance */}
+      <SectionCard title="Appearance" description="Choose how the dashboard canvas looks for everyone in your workspace. Tables and forms always use the light layout.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {([
+            { id: "light", label: "Light", hint: "Paper canvas, ink text — bright and printable.", canvas: "#F4F6FB", card: "#ffffff", cardBorder: "rgba(15,23,42,0.08)", ink: "#0F172A", muted: "rgba(15,23,42,0.4)" },
+            { id: "dark", label: "Dark", hint: "Night canvas, glass cards — the Distillr default.", canvas: "#0B0D12", card: "rgba(255,255,255,0.08)", cardBorder: "rgba(255,255,255,0.14)", ink: "#ffffff", muted: "rgba(255,255,255,0.4)" },
+          ] as const).map((t) => {
+            const active = currentTheme === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { if (!active) themeMut.mutate(t.id); }}
+                disabled={themeMut.isPending}
+                aria-pressed={active}
+                className={`text-left rounded-xl border-2 p-2 transition-all ${active ? "border-[#4F46E5] shadow-[0_0_0_4px_rgba(79,70,229,0.12)]" : "border-[#e5e5e5] hover:border-[#c7c7c7]"}`}
+              >
+                <div className="rounded-lg overflow-hidden" style={{ background: t.canvas }}>
+                  <div className="h-5 flex items-center px-2 gap-1" style={{ background: previewColor }}>
+                    <span className="w-2 h-2 rounded-sm bg-white/70" /><span className="w-10 h-1.5 rounded-full bg-white/60" />
+                  </div>
+                  <div className="p-2.5 grid grid-cols-3 gap-1.5">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="rounded-md p-1.5" style={{ background: t.card, border: `1px solid ${t.cardBorder}` }}>
+                        <div className="h-1 w-6 rounded-full mb-1.5" style={{ background: t.muted }} />
+                        <div className="h-2.5 w-7 rounded-sm" style={{ background: t.ink }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-1 pt-2 pb-0.5">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0a0a0a]">{t.label}</p>
+                    <p className="text-[11px] text-[#737373]">{t.hint}</p>
+                  </div>
+                  <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${active ? "border-[#4F46E5]" : "border-[#d4d4d4]"}`}>
+                    {active && <span className="w-2 h-2 rounded-full bg-[#4F46E5]" />}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </SectionCard>
 
       {/* Dashboard Color */}
       <SectionCard title="Dashboard Color" description="Primary color used for the dashboard nav bar, hero, and accents. Enter a hex code or choose a preset.">
