@@ -33,6 +33,7 @@ import {
   deleteTenant,
 } from "./tenant-storage";
 import { runWithTenant, getCurrentTenantId } from "./tenant-context";
+import { EXPORTABLE_TABLES, buildWorkbook, countTableRows, csvForTable, exportTableColumns, fetchTableRows, importWorkbook } from "./data-exchange";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
 import { readFile, saveFile } from "./file-storage";
 import { registerReportRoutes } from "./reports/routes";
@@ -3545,100 +3546,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await handleAiChat(req, res);
   });
 
-  // ── Export / Import ────────────────────────────────────────────
-  const EXPORTABLE_TABLES: Record<string, string> = {
-    batches: "distilling_batch_records",
-    barrels: "barrels",
-    barrel_events: "barrel_events",
-    production_records: "distilling_production_records",
-    inventory_records: "distilling_inventory_records",
-    inventory_items: "inventory_items",
-    inventory_lots: "inventory_lots",
-    inventory_movements: "inventory_movements",
-    compliance: "compliance",
-    clients: "clients",
-    properties: "properties",
-    sales_orders: "sales_orders",
-    staff: "staff",
-    ttb_reports: "ttb_reports",
-    audit_logs: "audit_logs",
-    permits: "permits",
-    cola_registrations: "cola_registrations",
-    label_records: "label_records",
-    state_excise_returns: "state_excise_returns",
-    equipment: "distillery_equipment",
-    calculator_presets: "calculator_presets",
-  };
+  // ── Export / Import (see server/data-exchange.ts) ──────────────
+  async function exportOrgName(): Promise<string> {
+    try {
+      const cfg = await storage.getPlatformConfig();
+      return (cfg.organizationNameOverride || cfg.organizationName || "").trim() || "Your distillery";
+    } catch {
+      return "Your distillery";
+    }
+  }
 
-  const TAB_LABELS: Record<string, string> = {
-    batches: "Production Batches",
-    barrels: "Barrels",
-    barrel_events: "Barrel Events",
-    production_records: "Production Records",
-    inventory_records: "Inventory Records",
-    inventory_items: "Inventory Items",
-    inventory_lots: "Inventory Lots",
-    inventory_movements: "Inventory Movements",
-    compliance: "Compliance",
-    clients: "Clients",
-    properties: "Properties",
-    sales_orders: "Sales Orders",
-    staff: "Staff",
-    ttb_reports: "TTB Reports",
-    audit_logs: "Audit Log",
-    permits: "Permits",
-    cola_registrations: "COLA Registrations",
-    label_records: "Label Records",
-    state_excise_returns: "FL Excise Returns",
-    equipment: "Distillery Equipment",
-    calculator_presets: "Calculator Presets",
-  };
-
-  // Reverse map: sheet tab label → table name (for import)
-  const LABEL_TO_TABLE: Record<string, string> = Object.fromEntries(
-    Object.entries(TAB_LABELS).map(([key, label]) => [label, EXPORTABLE_TABLES[key]])
-  );
-
-  // Non-importable tables (system/read-only)
-  const IMPORT_BLOCKED = new Set(["audit_logs"]);
-
-  app.get("/api/export/counts", async (req, res) => {
+  app.get("/api/export/counts", requireAuth, async (_req, res) => {
     try {
       const counts: Record<string, number> = {};
-      for (const [key, table] of Object.entries(EXPORTABLE_TABLES)) {
-        const rows = await query(`SELECT COUNT(*)::int as n FROM ${table}`);
-        counts[key] = (rows[0] as any)?.n ?? 0;
-      }
+      for (const [key, table] of Object.entries(EXPORTABLE_TABLES)) counts[key] = await countTableRows(table);
       res.json(counts);
     } catch {
       res.status(500).json({ error: "Failed to fetch counts" });
     }
   });
 
-  app.get("/api/export/all.xlsx", async (req, res) => {
+  app.get("/api/export/all.xlsx", requireAuth, async (_req, res) => {
     try {
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
-      for (const [key, tableName] of Object.entries(EXPORTABLE_TABLES)) {
-        // Always fetch column metadata so empty tables still get proper headers
-        const colMeta = await query(
-          `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
-          [tableName]
-        );
-        const cols = colMeta.map((c: any) => c.column_name as string);
-        const hasCreatedAt = cols.includes("created_at");
-        const orderClause = hasCreatedAt ? "ORDER BY created_at ASC NULLS LAST" : "";
-        const rows = await query(`SELECT * FROM ${tableName} ${orderClause}`);
-        let ws: any;
-        if (rows.length > 0) {
-          ws = XLSX.utils.json_to_sheet(rows);
-        } else {
-          // Empty table — write header row only so the sheet serves as an import template
-          ws = XLSX.utils.aoa_to_sheet([cols]);
-        }
-        XLSX.utils.book_append_sheet(wb, ws, TAB_LABELS[key] ?? key);
-      }
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const buf = await buildWorkbook({ org: await exportOrgName(), template: false });
       const date = new Date().toISOString().slice(0, 10);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="distillr-export-${date}.xlsx"`);
@@ -3648,68 +3578,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/export/template.xlsx", async (req, res) => {
+  app.get("/api/export/template.xlsx", requireAuth, async (_req, res) => {
     try {
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
-
-      // Build list of sheets for the Information sheet
-      const sheetList = Object.entries(TAB_LABELS).map(([key, label]) => [
-        `  • ${label}`,
-        `→ ${EXPORTABLE_TABLES[key]}`,
-      ]);
-
-      // Information sheet
-      const infoData = [
-        ["DISTILLR IMPORT TEMPLATE"],
-        [""],
-        ["INSTRUCTIONS:"],
-        ["1. Fill in one row per record. Leave ID blank for new records; include the existing ID to update a record."],
-        ["2. Do not rename or reorder sheet tabs — the importer uses exact sheet names to map tables."],
-        ["3. Dates should be in YYYY-MM-DD format. Numbers should use decimal points (not commas)."],
-        ["4. The 'Audit Log' sheet is read-only and will be skipped on import."],
-        ['5. JSONB fields (cases_made, line_items, etc.) accept JSON strings, e.g. {"750ml":10}'],
-        [""],
-        ["SHEETS IN THIS TEMPLATE:"],
-        ...sheetList,
-      ];
-      const infoWs = XLSX.utils.aoa_to_sheet(infoData);
-      XLSX.utils.book_append_sheet(wb, infoWs, "Information");
-
-      // Helper to produce a hint string for a column
-      function columnHint(col: string): string {
-        if (col === "id") return "# AUTO — leave blank for new records; include to update existing";
-        if (col === "stage") return "# planning | mash_fermentation | distillation | barreling | aging | bottling | closed";
-        if (col === "status") return "# see valid values for each table in the platform";
-        if (col === "event_type") return "# gauge | temperature | dump | Fill | Sample | TopOff";
-        if (col === "spirit_type") return "# rum";
-        if (col === "tax_class") return "# craft_tier1 | craft_tier2 | standard";
-        if (col === "movement_type") return "# receipt | usage | adjustment | transfer | loss";
-        if (col === "type" || col === "zone") return "# see platform for valid values";
-        if (col.endsWith("_at") || col === "created_at" || col === "updated_at" || col.endsWith("_date") || col === "event_at" || col === "performed_at")
-          return "# YYYY-MM-DD or YYYY-MM-DDThh:mm:ssZ";
-        if (col.endsWith("_id")) return "# reference ID from related table";
-        if (col === "metadata" || col.endsWith("_made") || col.endsWith("_items") || col === "parameters" || col === "payload")
-          return '# JSON object e.g. {"750ml":10,"1000ml":5}';
-        if (col.includes("proof") || col.includes("abv") || col.includes("gallons") || col.includes("volume") || col.includes("capacity"))
-          return "# numeric (decimal point, not comma)";
-        if (col.includes("cases") || col.includes("bottles")) return "# integer";
-        return "";
-      }
-
-      // One sheet per table — header row + hint row
-      for (const [key, tableName] of Object.entries(EXPORTABLE_TABLES)) {
-        const colMeta = await query(
-          `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
-          [tableName]
-        );
-        const cols = colMeta.map((c: any) => c.column_name as string);
-        const hints = cols.map(columnHint);
-        const ws = XLSX.utils.aoa_to_sheet([cols, hints]);
-        XLSX.utils.book_append_sheet(wb, ws, TAB_LABELS[key] ?? key);
-      }
-
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const buf = await buildWorkbook({ org: await exportOrgName(), template: true });
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="distillr-import-template.xlsx"`);
       res.send(buf);
@@ -3865,131 +3736,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/export/:table", async (req, res) => {
+  app.get("/api/export/:table", requireAuth, async (req, res) => {
     const tableName = EXPORTABLE_TABLES[req.params.table];
     if (!tableName) return res.status(400).json({ error: "Unknown table" });
     try {
-      const colRows = await query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
-        [tableName]
-      );
-      const colNames = colRows.map((r: any) => r.column_name as string);
-      const orderClause = colNames.includes("created_at") ? "ORDER BY created_at ASC NULLS LAST" : "";
-      const rows = await query(`SELECT * FROM ${tableName} ${orderClause}`);
-      if (rows.length === 0) {
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", `attachment; filename="${req.params.table}.csv"`);
-        return res.send(colNames.join(",") + "\n");
-      }
-      function escapeCSV(val: unknown): string {
-        if (val === null || val === undefined) return "";
-        const str = typeof val === "object" ? JSON.stringify(val) : String(val);
-        if (str.includes(",") || str.includes('"') || str.includes("\n"))
-          return '"' + str.replace(/"/g, '""') + '"';
-        return str;
-      }
-      const headers = Object.keys(rows[0]);
-      const csvLines = [
-        headers.join(","),
-        ...rows.map((row: any) => headers.map((h) => escapeCSV(row[h])).join(",")),
-      ];
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="${req.params.table}_${new Date().toISOString().slice(0, 10)}.csv"`);
-      res.send(csvLines.join("\n"));
+      const cols = await exportTableColumns(tableName);
+      const rows = await fetchTableRows(tableName, cols);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="distillr-${req.params.table}-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csvForTable(cols, rows));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Export failed" });
     }
   });
 
-  // Import — accepts multipart xlsx upload
+  // Import — accepts multipart xlsx upload (the export or the template)
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
   app.post("/api/import", requireAdmin, upload.single("file"), async (req: any, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     try {
-      const XLSX = await import("xlsx");
-      const wb = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
-      const results: Array<{ sheet: string; table: string; inserted: number; updated: number; skipped: number; errors: string[] }> = [];
-
-      for (const sheetName of wb.SheetNames) {
-        const tableName = LABEL_TO_TABLE[sheetName];
-        if (!tableName) {
-          results.push({ sheet: sheetName, table: "—", inserted: 0, updated: 0, skipped: 0, errors: [`Unknown sheet "${sheetName}" — skipped`] });
-          continue;
-        }
-        if (IMPORT_BLOCKED.has(Object.keys(EXPORTABLE_TABLES).find(k => EXPORTABLE_TABLES[k] === tableName)!)) {
-          results.push({ sheet: sheetName, table: tableName, inserted: 0, updated: 0, skipped: 0, errors: ["Read-only table — skipped"] });
-          continue;
-        }
-
-        const ws = wb.Sheets[sheetName];
-        const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: null });
-        if (rows.length === 0) {
-          results.push({ sheet: sheetName, table: tableName, inserted: 0, updated: 0, skipped: 0, errors: [] });
-          continue;
-        }
-
-        // Get valid columns for this table
-        const colMeta = await query(
-          `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
-          [tableName]
-        );
-        const validCols = new Set(colMeta.map((c: any) => c.column_name as string));
-
-        let inserted = 0, updated = 0, skipped = 0;
-        const errors: string[] = [];
-
-        for (const row of rows) {
-          try {
-            // Filter to only columns that exist in the table
-            const filterable = Object.fromEntries(
-              Object.entries(row).filter(([k]) => validCols.has(k) && k !== "created_at" && k !== "updated_at")
-            );
-
-            // Coerce empty strings to null
-            const clean: Record<string, unknown> = {};
-            for (const [k, v] of Object.entries(filterable)) {
-              clean[k] = v === "" ? null : v;
-            }
-
-            const hasId = validCols.has("id");
-            const id = hasId ? clean["id"] : undefined;
-            if (hasId) delete clean["id"];
-
-            const cols = Object.keys(clean);
-            const vals = Object.values(clean);
-            if (!cols.length) { skipped++; continue; }
-
-            if (hasId && id !== null && id !== undefined && String(id).trim() !== "") {
-              // Upsert: insert or update on conflict — use xmax to detect which happened
-              const allCols = ["id", ...cols];
-              const allVals = [id, ...vals];
-              const placeholders = allVals.map((_, i) => `$${i + 1}`).join(", ");
-              const setClauses = cols.map((c, i) => `${c} = $${i + 2}`).join(", ");
-              const result = await pool.query(
-                `INSERT INTO ${tableName} (${allCols.join(", ")}) VALUES (${placeholders})
-                 ON CONFLICT (id) DO UPDATE SET ${setClauses}
-                 RETURNING (xmax = 0) AS is_insert`,
-                allVals
-              );
-              if (result.rows[0]?.is_insert) inserted++; else updated++;
-            } else {
-              // No id — plain insert
-              const placeholders = vals.map((_, i) => `$${i + 1}`).join(", ");
-              await query(
-                `INSERT INTO ${tableName} (${cols.join(", ")}) VALUES (${placeholders})`,
-                vals
-              );
-              inserted++;
-            }
-          } catch (rowErr) {
-            errors.push(rowErr instanceof Error ? rowErr.message : "Row error");
-            skipped++;
-          }
-        }
-        results.push({ sheet: sheetName, table: tableName, inserted, updated, skipped, errors: errors.slice(0, 5) });
-      }
-      res.json({ results });
+      // multer's multipart parsing can drop the per-request tenant context; re-enter it from the session.
+      const tenantId = req.session.user.tenantId;
+      res.json({ results: await runWithTenant(tenantId, () => importWorkbook(req.file.buffer)) });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Import failed" });
     }

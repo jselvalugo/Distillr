@@ -85,7 +85,7 @@ const EXPORT_TABLES = [
   { key: "ttb_reports",          label: "TTB Reports",           desc: "Regulatory reports",                   module: "Compliance" },
   { key: "permits",              label: "Permits",               desc: "Bond & permit records",                module: "Compliance" },
   { key: "cola_registrations",   label: "COLA Registrations",    desc: "Label approvals",                      module: "Compliance" },
-  { key: "state_excise_returns", label: "FL Excise Returns",     desc: "State excise filings",                 module: "Compliance" },
+  { key: "state_excise_returns", label: "State Excise Returns",  desc: "State excise filings",                 module: "Compliance" },
   { key: "properties",           label: "Properties",            desc: "Facilities",                           module: "Organization" },
   { key: "staff",                label: "Staff",                 desc: "Team members",                         module: "Organization" },
   { key: "equipment",            label: "Distillery Equipment",  desc: "Floor plan & still config",            module: "Organization" },
@@ -849,7 +849,7 @@ function ImportTab() {
     <div className="p-5 sm:p-8 space-y-5 max-w-3xl">
       <ExciseImportCard />
 
-      <SectionCard title="Full Data Import" description="Upload the exported Excel template to bulk-import data. Rows with existing IDs are updated; new rows are inserted.">
+      <SectionCard title="Full Data Import" description="Download the Distillr template, fill in the sheets you need under the blue headers, and upload it here. You can also upload an edited full export. Rows with an ID are updated; rows without one are added.">
         <div className="space-y-4">
           <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={() => { window.location.href = "/api/export/template.xlsx"; }}>
