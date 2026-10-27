@@ -5,6 +5,9 @@
 
 [build.environment]
   NODE_VERSION    = "20"
+  # NODE_ENV=production is set on the site, which makes npm skip devDependencies;
+  # vite/esbuild are devDependencies and are needed to build.
+  NPM_FLAGS       = "--include=dev"
   ALLOW_REMOTE    = "true"
   LOCAL_ONLY_MODE = "false"
   SEED_DEMO_DATA  = "true"
