@@ -114,7 +114,7 @@ export default function PermitForm() {
             <Input value={form.issuingAuthority} onChange={set("issuingAuthority")} placeholder="TTB, State ABC Board…" />
           </Field>
           <Field label="State" hint="2-letter code, leave blank for federal">
-            <Input value={form.state} onChange={set("state")} placeholder="FL" maxLength={2} />
+            <Input value={form.state} onChange={set("state")} placeholder="e.g. TX" maxLength={2} />
           </Field>
           <Field label="Issue Date">
             <Input type="date" value={form.issueDate} onChange={set("issueDate")} />

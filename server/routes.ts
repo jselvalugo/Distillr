@@ -33,6 +33,7 @@ import {
   deleteTenant,
 } from "./tenant-storage";
 import { runWithTenant, getCurrentTenantId } from "./tenant-context";
+import { registerReferenceRoutes, syncCatalog } from "./reference-data";
 import { EXPORTABLE_TABLES, buildWorkbook, countTableRows, csvForTable, exportTableColumns, fetchTableRows, importWorkbook } from "./data-exchange";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
 import { readFile, saveFile } from "./file-storage";
@@ -1845,14 +1846,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "records must be a non-empty array" });
       }
       const now = new Date().toISOString();
+      const tenantId = getCurrentTenantId();
       let inserted = 0; let updated = 0; let skipped = 0;
       for (const r of records) {
         const { month, productName, abv, distCases, retailCases, totalCases, proofGallons } = r;
         if (!month || !productName || totalCases === 0) { skipped++; continue; }
         const name = productName.trim();
         const existing = await query(
-          `SELECT id FROM distilling_inventory_records WHERE product_name = $1 AND report_month = $2 AND title LIKE 'Imported:%' LIMIT 1`,
-          [name, month]
+          `SELECT id FROM distilling_inventory_records WHERE tenant_id = $3 AND product_name = $1 AND report_month = $2 AND title LIKE 'Imported:%' LIMIT 1`,
+          [name, month, tenantId]
         );
         if (existing.length > 0) {
           await query(
@@ -1860,9 +1862,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                cases_to_distributors=$1, cases_to_retail=$2, cases_made=$3,
                average_abv_percent=$4, ending_us_gallons=$5, ending_proof_gallons=$5,
                current_month_inventory=$6, ending_month_inventory=$6, updated_at=$7
-             WHERE id=$8`,
+             WHERE id=$8 AND tenant_id=$9`,
             [JSON.stringify({"750ml":distCases}), JSON.stringify({"750ml":retailCases}),
-             JSON.stringify({"750ml":totalCases}), abv, proofGallons, totalCases, now, existing[0].id]
+             JSON.stringify({"750ml":totalCases}), abv, proofGallons, totalCases, now, existing[0].id, tenantId]
           );
           updated++;
         } else {
@@ -1872,16 +1874,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                (id, title, product_name, average_abv_percent, report_month,
                 cases_made, cases_to_distributors, cases_to_retail, bottles_made,
                 beginning_of_month_cases, current_month_inventory, ending_month_inventory,
-                ending_us_gallons, ending_proof_gallons, created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+                ending_us_gallons, ending_proof_gallons, created_at, updated_at, tenant_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
             [id, `Imported: ${name} ${month}`, name, abv, month,
              JSON.stringify({"750ml":totalCases}), JSON.stringify({"750ml":distCases}),
              JSON.stringify({"750ml":retailCases}), JSON.stringify({"750ml":totalCases*6}),
-             0, totalCases, totalCases, proofGallons, proofGallons, now, now]
+             0, totalCases, totalCases, proofGallons, proofGallons, now, now, tenantId]
           );
           inserted++;
         }
       }
+      await syncCatalog(tenantId);
       res.json({ ok: true, inserted, updated, skipped });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Import failed";
@@ -3041,6 +3044,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Reports: catalog, documents and exports live in server/reports (tenant-scoped).
   registerReportRoutes(app);
+  registerReferenceRoutes(app);
 
   // TTB reports
   app.get("/api/reports/ttb", async (_req, res) => {
@@ -3758,7 +3762,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       // multer's multipart parsing can drop the per-request tenant context; re-enter it from the session.
       const tenantId = req.session.user.tenantId;
-      res.json({ results: await runWithTenant(tenantId, () => importWorkbook(req.file.buffer)) });
+      const results = await runWithTenant(tenantId, () => importWorkbook(req.file.buffer));
+      await runWithTenant(tenantId, () => syncCatalog(tenantId));
+      res.json({ results });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Import failed" });
     }

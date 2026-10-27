@@ -20,7 +20,10 @@ import { query, pool } from "./db";
 import { getCurrentTenantId, runWithTenant } from "./tenant-context";
 import { DISTILLR_MARK_PNG_BASE64 } from "./reports/brand-mark";
 
+// Order matters: reference data first so later sheets can refer to it on import.
 export const EXPORTABLE_TABLES: Record<string, string> = {
+  products: "products",
+  storage_locations: "storage_locations",
   batches: "distilling_batch_records",
   barrels: "barrels",
   barrel_events: "barrel_events",
@@ -45,6 +48,8 @@ export const EXPORTABLE_TABLES: Record<string, string> = {
 };
 
 export const TAB_LABELS: Record<string, string> = {
+  products: "Products",
+  storage_locations: "Storage Locations",
   batches: "Production Batches",
   barrels: "Barrels",
   barrel_events: "Barrel Events",
@@ -78,6 +83,7 @@ export const IMPORT_BLOCKED = new Set(["audit_logs"]);
 
 /** ID prefixes the app uses, so imported rows look like app-created ones. */
 const ID_PREFIX: Record<string, string> = {
+  products: "PRD", storage_locations: "LOC",
   distilling_batch_records: "DBATCH", barrels: "BARREL", barrel_events: "BEVT",
   distilling_production_records: "DPROD", distilling_inventory_records: "DINV",
   inventory_items: "INV", inventory_lots: "LOT", inventory_movements: "MOVE", compliance: "COMP",
@@ -117,6 +123,16 @@ export function columnFor(label: string): string {
 
 export function columnHint(col: string): string {
   if (col === "id") return "# leave blank for new records; keep the ID to update an existing one";
+  if (col === "spirit_type") return "# whiskey | brandy | rum | gin | vodka | neutral | agave | liqueur | other";
+  if (col === "spirit_class") return "# class designation, e.g. Straight Bourbon Whiskey";
+  if (col === "sizes") return '# JSON list, e.g. ["750ml","1000ml"]';
+  if (col === "variants") return '# JSON list of styles, e.g. ["Original","Cask Strength"]';
+  if (col === "recipe" || col === "ingredients") return '# JSON, e.g. [{"name":"Corn","quantity":900,"unit":"lb"}]';
+  if (col === "combine_barrel_aging") return "# TRUE if barreled and aged in one step";
+  if (col === "bonded") return "# TRUE or FALSE";
+  if (col === "variant") return "# one of the product's variants";
+  if (col === "product_name") return "# must match a name on the Products sheet";
+  if (col === "warehouse_zone") return "# a name from the Storage Locations sheet";
   if (col === "stage") return "# planning | mash_fermentation | distillation | barreling | aging | bottling | closed";
   if (col === "status") return "# status value as shown in the app";
   if (col === "event_type") return "# gauge | temperature | dump | fill | sample | topoff";
@@ -332,6 +348,8 @@ function infoSheet(
   });
   r++;
   const DESCRIPTIONS: Record<string, string> = {
+    "Products": "Your catalog: every product with its spirit class, proof, sizes, variants and recipe. Fill this first.",
+    "Storage Locations": "Rickhouses, racks, tanks and rooms barrels can be stored in.",
     "Production Batches": "Each batch from mash to bottle, with stage, proof gallons and case counts.",
     "Barrels": "Cooperage on hand: fill date, size, location, current proof and contents.",
     "Barrel Events": "Gauges, samples, top-offs and dumps logged against barrels.",
@@ -496,8 +514,47 @@ export async function importWorkbook(buffer: Buffer): Promise<ImportResult[]> {
   return runWithTenant(tenantId, () => importSheets(wb, tenantId));
 }
 
+/**
+ * IDs are unique across every workspace. When a file carries IDs that already
+ * belong to another workspace (a shared sample, or a copy of someone else's
+ * export), those rows get fresh IDs here, and every cell elsewhere in the file
+ * that pointed at the old ID is rewritten to the new one.
+ */
+async function planIdRemap(wb: ExcelJS.Workbook, tenantId: string): Promise<Map<string, string>> {
+  const remap = new Map<string, string>();
+  for (const ws of wb.worksheets) {
+    const tableName = LABEL_TO_TABLE[ws.name];
+    if (!tableName) continue;
+    const meta = await tableColumns(tableName);
+    const validCols = new Set(meta.map((c) => c.name));
+    if (!validCols.has("id") || !validCols.has("tenant_id")) continue;
+    const headerRow = findHeaderRow(ws, validCols);
+    if (!headerRow) continue;
+    let idCol = 0;
+    ws.getRow(headerRow).eachCell({ includeEmpty: false }, (cell, idx) => {
+      if (columnFor(String(cellIn(cell.value) ?? "")) === "id") idCol = idx;
+    });
+    if (!idCol) continue;
+    const ids: string[] = [];
+    for (let r = headerRow + 1; r <= ws.rowCount; r++) {
+      const v = cellIn(ws.getRow(r).getCell(idCol).value);
+      if (v != null && String(v).trim() && !String(v).trim().startsWith("#")) ids.push(String(v).trim());
+    }
+    if (!ids.length) continue;
+    const taken = await query<{ id: string }>(
+      `SELECT id FROM ${tableName} WHERE id = ANY($1::text[]) AND tenant_id <> $2`,
+      [ids, tenantId],
+    );
+    for (const { id } of taken) {
+      if (!remap.has(id)) remap.set(id, newId(tableName));
+    }
+  }
+  return remap;
+}
+
 async function importSheets(wb: ExcelJS.Workbook, tenantId: string): Promise<ImportResult[]> {
   const results: ImportResult[] = [];
+  const remap = await planIdRemap(wb, tenantId);
 
   for (const ws of wb.worksheets) {
     const sheetName = ws.name;
@@ -547,7 +604,8 @@ async function importSheets(wb: ExcelJS.Workbook, tenantId: string): Promise<Imp
         if (typeof v === "string" && v.trim().startsWith("#")) isHint = true;
         if (!name) return;
         if (v === null || (typeof v === "string" && v.trim() === "")) return;
-        record[name] = typeof v === "string" ? v.trim() : v;
+        const clean = typeof v === "string" ? v.trim() : v;
+        record[name] = typeof clean === "string" && remap.has(clean) ? remap.get(clean)! : clean;
         any = true;
       });
       if (!any) continue;

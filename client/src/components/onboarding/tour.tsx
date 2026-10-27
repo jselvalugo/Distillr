@@ -63,7 +63,7 @@ const STEPS: Step[] = [
     target: "user-menu",
     route: "/",
     title: "Your account",
-    body: "Settings live here: company info, your logo and colors, a light or dark dashboard, and your team. You can replay this tour from the same menu anytime.",
+    body: "Settings live here: company info, your logo and colors, a light or dark dashboard, your team — and Reference Data, where you keep your product catalog and storage locations. You can replay this tour from the same menu anytime.",
     place: "below",
   },
 ];
@@ -209,10 +209,20 @@ export function OnboardingTour() {
             <div className="tour-done-mark"><Check size={22} strokeWidth={2.5} /></div>
             <h2 className="tour-h">You're all set.</h2>
             <p className="tour-p">
-              Head to Operations → Production to log your first batch, or open Reports when you're ready to file. You can replay this tour from your account menu.
+              {user.role === "admin"
+                ? "Start by adding the products you make and where you store them — every batch, barrel and label picks from that list. Then log your first batch under Operations → Production."
+                : "Head to Operations → Production to log your first batch, or open Reports when you're ready to file."}
+              {" "}You can replay this tour from your account menu.
             </p>
             <div className="tour-actions">
-              <button className="tour-btn tour-btn--primary" onClick={finish} autoFocus>Start using Distillr</button>
+              {user.role === "admin" && (
+                <button className="tour-btn tour-btn--primary" onClick={() => { finish(); navigate("/settings?tab=products"); }} autoFocus>
+                  Set up my products
+                </button>
+              )}
+              <button className={`tour-btn ${user.role === "admin" ? "tour-btn--ghost" : "tour-btn--primary"}`} onClick={finish} autoFocus={user.role !== "admin"}>
+                {user.role === "admin" ? "I'll do it later" : "Start using Distillr"}
+              </button>
             </div>
             <p className="tour-foot"><DistillrLogo height={14} /></p>
           </div>

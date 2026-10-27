@@ -6,6 +6,7 @@ import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import { useHomeState } from "../lib/reference";
 
 const STATE_RATES: Record<string, { name: string; rate: number }> = {
   CA: { name: "California", rate: 3.30 }, NY: { name: "New York", rate: 6.44 },
@@ -29,8 +30,8 @@ const EXCISE_STATUSES = ["draft", "filed", "amended"];
 function formatStatus(s: string) { return s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); }
 
 const empty = {
-  state: "FL", periodStart: "", periodEnd: "", dueDate: "",
-  status: "draft", totalProofGallons: "", ratePerProofGallon: String(STATE_RATES["FL"].rate), notes: "",
+  state: "", periodStart: "", periodEnd: "", dueDate: "",
+  status: "draft", totalProofGallons: "", ratePerProofGallon: "", notes: "",
 };
 
 interface StateExciseReturn {
@@ -44,6 +45,12 @@ export default function ExciseForm() {
   const isEdit = !!params.id;
   const qc = useQueryClient();
   const [form, setForm] = useState(empty);
+  const homeState = useHomeState();
+  // A new return starts on the distillery's home state (Settings → Company Info).
+  useEffect(() => {
+    if (isEdit || !homeState || !STATE_RATES[homeState]) return;
+    setForm(f => (f.state ? f : { ...f, state: homeState, ratePerProofGallon: String(STATE_RATES[homeState].rate) }));
+  }, [homeState]);
 
   const { data: existing } = useQuery<StateExciseReturn>({
     queryKey: [`/api/state-excise/${params.id}`],
@@ -78,7 +85,8 @@ export default function ExciseForm() {
   function handlePeriodEnd(e: React.ChangeEvent<HTMLInputElement>) {
     const end = e.target.value;
     let dueDate = form.dueDate;
-    if (end && form.state === "FL") {
+    // Most states file monthly, due the 15th of the following month; adjust if yours differs.
+    if (end && !form.dueDate) {
       const d = new Date(end + "T00:00:00");
       d.setMonth(d.getMonth() + 1);
       d.setDate(15);
@@ -136,7 +144,7 @@ export default function ExciseForm() {
           </div>
           <InfoCard>
             <p className="font-medium text-[#0a0a0a]">Filing deadlines</p>
-            <p>Most states require monthly returns due on the 15th of the following month. Florida follows this schedule under § 565.12.</p>
+            <p>Most states require monthly returns due on the 15th of the following month. Rates change — confirm the current rate with your state's alcohol tax authority before filing.</p>
           </InfoCard>
         </>
       }
@@ -145,6 +153,7 @@ export default function ExciseForm() {
         <FormGrid>
           <Field label="State">
             <Select value={form.state} onChange={handleStateChange}>
+              <option value="">— Select state —</option>
               {Object.entries(STATE_RATES).map(([code, { name }]) => (
                 <option key={code} value={code}>{code} — {name}</option>
               ))}

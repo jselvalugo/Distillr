@@ -57,14 +57,14 @@ export default function InventoryItemForm() {
       aside={
         <InfoCard>
           <p className="font-medium text-[#0a0a0a]">Items vs. Lots</p>
-          <p>An <strong>item</strong> defines the product (e.g., "Silver Rum 750ml"). <strong>Lots</strong> represent physical stock of that item with quantities, ABV, and lot codes. Add lots after creating the item.</p>
+          <p>An <strong>item</strong> defines the product (e.g., "Small Batch Bourbon 750 mL"). <strong>Lots</strong> represent physical stock of that item with quantities, ABV, and lot codes. Add lots after creating the item.</p>
         </InfoCard>
       }
     >
       <FormSection title="Item Details">
         <FormGrid>
           <Field label="Item Name" required>
-            <Input value={form.name} onChange={set("name")} placeholder="e.g. Silver Rum 750ml" />
+            <Input value={form.name} onChange={set("name")} placeholder="e.g. Small Batch Bourbon 750 mL" />
           </Field>
           <Field label="Category" required>
             <Select value={form.category} onChange={set("category")}>

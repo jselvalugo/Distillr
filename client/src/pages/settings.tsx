@@ -1,7 +1,9 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Building2, Shield, Database, Settings2, AlertTriangle, Download, Upload, Image, User } from "lucide-react";
+import { Building2, Shield, Database, Settings2, AlertTriangle, Download, Upload, Image, User, Library } from "lucide-react";
+import { ProductsTab, LocationsTab } from "./settings-reference";
+import { US_STATES } from "@shared/spirits";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -21,6 +23,7 @@ type PlatformConfig = {
   website: string;
   primaryAddress: string;
   timeZone: string;
+  homeState?: string | null;
   logoDataUrl: string | null;
   dspNumber: string | null;
   ein: string | null;
@@ -118,6 +121,7 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
     website: config?.website ?? "",
     primaryAddress: config?.primaryAddress ?? "",
     timeZone: config?.timeZone ?? "",
+    homeState: config?.homeState ?? "",
   });
   const [saved, setSaved] = useState(false);
 
@@ -139,6 +143,7 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
           website: form.website,
           primaryAddress: form.primaryAddress,
           timeZone: form.timeZone,
+          homeState: form.homeState || null,
         }),
       }),
     onSuccess: () => {
@@ -193,14 +198,14 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
         <FormRow label="Operations Email" required hint="Used in TTB correspondence and compliance records.">
           <div className="flex items-center gap-2">
             <FieldStatus value={form.supportEmail} />
-            <Input value={form.supportEmail} onChange={set("supportEmail")} type="email" placeholder="e.g. ops@lugoscraftdistillery.com" className="flex-1" />
+            <Input value={form.supportEmail} onChange={set("supportEmail")} type="email" placeholder="e.g. ops@yourdistillery.com" className="flex-1" />
           </div>
         </FormRow>
         <FormRow label="Phone Number" hint="Primary operations phone. Included in compliance documents.">
           <Input value={form.supportPhone} onChange={set("supportPhone")} type="tel" placeholder="e.g. (787) 555-0100" />
         </FormRow>
         <FormRow label="Website" hint="Distillery website URL.">
-          <Input value={form.website} onChange={set("website")} type="url" placeholder="e.g. https://www.lugoscraftdistillery.com" />
+          <Input value={form.website} onChange={set("website")} type="url" placeholder="e.g. https://www.yourdistillery.com" />
         </FormRow>
       </SectionCard>
 
@@ -208,13 +213,26 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
         <FormRow label="Primary Address" required hint="Registered distillery address used on TTB filings and state permits.">
           <div className="flex items-center gap-2">
             <FieldStatus value={form.primaryAddress} />
-            <Input value={form.primaryAddress} onChange={set("primaryAddress")} placeholder="e.g. 123 Calle Principal, Bayamón, PR 00961" className="flex-1" />
+            <Input value={form.primaryAddress} onChange={set("primaryAddress")} placeholder="e.g. 1400 Mill Race Rd, Bastrop, TX 78602" className="flex-1" />
+          </div>
+        </FormRow>
+        <FormRow label="Home State" hint="Where the distillery is licensed. Used as the default for state excise returns and permits.">
+          <div className="flex items-center gap-2">
+            <FieldStatus value={form.homeState} />
+            <select
+              value={form.homeState}
+              onChange={(e) => { setForm(f => ({ ...f, homeState: e.target.value })); setSaved(false); }}
+              className="flex h-9 w-full rounded-md border border-[#e5e5e5] bg-white px-3 py-1 text-sm text-[#0a0a0a] flex-1"
+            >
+              <option value="">— Select state —</option>
+              {US_STATES.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+            </select>
           </div>
         </FormRow>
         <FormRow label="Time Zone" required hint="IANA timezone identifier — used for report timestamps and scheduling.">
           <div className="flex items-center gap-2">
             <FieldStatus value={form.timeZone} />
-            <Input value={form.timeZone} onChange={set("timeZone")} placeholder="e.g. America/Puerto_Rico" className="flex-1" />
+            <Input value={form.timeZone} onChange={set("timeZone")} placeholder="e.g. America/Chicago" className="flex-1" />
           </div>
         </FormRow>
       </SectionCard>
@@ -1028,20 +1046,20 @@ const LOSS_RATE_META: { key: string; label: string; unit: string; benchmark: str
     ref: "Craft distillery ops benchmarks",
   },
   {
-    key: "Molasses",
-    label: "Molasses",
-    unit: "gallons",
-    benchmark: "3–6%",
-    why: "Pump and hose transfer residual, drum/tote carryover (typically 0.5–2 gal per 55-gal drum), minor evaporation, and yeast starter waste. TTB requires recording all raw materials used per 27 CFR § 19.582.",
+    key: "Fermentables",
+    label: "Grain & Fermentables",
+    unit: "lbs / gallons",
+    benchmark: "2–6%",
+    why: "Milling dust and bag residual for grain; pump, hose and drum carryover for molasses, syrups and juice; spillage during transfer and yeast-starter waste. TTB requires recording all materials used.",
     ref: "27 CFR § 19.582; craft distillery ops",
   },
   {
-    key: "Cane Sugar",
-    label: "Cane Sugar",
+    key: "Botanicals & Flavorings",
+    label: "Botanicals & Flavorings",
     unit: "lbs",
-    benchmark: "2–4%",
-    why: "Bag residual (~0.5 lb per 50-lb bag), spillage during transfer, clumping from humidity absorption, and dissolving losses in the mash vessel.",
-    ref: "27 CFR § 19.582; craft distillery ops",
+    benchmark: "2–5%",
+    why: "Spent botanicals left in the basket or still, handling and sieving loss, and moisture loss in storage.",
+    ref: "Craft distillery ops benchmarks",
   },
   {
     key: "Unused Barrels",
@@ -1053,25 +1071,12 @@ const LOSS_RATE_META: { key: string; label: string; unit: string; benchmark: str
   },
 ];
 
-// Label breakdown descriptions per product
-const LABEL_BREAKDOWN: Record<string, string> = {
-  "Pitorro": "Front · Back · Neck · Back-neck strip",
-  "Riskey":  "Front · Back",
-};
-
 function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined }) {
   const qc = useQueryClient();
-  const defaults: Record<string, number> = { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 };
+  const defaults: Record<string, number> = { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Fermentables": 4, "Botanicals & Flavorings": 3, "Unused Barrels": 0 };
   const [rates, setRates] = useState<Record<string, string>>(() => {
     const src = config?.inventoryLossRates ?? defaults;
     return Object.fromEntries(LOSS_RATE_META.map(m => [m.key, String(src[m.key] ?? defaults[m.key] ?? 0)]));
-  });
-
-  // Product label counts state: array of { product, count } for easy add/remove
-  type LabelRow = { product: string; count: string };
-  const [labelRows, setLabelRows] = useState<LabelRow[]>(() => {
-    const src = config?.productLabelCounts ?? { "Pitorro": 4, "Riskey": 2 };
-    return Object.entries(src).map(([product, count]) => ({ product, count: String(count) }));
   });
 
   const saveRates = useMutation({
@@ -1084,21 +1089,6 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
       }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/platform-config"] }); toast.success("Loss rates saved"); },
-    onError: () => toast.error("Failed to save"),
-  });
-
-  const saveLabelCounts = useMutation({
-    mutationFn: () => apiRequest("/api/platform-config", {
-      method: "PATCH",
-      body: JSON.stringify({
-        productLabelCounts: Object.fromEntries(
-          labelRows
-            .filter(r => r.product.trim())
-            .map(r => [r.product.trim(), parseInt(r.count) || 0])
-        ),
-      }),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/platform-config"] }); toast.success("Label counts saved"); },
     onError: () => toast.error("Failed to save"),
   });
 
@@ -1161,63 +1151,11 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
 
       <SectionCard
         title="Labels per Product"
-        description="Number of labels applied per bottle for each product line. Drives the label demand calculation in the Inventory → Labels tab."
+        description="Labels per bottle is now set on each product, so label demand follows your catalog."
       >
-        <div className="rounded-lg border border-[#e5e5e5] overflow-hidden mb-3">
-          <table className="w-full text-xs">
-            <thead className="bg-[#f7f7f7] border-b border-[#e5e5e5]">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a] w-40">Product</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-[#0a0a0a]">Label Breakdown</th>
-                <th className="text-center px-4 py-2.5 font-semibold text-[#0a0a0a] w-28">Labels / Bottle</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#f0f0f0]">
-              {labelRows.map((row, i) => (
-                <tr key={i} className="hover:bg-[#fafafa]">
-                  <td className="px-4 py-2.5 align-middle">
-                    <input
-                      type="text"
-                      value={row.product}
-                      onChange={e => setLabelRows(rows => rows.map((r, j) => j === i ? { ...r, product: e.target.value } : r))}
-                      placeholder="Product name"
-                      className="w-full border border-[#e5e5e5] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 align-middle text-[#737373] italic">
-                    {LABEL_BREAKDOWN[row.product.trim()] ?? "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-center align-middle">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={row.count}
-                      onChange={e => setLabelRows(rows => rows.map((r, j) => j === i ? { ...r, count: e.target.value } : r))}
-                      className="w-16 text-center border border-[#e5e5e5] rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
-                    />
-                  </td>
-                  <td className="px-2 py-2.5 text-center align-middle">
-                    <button
-                      onClick={() => setLabelRows(rows => rows.filter((_, j) => j !== i))}
-                      className="text-[#d1d5db] hover:text-red-400 transition-colors text-sm font-bold"
-                      title="Remove row"
-                    >×</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setLabelRows(rows => [...rows, { product: "", count: "1" }])}
-            className="text-xs text-[var(--brand)] hover:underline"
-          >+ Add product</button>
-          <Button onClick={() => saveLabelCounts.mutate()} disabled={saveLabelCounts.isPending} size="sm">
-            {saveLabelCounts.isPending ? "Saving…" : "Save Label Counts"}
-          </Button>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-[#737373]">Open a product under Reference Data → Products and set “Labels per bottle”.</p>
+          <Button size="sm" variant="outline" onClick={() => window.dispatchEvent(new CustomEvent("distillr:settings-tab", { detail: "products" }))}>Open Products</Button>
         </div>
       </SectionCard>
 
@@ -1237,7 +1175,7 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
             1,900 net usable labels.
           </p>
           <p>
-            <strong className="text-[#0a0a0a]">TTB Note:</strong> Raw material losses (Molasses, Cane Sugar) must
+            <strong className="text-[#0a0a0a]">TTB Note:</strong> Raw material losses (grain, molasses, sugar and other fermentables) must
             be recorded as part of your production records under <span className="font-mono">27 CFR § 19.582</span>.
             These estimates help you reconcile actual usage against purchased quantity. Actual discrepancies should
             be noted in your batch production records.
@@ -1256,7 +1194,17 @@ function InventoryLossRatesTab({ config }: { config: PlatformConfig | undefined 
 
 // ─── Sidebar nav ──────────────────────────────────────────────────────────────
 
-type Tab = "org-info" | "branding" | "regulatory" | "inventory" | "export" | "import" | "system";
+type Tab = "org-info" | "branding" | "products" | "locations" | "regulatory" | "inventory" | "export" | "import" | "system";
+
+const TAB_KEYS: Tab[] = ["org-info", "branding", "products", "locations", "regulatory", "inventory", "export", "import", "system"];
+function initialTab(): Tab {
+  try {
+    const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    return t && TAB_KEYS.includes(t) ? t : "org-info";
+  } catch {
+    return "org-info";
+  }
+}
 
 const NAV_GROUPS = [
   {
@@ -1265,6 +1213,14 @@ const NAV_GROUPS = [
     items: [
       { key: "org-info" as Tab, label: "Company Info" },
       { key: "branding" as Tab, label: "Branding" },
+    ],
+  },
+  {
+    group: "Reference Data",
+    icon: Library,
+    items: [
+      { key: "products" as Tab, label: "Products" },
+      { key: "locations" as Tab, label: "Storage Locations" },
     ],
   },
   {
@@ -1302,7 +1258,20 @@ const NAV_GROUPS = [
 
 export default function Settings() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>("org-info");
+  const [tab, setTabState] = useState<Tab>(initialTab);
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", t);
+      window.history.replaceState(null, "", url.toString());
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    const onTab = (e: Event) => { const t = (e as CustomEvent).detail as Tab; if (TAB_KEYS.includes(t)) setTab(t); };
+    window.addEventListener("distillr:settings-tab", onTab);
+    return () => window.removeEventListener("distillr:settings-tab", onTab);
+  }, [setTab]);
 
   const { data: config } = useQuery<PlatformConfig>({
     queryKey: ["/api/platform-config"],
@@ -1365,6 +1334,8 @@ export default function Settings() {
 
           {tab === "org-info"    && <OrganizationTab config={config} />}
           {tab === "branding"    && <BrandingTab config={config} />}
+          {tab === "products"    && <ProductsTab />}
+          {tab === "locations"   && <LocationsTab />}
           {tab === "regulatory"  && <RegulatoryTab config={config} />}
           {tab === "inventory"   && <InventoryLossRatesTab config={config} />}
           {tab === "export"      && <ExportTab />}

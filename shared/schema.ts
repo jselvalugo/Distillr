@@ -590,7 +590,8 @@ export const distillingBatchRecordSchema = z.object({
   productionMonth: z.string().nullable().optional(),
   expectingOutcome: z.string().nullable().optional(),
   expectingDate: z.string().nullable().optional(),
-  pitorroFruit: z.string().nullable().optional(),
+  /** Style of the product made in this batch (flavor, finish…), from the product's variants. */
+  variant: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -632,7 +633,7 @@ export const insertDistillingBatchRecordSchema = distillingBatchRecordSchema.par
   productionMonth: true,
   expectingOutcome: true,
   expectingDate: true,
-  pitorroFruit: true,
+  variant: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -644,11 +645,9 @@ export const distillingProductionRecordSchema = z.object({
   id: z.string(),
   batchRecordId: z.string().nullable().optional(),
   mashDate: z.string(),
-  gallonsMolasses: z.number().nonnegative(),
-  lbsSugar: z.number().nonnegative(),
+  /** Mash bill / fermentables used, e.g. [{ name: "Corn", quantity: 900, unit: "lb" }]. */
+  ingredients: z.array(z.object({ name: z.string(), quantity: z.number().nonnegative().nullable(), unit: z.string() })).default([]),
   yeastDate: z.string().nullable().optional(),
-  libertaliaYeastPackets: z.number().int().nonnegative(),
-  riskeyYeastPackets: z.number().int().nonnegative(),
   distillDate: z.string(),
   gallonsDistilled: z.number().nonnegative(),
   percentageDistilled: z.number().nonnegative(),
@@ -778,6 +777,8 @@ export const platformConfigSchema = z.object({
   ein: z.string().nullable().optional(),
   logoDataUrl: z.string().nullable().optional(),
   dashboardColor: z.string().nullable().optional(),
+  /** Two-letter state the distillery is licensed in; the default for state excise and permits. */
+  homeState: z.string().nullable().optional(),
   /** Dashboard appearance; "dark" (brand Night) is the default when unset. */
   theme: z.enum(["light", "dark"]).nullable().optional(),
   inventoryLossRates: z.record(z.number()).nullable().optional(),
@@ -814,8 +815,9 @@ export const defaultPlatformConfig: PlatformConfig = {
   website: "",
   primaryAddress: "",
   timeZone: "America/New_York",
+  homeState: null,
   ein: null,
-  inventoryLossRates: { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0 },
+  inventoryLossRates: { "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Fermentables": 4, "Botanicals & Flavorings": 3, "Unused Barrels": 0 },
   productLabelCounts: {},
   accountTypes: ["Distributor", "Retailer", "Supplier", "Contract Partner", "Regulatory"],
   accountStatuses: ["Active", "Prospective", "Inactive"],

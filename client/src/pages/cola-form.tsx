@@ -6,26 +6,13 @@ import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import { ProductSelect, SpiritClassSelect } from "../components/reference/pickers";
 
-const PRODUCTS = [
-  "Original Pitorro",
-  "Coconut Pitorro",
-  "Citrus Pitorro",
-  "Café Pitorro",
-  "Libertalia",
-  "Oak Aged Libertalia",
-  "Riskey",
-  "Riskey Barrel Strength",
-  "Coquito",
-  "Libations",
-  "Yo-Ho",
-] as const;
 
-const CLASS_TYPES = ["Rum"];
 const COLA_STATUSES = ["pending", "approved", "rejected", "expired", "revoked"];
 
 const empty = {
-  productName: "", brandName: "", classType: "Rum", formulaNumber: "",
+  productName: "", brandName: "", classType: "", formulaNumber: "",
   colaNumber: "", status: "pending", appliedAt: "", approvedAt: "", expiresAt: "", notes: "",
 };
 
@@ -116,18 +103,16 @@ export default function ColaForm() {
       <FormSection title="Product Information">
         <FormGrid>
           <Field label="Product Name" required>
-            <Select value={form.productName} onChange={set("productName")}>
-              <option value="">— Select product —</option>
-              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </Select>
+            <ProductSelect
+              value={form.productName}
+              onChange={(name, p) => setForm(f => ({ ...f, productName: name, classType: f.classType || p?.spiritClass || "" }))}
+            />
           </Field>
           <Field label="Brand Name" required>
-            <Input value={form.brandName} onChange={set("brandName")} placeholder="e.g. Libertalia" />
+            <Input value={form.brandName} onChange={set("brandName")} placeholder="e.g. Riverbend" />
           </Field>
-          <Field label="Class / Type">
-            <Select value={form.classType} onChange={set("classType")}>
-              {CLASS_TYPES.map(t => <option key={t}>{t}</option>)}
-            </Select>
+          <Field label="Class designation">
+            <SpiritClassSelect value={form.classType} onChange={(v) => setForm(f => ({ ...f, classType: v }))} />
           </Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>

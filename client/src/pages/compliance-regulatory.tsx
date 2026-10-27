@@ -12,6 +12,8 @@ import { Dialog } from "../components/ui/dialog";
 import { Badge, statusBadge } from "../components/ui/badge";
 import { fmt } from "../lib/utils";
 import { useAuth } from "../hooks/use-auth";
+import { ProductSelect, SpiritClassSelect } from "../components/reference/pickers";
+import { useHomeState } from "../lib/reference";
 
 type Tab = "permits" | "excise" | "cola" | "labels";
 
@@ -110,7 +112,6 @@ const PERMIT_TYPES = [
   "Other",
 ];
 
-const CLASS_TYPES = ["Rum"];
 
 const COLA_STATUSES = ["pending", "approved", "rejected", "expired", "revoked"];
 const LABEL_STATUSES = ["draft", "approved", "in_use", "retired"];
@@ -160,7 +161,7 @@ const emptyPermit = {
 const emptyCola = {
   productName: "",
   brandName: "",
-  classType: "Rum",
+  classType: "",
   formulaNumber: "",
   colaNumber: "",
   status: "pending",
@@ -177,20 +178,20 @@ const emptyLabel = {
   colaId: "",
   netContents: "",
   alcoholContent: "",
-  classType: "Rum",
+  classType: "",
   status: "draft",
   approvedAt: "",
   notes: "",
 };
 
 const emptyExcise = {
-  state: "FL",
+  state: "",
   periodStart: "",
   periodEnd: "",
   dueDate: "",
   status: "draft",
   totalProofGallons: "",
-  ratePerProofGallon: String(STATE_RATES["CA"].rate),
+  ratePerProofGallon: "",
   notes: "",
 };
 
@@ -219,6 +220,13 @@ export default function ComplianceRegulatory() {
   // Excise state
   const [exciseOpen, setExciseOpen] = useState(false);
   const [editExcise, setEditExcise] = useState<StateExciseReturn | null>(null);
+  const homeState = useHomeState();
+  // New returns start on the distillery's home state (Settings → Company Info).
+  const blankExcise = () => ({
+    ...emptyExcise,
+    state: homeState && STATE_RATES[homeState] ? homeState : "",
+    ratePerProofGallon: homeState && STATE_RATES[homeState] ? String(STATE_RATES[homeState].rate) : "",
+  });
   const [exciseForm, setExciseForm] = useState(emptyExcise);
 
   const { data: permits = [] } = useQuery<Permit[]>({
@@ -378,7 +386,7 @@ export default function ComplianceRegulatory() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/state-excise"] });
       setExciseOpen(false);
-      setExciseForm(emptyExcise);
+      setExciseForm(blankExcise());
       toast.success("Excise return created");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -398,7 +406,7 @@ export default function ComplianceRegulatory() {
       qc.invalidateQueries({ queryKey: ["/api/state-excise"] });
       setExciseOpen(false);
       setEditExcise(null);
-      setExciseForm(emptyExcise);
+      setExciseForm(blankExcise());
       toast.success("Excise return updated");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -482,7 +490,7 @@ export default function ComplianceRegulatory() {
 
   function openAddExcise() {
     setEditExcise(null);
-    setExciseForm(emptyExcise);
+    setExciseForm(blankExcise());
     setExciseOpen(true);
   }
 
@@ -646,10 +654,10 @@ export default function ComplianceRegulatory() {
         {/* State Excise Tab */}
         {tab === "excise" && (
           <div className="space-y-4">
-            {/* Florida compliance info banner */}
+            {/* Home-state excise summary (Settings → Company Info → Home State) */}
             <div className="border border-[#e5e5e5] rounded-lg bg-white p-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1">
+              {homeState === "FL" ? (
+                <>
                   <h3 className="text-sm font-semibold text-[#0a0a0a]">Florida Excise Tax — Distilled Spirits</h3>
                   <p className="text-xs text-[#737373] mt-1">
                     Rate: <span className="font-semibold text-[#0a0a0a]">$9.53 per proof gallon</span> &nbsp;·&nbsp;
@@ -660,8 +668,24 @@ export default function ComplianceRegulatory() {
                   <p className="text-[10px] text-[#a3a3a3] mt-1">
                     Florida Statutes § 565.12 — Excise tax on distilled spirits sold to licensed vendors. Craft distillers producing under 75,000 gallons/year may qualify for a 7% excise tax credit under § 565.108.
                   </p>
-                </div>
-              </div>
+                </>
+              ) : homeState && STATE_RATES[homeState] ? (
+                <>
+                  <h3 className="text-sm font-semibold text-[#0a0a0a]">{STATE_RATES[homeState].name} Excise Tax — Distilled Spirits</h3>
+                  <p className="text-xs text-[#737373] mt-1">
+                    Reference rate: <span className="font-semibold text-[#0a0a0a]">${STATE_RATES[homeState].rate.toFixed(2)} per proof gallon</span> &nbsp;·&nbsp;
+                    Most states file monthly, due the 15th of the following month.
+                  </p>
+                  <p className="text-[10px] text-[#a3a3a3] mt-1">Rates and schedules change — confirm the current rate and due date with your state's alcohol tax authority before filing.</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-sm font-semibold text-[#0a0a0a]">State Excise Returns</h3>
+                  <p className="text-xs text-[#737373] mt-1">
+                    Set your distillery's home state under Settings → Company Info so new returns start with your state and its reference rate.
+                  </p>
+                </>
+              )}
             </div>
             <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-hidden">
             <Table>
@@ -972,10 +996,9 @@ export default function ComplianceRegulatory() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Product Name</label>
-              <Input
+              <ProductSelect
                 value={colaForm.productName}
-                onChange={(e) => setColaForm({ ...colaForm, productName: e.target.value })}
-                placeholder="e.g. Libertalia Rum"
+                onChange={(name, p) => setColaForm({ ...colaForm, productName: name, classType: colaForm.classType || p?.spiritClass || "" })}
               />
             </div>
             <div>
@@ -983,21 +1006,14 @@ export default function ComplianceRegulatory() {
               <Input
                 value={colaForm.brandName}
                 onChange={(e) => setColaForm({ ...colaForm, brandName: e.target.value })}
-                placeholder="e.g. Libertalia"
+                placeholder="e.g. Riverbend"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Class / Type</label>
-              <Select
-                value={colaForm.classType}
-                onChange={(e) => setColaForm({ ...colaForm, classType: e.target.value })}
-              >
-                {CLASS_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </Select>
+              <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Class designation</label>
+              <SpiritClassSelect value={colaForm.classType} onChange={(v) => setColaForm({ ...colaForm, classType: v })} />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Status</label>
@@ -1099,10 +1115,9 @@ export default function ComplianceRegulatory() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Product Name</label>
-              <Input
+              <ProductSelect
                 value={labelForm.productName}
-                onChange={(e) => setLabelForm({ ...labelForm, productName: e.target.value })}
-                placeholder="e.g. Libertalia Rum"
+                onChange={(name, p) => setLabelForm({ ...labelForm, productName: name, classType: labelForm.classType || p?.spiritClass || "", sku: labelForm.sku || p?.sku || "" })}
               />
             </div>
             <div>
@@ -1110,7 +1125,7 @@ export default function ComplianceRegulatory() {
               <Input
                 value={labelForm.sku}
                 onChange={(e) => setLabelForm({ ...labelForm, sku: e.target.value })}
-                placeholder="e.g. LIB-RUM-750"
+                placeholder="e.g. SBB-750"
               />
             </div>
           </div>
@@ -1124,15 +1139,8 @@ export default function ComplianceRegulatory() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Class / Type</label>
-              <Select
-                value={labelForm.classType}
-                onChange={(e) => setLabelForm({ ...labelForm, classType: e.target.value })}
-              >
-                {CLASS_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </Select>
+              <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Class designation</label>
+              <SpiritClassSelect value={labelForm.classType} onChange={(v) => setLabelForm({ ...labelForm, classType: v })} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1228,7 +1236,7 @@ export default function ComplianceRegulatory() {
       {/* Excise Return Dialog */}
       <Dialog
         open={exciseOpen}
-        onClose={() => { setExciseOpen(false); setEditExcise(null); setExciseForm(emptyExcise); }}
+        onClose={() => { setExciseOpen(false); setEditExcise(null); setExciseForm(blankExcise()); }}
         title={editExcise ? "Edit Excise Return" : "New Excise Return"}
         size="md"
       >
@@ -1243,6 +1251,7 @@ export default function ComplianceRegulatory() {
                 setExciseForm({ ...exciseForm, state: st, ratePerProofGallon: String(rate) });
               }}
             >
+              <option value="">— Select state —</option>
               {Object.entries(STATE_RATES).map(([code, { name }]) => (
                 <option key={code} value={code}>
                   {code} — {name}
@@ -1267,7 +1276,8 @@ export default function ComplianceRegulatory() {
                 onChange={(e) => {
                   const end = e.target.value;
                   let dueDate = exciseForm.dueDate;
-                  if (end && exciseForm.state === "FL") {
+                  // Most states file monthly, due the 15th of the following month; adjust if yours differs.
+                  if (end && !exciseForm.dueDate) {
                     const d = new Date(end + "T00:00:00");
                     d.setMonth(d.getMonth() + 1);
                     d.setDate(15);
@@ -1345,7 +1355,7 @@ export default function ComplianceRegulatory() {
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              onClick={() => { setExciseOpen(false); setEditExcise(null); setExciseForm(emptyExcise); }}
+              onClick={() => { setExciseOpen(false); setEditExcise(null); setExciseForm(blankExcise()); }}
             >
               Cancel
             </Button>

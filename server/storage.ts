@@ -1,3 +1,4 @@
+import type { Ingredient } from "../shared/spirits";
 import {
   type Job,
   type InsertJob,
@@ -91,53 +92,12 @@ function roundNumber(value: number, digits = 2): number {
 const DEFAULT_US_GALLONS_PER_CASE = roundNumber((12 * 750 * 0.0002641720524), 6); // 12x750mL
 const DEFAULT_PROOF_GALLONS_PER_CASE = roundNumber(DEFAULT_US_GALLONS_PER_CASE * 0.4, 6); // Assumes 40% ABV average
 
-const ZERO_DISTILLING_CASES_MADE: DistillingCasesMade = {
-  pitorro: 0,
-  pitorroDeCafe: 0,
-  pitorroCoconut: 0,
-  pitorroCitrus: 0,
-  libertalia: 0,
-  oakAgedLibertalia: 0,
-  riskey: 0,
-  riskeyBarrelStrength: 0,
-  coquito: 0,
-  lugosCraftLibations: 0,
-  yoHo: 0,
-};
-
-const ZERO_DISTILLING_CASES_TO_DISTRIBUTORS: DistillingCasesToDistributors = {
-  pitorro: 0,
-  pitorroDeCafe: 0,
-  pitorroCoconut: 0,
-  pitorroCitrus: 0,
-  libertalia: 0,
-  riskey: 0,
-  riskeyBarrelStrength: 0,
-  coquito: 0,
-  lugosCraftLibations: 0,
-  yoHo: 0,
-};
-
-const ZERO_DISTILLING_CASES_TO_RETAIL: DistillingCasesToRetail = {
-  pitorro: 0,
-  pitorroDeCafe: 0,
-  pitorroCoconut: 0,
-  pitorroCitrus: 0,
-  libertalia: 0,
-  oakAgedLibertalia: 0,
-  riskey: 0,
-  riskeyBarrelStrength: 0,
-  coquito: 0,
-};
-
-const ZERO_DISTILLING_BOTTLES_MADE: DistillingBottlesMade = {
-  pitorro: 0,
-  pitorroDeCafe: 0,
-  pitorroCoconut: 0,
-  libertalia: 0,
-  oakAgedLibertalia: 0,
-  riskey: 0,
-};
+// Case/bottle counts are keyed by bottle size ("750ml") or by product, as the
+// caller sends them. Empty by default — there is no built-in product list.
+const ZERO_DISTILLING_CASES_MADE: DistillingCasesMade = {};
+const ZERO_DISTILLING_CASES_TO_DISTRIBUTORS: DistillingCasesToDistributors = {};
+const ZERO_DISTILLING_CASES_TO_RETAIL: DistillingCasesToRetail = {};
+const ZERO_DISTILLING_BOTTLES_MADE: DistillingBottlesMade = {};
 
 /**
  * Case/bottle counts keyed by bottle size ("750ml", "1000ml", …) or product.
@@ -156,6 +116,22 @@ function normalizeNumericRecord<T extends Record<string, number>>(value: unknown
     if (Number.isFinite(n)) out[key] = Math.max(0, n);
   }
   return out as T;
+}
+
+/** Accepts the stored JSONB (or JSON text) and returns clean {name, quantity, unit} rows. */
+function normalizeIngredients(value: unknown): Ingredient[] {
+  let list: unknown = value;
+  if (typeof list === "string") {
+    try { list = JSON.parse(list); } catch { list = []; }
+  }
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((i: any) => ({
+      name: String(i?.name ?? "").trim(),
+      quantity: i?.quantity === null || i?.quantity === undefined || i?.quantity === "" ? null : Math.max(0, Number(i.quantity) || 0),
+      unit: String(i?.unit ?? "").trim(),
+    }))
+    .filter((i) => i.name);
 }
 
 function sumNumericRecord(value: Record<string, number>): number {
@@ -632,7 +608,7 @@ function mapDistillingBatchRecord(row: Record<string, unknown>): DistillingBatch
     productionMonth: toNullableText(row.production_month),
     expectingOutcome: toNullableText(row.expecting_outcome),
     expectingDate: toNullableText(row.expecting_date),
-    pitorroFruit: toNullableText(row.pitorro_fruit),
+    variant: toNullableText(row.variant),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -643,11 +619,8 @@ function mapDistillingProductionRecord(row: Record<string, unknown>): Distilling
     id: String(row.id),
     batchRecordId: toNullableText(row.batch_record_id),
     mashDate: String(row.mash_date),
-    gallonsMolasses: toFiniteNumber(row.gallons_molasses),
-    lbsSugar: toFiniteNumber(row.lbs_sugar),
+    ingredients: normalizeIngredients(row.ingredients),
     yeastDate: toNullableText(row.yeast_date),
-    libertaliaYeastPackets: toInt(row.libertalia_yeast_packets),
-    riskeyYeastPackets: toInt(row.riskey_yeast_packets),
     distillDate: String(row.distill_date),
     gallonsDistilled: toFiniteNumber(row.gallons_distilled),
     percentageDistilled: toFiniteNumber(row.percentage_distilled),
@@ -693,6 +666,7 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     website: String(row.website),
     primaryAddress: String(row.primary_address),
     timeZone: String(row.time_zone),
+    homeState: row.home_state != null && String(row.home_state).trim() ? String(row.home_state) : null,
     dspNumber: row.dsp_number != null ? String(row.dsp_number) : null,
     ein: row.ein != null ? String(row.ein) : null,
     logoDataUrl: row.logo_data_url != null ? String(row.logo_data_url) : null,
@@ -708,9 +682,9 @@ function mapPlatformConfig(row: Record<string, unknown>): PlatformConfig {
     productLabelCounts: (() => {
       try {
         const raw = row.product_label_counts;
-        if (raw == null) return { "Pitorro": 4, "Riskey": 2 };
+        if (raw == null) return {};
         return typeof raw === "string" ? JSON.parse(raw) : raw;
-      } catch { return { "Pitorro": 4, "Riskey": 2 }; }
+      } catch { return {}; }
     })(),
     accountTypes: toStringArray(row.account_types),
     accountStatuses: toStringArray(row.account_statuses),
@@ -2287,7 +2261,7 @@ export class PostgresStorage implements IStorage {
         cases_750ml, cases_1000ml, cases_1750ml, total_cases,
         lot_number, tax_class, excise_tax_due, distill_date, fill_date,
         target_dump_date, amount_received_gallons, production_month,
-        expecting_outcome, expecting_date, pitorro_fruit,
+        expecting_outcome, expecting_date, variant,
         created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
@@ -2334,7 +2308,7 @@ export class PostgresStorage implements IStorage {
         productionMonthForInsert,
         record.expectingOutcome || null,
         record.expectingDate || null,
-        record.pitorroFruit || null,
+        record.variant || null,
         record.createdAt || now,
         record.updatedAt || now,
       ],
@@ -2381,7 +2355,7 @@ export class PostgresStorage implements IStorage {
         cases_750ml = $26, cases_1000ml = $27, cases_1750ml = $28, total_cases = $29,
         lot_number = $30, tax_class = $31, excise_tax_due = $32, distill_date = $33, fill_date = $34,
         target_dump_date = $35, amount_received_gallons = $36, production_month = $37,
-        expecting_outcome = $38, expecting_date = $39, pitorro_fruit = $40,
+        expecting_outcome = $38, expecting_date = $39, variant = $40,
         updated_at = $41
       WHERE id = $1 AND tenant_id = $42
       RETURNING *`,
@@ -2396,7 +2370,7 @@ export class PostgresStorage implements IStorage {
         next.cases750ml ?? null, next.cases1000ml ?? null, next.cases1750ml ?? null, next.totalCases ?? null,
         next.lotNumber ?? null, next.taxClass ?? null, next.exciseTaxDue ?? null, next.distillDate ?? null, next.fillDate ?? null,
         next.targetDumpDate ?? null, next.amountReceivedGallons ?? null, next.productionMonth ?? null,
-        next.expectingOutcome ?? null, next.expectingDate ?? null, next.pitorroFruit ?? null,
+        next.expectingOutcome ?? null, next.expectingDate ?? null, next.variant ?? null,
         next.updatedAt,
         tenantId,
       ],
@@ -2432,20 +2406,17 @@ export class PostgresStorage implements IStorage {
     const tenantId = getCurrentTenantId();
     const rows = await query(
       `INSERT INTO distilling_production_records (
-        id, tenant_id, batch_record_id, mash_date, gallons_molasses, lbs_sugar, yeast_date, libertalia_yeast_packets,
-        riskey_yeast_packets, distill_date, gallons_distilled, percentage_distilled, proof_of_gallons, notes, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        id, tenant_id, batch_record_id, mash_date, ingredients, yeast_date,
+        distill_date, gallons_distilled, percentage_distilled, proof_of_gallons, notes, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       RETURNING *`,
       [
         record.id || generateId("DPROD"),
         tenantId,
         record.batchRecordId || null,
         record.mashDate || now.slice(0, 10),
-        toFiniteNumber(record.gallonsMolasses, 0),
-        toFiniteNumber(record.lbsSugar, 0),
+        JSON.stringify(normalizeIngredients(record.ingredients)),
         record.yeastDate || null,
-        Math.max(0, toInt(record.libertaliaYeastPackets, 0)),
-        Math.max(0, toInt(record.riskeyYeastPackets, 0)),
         record.distillDate || now.slice(0, 10),
         gallonsDistilled,
         percentageDistilled,
@@ -2477,13 +2448,7 @@ export class PostgresStorage implements IStorage {
       notes: updates.notes === undefined ? existing.notes : updates.notes,
       gallonsDistilled,
       percentageDistilled,
-      gallonsMolasses:
-        updates.gallonsMolasses === undefined ? existing.gallonsMolasses : toFiniteNumber(updates.gallonsMolasses),
-      lbsSugar: updates.lbsSugar === undefined ? existing.lbsSugar : toFiniteNumber(updates.lbsSugar),
-      libertaliaYeastPackets:
-        updates.libertaliaYeastPackets === undefined ? existing.libertaliaYeastPackets : Math.max(0, toInt(updates.libertaliaYeastPackets)),
-      riskeyYeastPackets:
-        updates.riskeyYeastPackets === undefined ? existing.riskeyYeastPackets : Math.max(0, toInt(updates.riskeyYeastPackets)),
+      ingredients: updates.ingredients === undefined ? existing.ingredients : normalizeIngredients(updates.ingredients),
       proofOfGallons: computeProofOfGallons(gallonsDistilled, percentageDistilled),
       updatedAt: new Date().toISOString(),
     };
@@ -2493,28 +2458,22 @@ export class PostgresStorage implements IStorage {
       `UPDATE distilling_production_records SET
         batch_record_id = $2,
         mash_date = $3,
-        gallons_molasses = $4,
-        lbs_sugar = $5,
-        yeast_date = $6,
-        libertalia_yeast_packets = $7,
-        riskey_yeast_packets = $8,
-        distill_date = $9,
-        gallons_distilled = $10,
-        percentage_distilled = $11,
-        proof_of_gallons = $12,
-        notes = $13,
-        updated_at = $14
-      WHERE id = $1 AND tenant_id = $15
+        ingredients = $4,
+        yeast_date = $5,
+        distill_date = $6,
+        gallons_distilled = $7,
+        percentage_distilled = $8,
+        proof_of_gallons = $9,
+        notes = $10,
+        updated_at = $11
+      WHERE id = $1 AND tenant_id = $12
       RETURNING *`,
       [
         id,
         next.batchRecordId || null,
         next.mashDate,
-        next.gallonsMolasses,
-        next.lbsSugar,
+        JSON.stringify(next.ingredients ?? []),
         next.yeastDate || null,
-        next.libertaliaYeastPackets,
-        next.riskeyYeastPackets,
         next.distillDate,
         next.gallonsDistilled,
         next.percentageDistilled,
@@ -3002,12 +2961,12 @@ export class PostgresStorage implements IStorage {
     await query(
       `INSERT INTO platform_config (
         tenant_id, organization_name, organization_name_override, platform_tagline, industry, support_email, support_phone,
-        website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color, theme,
+        website, primary_address, time_zone, dsp_number, ein, logo_data_url, dashboard_color, theme, home_state,
         account_types, account_statuses, account_industries,
         account_tiers, service_categories, service_catalog, location_types, location_statuses,
         requirement_types, requirement_statuses, requirement_severities, inventory_loss_rates, product_label_counts
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
       )
       ON CONFLICT (tenant_id) DO UPDATE SET
         organization_name = EXCLUDED.organization_name,
@@ -3019,6 +2978,7 @@ export class PostgresStorage implements IStorage {
         website = EXCLUDED.website,
         primary_address = EXCLUDED.primary_address,
         time_zone = EXCLUDED.time_zone,
+        home_state = EXCLUDED.home_state,
         dsp_number = EXCLUDED.dsp_number,
         ein = EXCLUDED.ein,
         logo_data_url = EXCLUDED.logo_data_url,
@@ -3053,6 +3013,7 @@ export class PostgresStorage implements IStorage {
         next.logoDataUrl ?? null,
         next.dashboardColor ?? null,
         next.theme ?? null,
+        next.homeState ?? null,
         next.accountTypes,
         next.accountStatuses,
         next.accountIndustries,

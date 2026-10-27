@@ -6,27 +6,14 @@ import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import { ProductSelect, SpiritClassSelect } from "../components/reference/pickers";
 
-const PRODUCTS = [
-  "Original Pitorro",
-  "Coconut Pitorro",
-  "Citrus Pitorro",
-  "Café Pitorro",
-  "Libertalia",
-  "Oak Aged Libertalia",
-  "Riskey",
-  "Riskey Barrel Strength",
-  "Coquito",
-  "Libations",
-  "Yo-Ho",
-] as const;
 
-const CLASS_TYPES = ["Rum"];
 const LABEL_STATUSES = ["draft", "approved", "in_use", "retired"];
 
 const empty = {
   productName: "", sku: "", version: "1.0", colaId: "", netContents: "",
-  alcoholContent: "", classType: "Rum", status: "draft", approvedAt: "", notes: "",
+  alcoholContent: "", classType: "", status: "draft", approvedAt: "", notes: "",
 };
 
 interface LabelRecord {
@@ -123,21 +110,25 @@ export default function LabelForm() {
       <FormSection title="Label Identity">
         <FormGrid>
           <Field label="Product Name" required>
-            <Select value={form.productName} onChange={set("productName")}>
-              <option value="">— Select product —</option>
-              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </Select>
+            <ProductSelect
+              value={form.productName}
+              onChange={(name, p) => setForm(f => ({
+                ...f,
+                productName: name,
+                classType: f.classType || p?.spiritClass || "",
+                sku: f.sku || p?.sku || "",
+                alcoholContent: f.alcoholContent || (p?.bottlingProof ? String(p.bottlingProof / 2) : ""),
+              }))}
+            />
           </Field>
           <Field label="SKU" required hint="Stock keeping unit">
-            <Input value={form.sku} onChange={set("sku")} placeholder="LIB-RUM-750" />
+            <Input value={form.sku} onChange={set("sku")} placeholder="e.g. SBB-750" />
           </Field>
           <Field label="Version">
             <Input value={form.version} onChange={set("version")} placeholder="1.0" />
           </Field>
-          <Field label="Class / Type">
-            <Select value={form.classType} onChange={set("classType")}>
-              {CLASS_TYPES.map(t => <option key={t}>{t}</option>)}
-            </Select>
+          <Field label="Class designation">
+            <SpiritClassSelect value={form.classType} onChange={(v) => setForm(f => ({ ...f, classType: v }))} />
           </Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>

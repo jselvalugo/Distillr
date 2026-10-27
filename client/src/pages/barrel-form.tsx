@@ -7,62 +7,7 @@ import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../component
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import type { Barrel } from "@shared/schema";
-
-const LOC_SUITES = ["206", "207", "208"];
-const LOC_ZONES  = ["A", "B", "C"];
-const LOC_LEVELS = ["1", "2", "3"];
-
-function parseLocation(val: string) {
-  const [suite = "", zone = "", level = ""] = val.split("-");
-  return { suite, zone, level };
-}
-
-function LocationPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { suite, zone, level } = parseLocation(value);
-  const emit = (s: string, z: string, l: string) => onChange([s, z, l].filter(Boolean).join("-"));
-  return (
-    <div className="space-y-1">
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Suite</p>
-          <Select value={suite} onChange={(e) => emit(e.target.value, zone, level)}>
-            <option value="">—</option>
-            {LOC_SUITES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
-        </div>
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Zone</p>
-          <Select value={zone} onChange={(e) => emit(suite, e.target.value, level)}>
-            <option value="">—</option>
-            {LOC_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-          </Select>
-        </div>
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Level</p>
-          <Select value={level} onChange={(e) => emit(suite, zone, e.target.value)}>
-            <option value="">—</option>
-            {LOC_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </Select>
-        </div>
-      </div>
-      {value && <p className="text-[10px] text-[#737373] font-mono">{value}</p>}
-    </div>
-  );
-}
-
-const PRODUCTS = [
-  "Original Pitorro",
-  "Coconut Pitorro",
-  "Citrus Pitorro",
-  "Café Pitorro",
-  "Libertalia",
-  "Oak Aged Libertalia",
-  "Riskey",
-  "Riskey Barrel Strength",
-  "Coquito",
-  "Libations",
-  "Yo-Ho",
-] as const;
+import { LocationSelect, ProductSelect } from "../components/reference/pickers";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -185,11 +130,8 @@ export default function BarrelForm() {
               <option>Retired</option>
             </Select>
           </Field>
-          <Field label="Product Name" span="full">
-            <Select value={form.productName} onChange={set("productName")}>
-              <option value="">— Select product —</option>
-              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </Select>
+          <Field label="Product" span="full" hint="From your catalog — Settings → Reference Data → Products">
+            <ProductSelect value={form.productName} onChange={(name) => setForm(f => ({ ...f, productName: name }))} />
           </Field>
         </FormGrid>
       </FormSection>
@@ -199,7 +141,7 @@ export default function BarrelForm() {
           <Field label="Fill Date">
             <Input type="date" value={form.fillDate} onChange={set("fillDate")} />
           </Field>
-          <Field label="Fill Proof (°)" hint="Max 125° per TTB regulations">
+          <Field label="Fill Proof (°)" hint="Bourbon and rye: 125° max at barrel entry">
             <Input type="number" step="0.01" min="0" max="200" value={form.fillProof} onChange={set("fillProof")} placeholder="125.0" />
           </Field>
           <Field label="Fill Volume (gal)" hint="Wine gallons at time of fill">
@@ -210,8 +152,8 @@ export default function BarrelForm() {
 
       <FormSection title="Storage Location" subtitle="Warehouse and cooperage details">
         <FormGrid>
-          <Field label="Location" hint="Suite · Zone · Level (e.g. 207-C-2)" span="full">
-            <LocationPicker value={form.warehouseZone} onChange={(v) => setForm(f => ({ ...f, warehouseZone: v }))} />
+          <Field label="Location" hint="From Settings → Reference Data → Storage Locations" span="full">
+            <LocationSelect value={form.warehouseZone} onChange={(v) => setForm(f => ({ ...f, warehouseZone: v }))} />
           </Field>
           <Field label="Char Level" hint="e.g. #3, #4, Medium+">
             <Input value={form.charLevel} onChange={set("charLevel")} placeholder="#3" />
