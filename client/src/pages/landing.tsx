@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
-import { LandingNav } from "../components/LandingNav";
-
-const WHITE = "#ffffff";
-const BLACK = "#000000";
-const OFF   = "#0a0a0a";
+import { Link, useLocation } from "wouter";
+import { ArrowRight, Bot, Check, FlaskConical, Landmark, Layers, Package, ShieldCheck } from "lucide-react";
+import { PublicShell } from "../components/public/shell";
+import { DistillrMark } from "../components/brand/logo";
 
 const PLANS = [
   {
-    name: "Starter Tier",
+    name: "Starter",
     price: "$99",
     per: "/mo",
     desc: "For small craft producers going digital.",
@@ -16,7 +14,7 @@ const PLANS = [
     features: ["1 user", "Batch & production tracking", "Up to 50 barrels", "TTB report generation", "Email support"],
   },
   {
-    name: "Professional Tier",
+    name: "Professional",
     price: "$299",
     per: "/mo",
     desc: "The complete platform for growing distilleries.",
@@ -40,817 +38,245 @@ const FAQS = [
   { q: "Which states are covered for excise returns?", a: "All 50 states plus DC. Rates are maintained by our team and updated whenever states revise them." },
 ];
 
-const STYLES = `
-  @keyframes fadein    { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes slidedown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes floatUp   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-  @keyframes shimmer   { 0%{background-position:200% center} 100%{background-position:-200% center} }
-  @keyframes scanline  { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  .lnd-hero-gradient-text {
-    background: linear-gradient(
-      110deg,
-      #ffffff 0%,
-      #c8c8c8 20%,
-      #ffffff 35%,
-      #8a8a8a 50%,
-      #ffffff 65%,
-      #c8c8c8 80%,
-      #ffffff 100%
-    );
-    background-size: 250% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer 6s linear infinite;
-  }
-
-  .lnd-hero-gradient-span {
-    background: linear-gradient(
-      110deg,
-      #ffffff 0%,
-      #a0a0a0 30%,
-      #ffffff 50%,
-      #606060 70%,
-      #ffffff 100%
-    );
-    background-size: 300% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer 4s linear infinite;
-  }
-
-  .lnd-nav-link {
-    font-size: 13px;
-    color: rgba(255,255,255,0.55);
-    text-decoration: none;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: background 0.15s, color 0.15s;
-  }
-  .lnd-nav-link:hover { background: rgba(255,255,255,0.07); color: #fff; }
-
-  .lnd-btn-primary {
-    background: ${WHITE};
-    color: ${BLACK};
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 700;
-    padding: 11px 26px;
-    border-radius: 100px;
-    transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
-    line-height: 1;
-    letter-spacing: -0.01em;
-  }
-  .lnd-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(255,255,255,0.25); background: #e8e8e8; }
-
-  .lnd-btn-outline {
-    background: transparent;
-    color: rgba(255,255,255,0.7);
-    border: 1.5px solid rgba(255,255,255,0.22);
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    padding: 11px 26px;
-    border-radius: 100px;
-    transition: transform 0.18s, box-shadow 0.18s, background 0.18s, border-color 0.18s, color 0.18s;
-    line-height: 1;
-    backdrop-filter: blur(8px);
-  }
-  .lnd-btn-outline:hover { transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.4); color: #fff; }
-
-  .lnd-btn-signin {
-    background: transparent;
-    color: rgba(255,255,255,0.5);
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    padding: 8px 14px;
-    border-radius: 8px;
-    transition: background 0.15s, color 0.15s;
-    line-height: 1;
-  }
-  .lnd-btn-signin:hover { background: rgba(255,255,255,0.07); color: #fff; }
-
-  .lnd-btn-getstarted {
-    background: ${WHITE};
-    color: ${BLACK};
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 700;
-    padding: 9px 20px;
-    border-radius: 100px;
-    transition: transform 0.18s, box-shadow 0.18s;
-    line-height: 1;
-  }
-  .lnd-btn-getstarted:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,255,255,0.2); }
-
-  .lnd-feature-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 14px;
-    padding: 28px 24px;
-    transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-    cursor: default;
-    backdrop-filter: blur(12px);
-  }
-  .lnd-feature-card:hover {
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(255,255,255,0.16);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(255,255,255,0.04);
-  }
-
-  .lnd-faq-btn {
-    width: 100%;
-    text-align: left;
-    padding: 18px 22px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    background: none;
-    border: none;
-    cursor: pointer;
-  }
-
-  .lnd-plan-btn {
-    width: 100%;
-    padding: 12px;
-    border-radius: 100px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    margin-bottom: 24px;
-    transition: transform 0.18s, box-shadow 0.18s;
-  }
-  .lnd-plan-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.15); }
-
-  /* Responsive */
-  .lnd-nav-links { display: flex; align-items: center; }
-  .lnd-nav-ctas  { display: flex; align-items: center; gap: 4px; }
-  .lnd-hamburger { display: none; }
-  .lnd-mobile-menu { display: none; }
-
-  .lnd-hero-inner {
-    display: flex;
-    align-items: center;
-    gap: 48px;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 0 48px;
-    min-height: 100vh;
-    padding-top: 80px;
-    padding-bottom: 60px;
-  }
-  .lnd-hero-left  { flex: 0 0 55%; min-width: 0; }
-  .lnd-hero-right { flex: 0 0 45%; min-width: 0; }
-
-  .lnd-what-inner {
-    display: flex;
-    align-items: center;
-    gap: 56px;
-    max-width: 1060px;
-    margin: 0 auto;
-    padding: 80px 48px;
-  }
-  .lnd-what-left  { flex: 0 0 48%; min-width: 0; }
-  .lnd-what-right { flex: 1; min-width: 0; }
-
-  .lnd-feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  .lnd-pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
-
-  .lnd-section-pad { padding: 80px 48px; }
-  .lnd-footer-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 24px; }
-  .lnd-footer-links { display: flex; gap: 28px; }
-
-  @media (max-width: 767px) {
-    .lnd-nav-links { display: none !important; }
-    .lnd-nav-ctas  { display: none !important; }
-    .lnd-hamburger { display: flex !important; }
-    .lnd-mobile-menu { display: flex !important; }
-
-    .lnd-hero-inner {
-      flex-direction: column;
-      padding: 100px 20px 48px;
-      min-height: auto;
-      gap: 32px;
-    }
-    .lnd-hero-left  { flex: none; width: 100%; }
-    .lnd-hero-right { flex: none; width: 100%; }
-
-    .lnd-what-inner {
-      flex-direction: column;
-      padding: 60px 20px;
-      gap: 36px;
-    }
-    .lnd-what-left  { flex: none; width: 100%; }
-    .lnd-what-right { flex: none; width: 100%; }
-
-    .lnd-feature-grid { grid-template-columns: 1fr !important; }
-    .lnd-pricing-grid { grid-template-columns: 1fr !important; }
-    .lnd-section-pad  { padding: 60px 20px !important; }
-    .lnd-footer-inner { flex-direction: column; align-items: flex-start; gap: 20px; }
-    .lnd-footer-links { flex-wrap: wrap; gap: 16px; }
-  }
-
-  @media (min-width: 768px) and (max-width: 1024px) {
-    .lnd-feature-grid { grid-template-columns: repeat(2, 1fr) !important; }
-    .lnd-pricing-grid { grid-template-columns: 1fr !important; }
-    .lnd-hero-inner   { padding: 100px 32px 60px; gap: 32px; }
-    .lnd-what-inner   { padding: 60px 32px; gap: 36px; }
-    .lnd-section-pad  { padding: 70px 32px !important; }
-  }
-`;
-
-function FooterBarrelMark() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-      <ellipse cx="16" cy="7"  rx="9" ry="3.5" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
-      <ellipse cx="16" cy="25" rx="9" ry="3.5" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
-      <line x1="7"  y1="7"  x2="7"  y2="25" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
-      <line x1="25" y1="7"  x2="25" y2="25" stroke="rgba(255,255,255,0.6)" strokeWidth="1.6" />
-      <ellipse cx="16" cy="13" rx="10" ry="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-      <ellipse cx="16" cy="19" rx="10" ry="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function CreamCheck() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-      <circle cx="9" cy="9" r="9" fill="rgba(255,255,255,0.08)" />
-      <path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="rgba(255,255,255,0.8)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PricingCheck({ featured }: { featured: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-      <circle cx="8" cy="8" r="8" fill={featured ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.08)"} />
-      <path d="M4.5 8l2.5 2.5 4.5-4.5" stroke={featured ? "#000" : "rgba(255,255,255,0.7)"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-const footerLinks = [
-  { l: "Features", h: "/features" },
-  { l: "Pricing",  h: "/pricing" },
-  { l: "FAQ",      h: "/faq" },
+const FEATURES = [
+  { n: "01", icon: ShieldCheck, t: "TTB Compliance Engine", d: "Forms 5110.40 and 5000.24 built from live batch data, with CBMA rate tiers applied. Export to PDF, Excel or Word in one click." },
+  { n: "02", icon: FlaskConical, t: "Batch Production", d: "A 7-stage workflow from mash to bottle, with proof gallons calculated and TTB operations tagged at every step." },
+  { n: "03", icon: Layers, t: "Barrel Intelligence", d: "Every barrel from fill to dump: gauge readings, angel's share, aging milestones and your bonded warehouse balance." },
+  { n: "04", icon: Package, t: "Inventory & Lots", d: "Lot tracking with TTB movement categories, warehouse locations and a full chain of custody." },
+  { n: "05", icon: Landmark, t: "Regulatory Automation", d: "COLA registrations, 50-state excise returns and permit renewals, tracked with deadline alerts." },
+  { n: "06", icon: Bot, t: "AI Assistant", d: "Ask about deadlines, batch status or barrel inventory in plain English and get answers backed by your data." },
 ];
+
+export function CheckDot({ dark = false }: { dark?: boolean }) {
+  return (
+    <span className="pub-check__dot" style={dark ? { background: "rgba(129,140,248,0.25)" } : undefined}>
+      <Check size={11} strokeWidth={3} color={dark ? "#C7D2FE" : "#4F46E5"} />
+    </span>
+  );
+}
+
+export function PlanCard({ plan, onSelect }: { plan: (typeof PLANS)[number]; onSelect: () => void }) {
+  return (
+    <div className={`pub-plan ${plan.featured ? "pub-plan--featured" : ""}`}>
+      {plan.featured && <span className="pub-plan__tag">Most popular</span>}
+      <p className="pub-plan__name">{plan.name}</p>
+      <div className="pub-plan__price">
+        <strong>{plan.price}</strong>
+        {plan.per && <span>{plan.per}</span>}
+      </div>
+      <p className="pub-plan__desc">{plan.desc}</p>
+      <button className={`pub-btn ${plan.featured ? "pub-btn--primary" : "pub-btn--ghost"}`} onClick={onSelect} style={{ width: "100%" }}>
+        {plan.price === "Custom" ? "Contact sales" : "Request access"}
+      </button>
+      <ul className="pub-plan__list">
+        {plan.features.map((f) => (
+          <li key={f}>
+            <CheckDot dark={plan.featured} />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function FaqItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
+  return (
+    <div className={`pub-faq ${open ? "pub-faq--open" : ""}`}>
+      <button className="pub-faq__btn" onClick={onToggle} aria-expanded={open}>
+        <span>{q}</span>
+        <span className="pub-faq__plus" aria-hidden>
+          +
+        </span>
+      </button>
+      {open && <div className="pub-faq__body">{a}</div>}
+    </div>
+  );
+}
+
+export { PLANS as LANDING_PLANS };
 
 export default function Landing() {
   const [, navigate] = useLocation();
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
-    <div style={{
-      background: BLACK,
-      color: WHITE,
-      minHeight: "100vh",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-      overflowX: "hidden",
-    }}>
-      <style>{STYLES}</style>
-
-      <LandingNav />
-
-      {/* ── HERO SECTION ── */}
-      <section style={{ background: BLACK, position: "relative", overflow: "hidden" }}>
-
-        {/* Futuristic background aura */}
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-          <div style={{ position: "absolute", top: "-20%", left: "30%", width: 700, height: 500, background: "radial-gradient(ellipse, rgba(255,255,255,0.04) 0%, transparent 65%)", filter: "blur(60px)" }} />
-          <div style={{ position: "absolute", bottom: 0, right: "10%", width: 400, height: 300, background: "radial-gradient(ellipse, rgba(255,255,255,0.03) 0%, transparent 70%)", filter: "blur(50px)" }} />
-          {/* Subtle grid lines */}
-          <div style={{
-            position: "absolute", inset: 0,
-            backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
-            backgroundSize: "80px 80px",
-          }} />
-        </div>
-
-        <div className="lnd-hero-inner" style={{ position: "relative", zIndex: 1 }}>
-
-          {/* Left column */}
-          <div className="lnd-hero-left" style={{ animation: "fadein 0.7s ease-out both" }}>
-            {/* Label badge */}
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              borderRadius: 100,
-              padding: "5px 14px 5px 8px",
-              marginBottom: 28,
-              backdropFilter: "blur(12px)",
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: WHITE }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.7)", letterSpacing: "0.03em" }}>Distillery Operations Platform</span>
+    <PublicShell>
+      {/* ── Hero ── */}
+      <section className="pub-hero">
+        <div className="pub-hero__glow" />
+        <div className="pub-hero__grid" />
+        <div className="pub-wrap pub-hero__inner">
+          <div className="pub-rise">
+            <div className="pub-badge">
+              <DistillrMark size={16} />
+              Distillery operations platform
             </div>
-
-            {/* Headline — glass gradient shimmer */}
-            <h1 className="lnd-hero-gradient-text" style={{
-              fontSize: "clamp(2.4rem, 4.5vw, 3.8rem)",
-              fontWeight: 800,
-              letterSpacing: "-0.035em",
-              lineHeight: 1.08,
-              marginBottom: 22,
-            }}>
-              The modern ERP for{" "}
-              <span className="lnd-hero-gradient-span" style={{ display: "inline" }}>
-                craft spirits
-              </span>
+            <h1 className="pub-h1">
+              Run the distillery.
               <br />
-              producers.
+              <em>Distillr</em> handles the paperwork.
             </h1>
-
-            {/* Subtitle */}
-            <p style={{
-              fontSize: 17,
-              lineHeight: 1.7,
-              color: "rgba(255,255,255,0.45)",
-              marginBottom: 36,
-              maxWidth: 480,
-            }}>
-              From grain to glass — batch tracking, TTB compliance, barrel intelligence, and regulatory automation built for craft distillers.
+            <p className="pub-lead">
+              Batch production, barrels, inventory and sales in one place — with TTB forms, excise returns and state filings generated from the records you already keep.
             </p>
-
-            {/* CTAs */}
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-              <button
-                onClick={() => navigate("/signup")}
-                className="lnd-btn-primary"
-                style={{ fontSize: 15, padding: "13px 32px" }}
-              >
-                Request Access
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 32 }}>
+              <button className="pub-btn pub-btn--primary pub-btn--lg" onClick={() => navigate("/signup")}>
+                Request access <ArrowRight size={16} />
               </button>
-              <button
-                onClick={() => navigate("/login")}
-                className="lnd-btn-outline"
-                style={{ fontSize: 15, padding: "13px 28px" }}
-              >
-                Sign In →
+              <button className="pub-btn pub-btn--ghost pub-btn--lg" onClick={() => navigate("/login")}>
+                Sign in
               </button>
             </div>
-
-            {/* Social proof micro-line */}
-            <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.3)", letterSpacing: "0.01em" }}>
-              ✓ No credit card required &nbsp;·&nbsp; 14-day free trial
+            <p className="pub-hero__note">
+              <strong>No credit card required</strong> · 14-day free trial · Month-to-month
             </p>
           </div>
 
-          {/* Right column — screenshot */}
-          <div className="lnd-hero-right" style={{ position: "relative" }}>
-            {/* Screenshot frame */}
-            <div style={{
-              background: "rgba(255,255,255,0.04)",
-              borderRadius: 16,
-              border: "1px solid rgba(255,255,255,0.12)",
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 24px 80px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)",
-              overflow: "hidden",
-              position: "relative",
-              backdropFilter: "blur(12px)",
-            }}>
-              {/* Browser chrome bar */}
-              <div style={{
-                background: "rgba(255,255,255,0.05)",
-                padding: "9px 14px",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-              }}>
-                <div style={{ display: "flex", gap: 5 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(255,255,255,0.15)" }} />
-                </div>
-                <div style={{
-                  flex: 1,
-                  maxWidth: 280,
-                  margin: "0 auto",
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 5,
-                  padding: "3px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}>
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.01em" }}>app.distillr.io/dashboard</span>
-                </div>
+          <div className="pub-rise-2" style={{ position: "relative" }}>
+            <div className="pub-frame">
+              <div className="pub-frame__bar">
+                <span className="pub-frame__dots"><span /><span /><span /></span>
+                <span className="pub-frame__url">app.distillrsoftware.com/dashboard</span>
               </div>
-              <img
-                src="/dashboard-screenshot.png"
-                alt="Distillr Operations Dashboard"
-                style={{ width: "100%", display: "block" }}
-              />
+              <img src="/dashboard-screenshot.png" alt="Distillr operations dashboard" />
             </div>
-
-            {/* Floating stat chip — left */}
-            <div style={{
-              position: "absolute",
-              bottom: -16,
-              left: 20,
-              zIndex: 3,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              borderRadius: 12,
-              padding: "10px 16px",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
-              animation: "floatUp 5s ease-in-out infinite",
-              backdropFilter: "blur(16px)",
-            }}>
-              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Proof Gallons</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: WHITE, lineHeight: 1, letterSpacing: "-0.03em" }}>265.4</p>
+            <div className="pub-chip" style={{ bottom: -18, left: 18 }}>
+              <p className="pub-chip__label">Proof gallons in bond</p>
+              <p className="pub-chip__value">
+                1,264.8<small>PG</small>
+              </p>
             </div>
-
-            {/* Floating stat chip — right */}
-            <div style={{
-              position: "absolute",
-              bottom: -16,
-              right: 20,
-              zIndex: 3,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              borderRadius: 12,
-              padding: "10px 16px",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)",
-              animation: "floatUp 5s ease-in-out 1.5s infinite",
-              backdropFilter: "blur(16px)",
-            }}>
-              <p style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 2, fontWeight: 600 }}>Cases Bottled</p>
-              <p style={{ fontSize: 22, fontWeight: 800, color: WHITE, lineHeight: 1, letterSpacing: "-0.03em" }}>248</p>
+            <div className="pub-chip" style={{ bottom: -18, right: 18, animationDelay: "1.4s" }}>
+              <p className="pub-chip__label">Excise due · Oct</p>
+              <p className="pub-chip__value">$1,098.48</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── TRUST STRIP ── */}
-      <section style={{ background: BLACK, paddingTop: 48, paddingBottom: 0 }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 48px", textAlign: "center" }}>
-          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.28)", letterSpacing: "0.01em", marginBottom: 20 }}>
-            Trusted by craft distilleries across the United States.
-          </p>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.08)" }} />
+      {/* ── Trust strip ── */}
+      <section className="pub-trust" style={{ marginTop: 40 }}>
+        <div className="pub-wrap pub-trust__inner" style={{ padding: 0 }}>
+          {[
+            ["5110.40 · 5000.24", "TTB forms, filled from your data"],
+            ["50 + DC", "State excise rates maintained"],
+            ["7 stages", "Mash to bottle, proof gallons at each"],
+            ["< 1 day", "Typical migration from spreadsheets"],
+          ].map(([v, l]) => (
+            <div key={l} className="pub-trust__item">
+              <p className="pub-trust__value">{v}</p>
+              <p className="pub-trust__label">{l}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── DIVIDER ── */}
-      <div style={{ height: 80, background: BLACK }} />
-
-      {/* ── WHAT IS DISTILLR ── */}
-      <section style={{ background: OFF }}>
-        <div className="lnd-what-inner">
-
-          {/* Left: screenshot */}
-          <div className="lnd-what-left">
-            <div style={{
-              background: "rgba(255,255,255,0.04)",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.1)",
-              overflow: "hidden",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)",
-              backdropFilter: "blur(8px)",
-            }}>
-              <img
-                src="/dashboard-screenshot.png"
-                alt="Distillr Dashboard"
-                style={{ width: "100%", display: "block" }}
-              />
-            </div>
+      {/* ── What is Distillr ── */}
+      <section className="pub-section">
+        <div className="pub-wrap pub-split">
+          <div className="pub-frame" style={{ boxShadow: "0 30px 60px -40px rgba(15,23,42,0.45)" }}>
+            <img src="/dashboard-screenshot.png" alt="Distillr dashboard" />
           </div>
-
-          {/* Right: copy */}
-          <div className="lnd-what-right">
-            <h2 style={{
-              fontSize: "clamp(1.8rem, 3vw, 2.6rem)",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              color: WHITE,
-              lineHeight: 1.12,
-              marginBottom: 18,
-            }}>
-              What is Distillr?
-            </h2>
-            <p style={{ fontSize: 16, lineHeight: 1.75, color: "rgba(255,255,255,0.45)", marginBottom: 22 }}>
-              Distillr is an end-to-end distillery management platform — handling everything from batch production and barrel tracking to TTB compliance and state excise returns.
+          <div>
+            <p className="pub-eyebrow">What is Distillr</p>
+            <h2 className="pub-h2">One system for the whole operation.</h2>
+            <p className="pub-lead">
+              Distillr is an end-to-end distillery management platform — batch production, barrel tracking, inventory, sales, and the TTB and state compliance that comes with them.
             </p>
-            <a
-              href="/features"
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: "rgba(255,255,255,0.7)",
-                textDecoration: "underline",
-                textDecorationColor: "rgba(255,255,255,0.3)",
-                textUnderlineOffset: "4px",
-                display: "inline-block",
-                marginBottom: 32,
-                transition: "color 0.15s",
-              }}
-            >
-              See how it works →
-            </a>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {[
-                "7-stage batch production tracking",
-                "TTB Forms 5110.40 & 5000.24 auto-generated",
-                "Real-time proof gallon & excise calculation",
-              ].map((item) => (
-                <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <CreamCheck />
-                  <span style={{ fontSize: 14.5, color: "rgba(255,255,255,0.7)", lineHeight: 1.5 }}>{item}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "26px 0" }}>
+              {["7-stage batch production tracking", "TTB Forms 5110.40 and 5000.24, generated for you", "Real-time proof gallon and excise calculation", "Clean PDF, Excel and Word exports"].map((item) => (
+                <div key={item} className="pub-check">
+                  <CheckDot />
+                  <span>{item}</span>
                 </div>
               ))}
             </div>
+            <Link href="/features" className="pub-link">
+              See how it works <ArrowRight size={14} />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ── FEATURES GRID ── */}
-      <section id="features" style={{ background: OFF, paddingBottom: 80 }}>
-        <div style={{ maxWidth: 1060, margin: "0 auto", padding: "0 48px" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Platform</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.5rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE, marginBottom: 14 }}>
-              Built for every part of your operation.
-            </h2>
-            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", maxWidth: 480, margin: "0 auto", lineHeight: 1.7 }}>
-              Every workflow, every compliance deadline, every TTB report — in one system.
-            </p>
+      {/* ── Features grid ── */}
+      <section className="pub-section" style={{ paddingTop: 0 }}>
+        <div className="pub-wrap">
+          <div className="pub-center" style={{ marginBottom: 44 }}>
+            <p className="pub-eyebrow">Platform</p>
+            <h2 className="pub-h2">Built for every part of your operation.</h2>
+            <p className="pub-lead">Every workflow, every compliance deadline, every TTB report — in one system.</p>
           </div>
-          <div className="lnd-feature-grid">
-            {[
-              { n: "01", t: "TTB Compliance Engine", d: "Auto-generate Forms 5110.40 and 5000.24 from live batch data. Export to TTB PONL in one click. CBMA credits included." },
-              { n: "02", t: "Batch Production", d: "7-stage workflow from mash to bottle with proof gallon tracking and TTB operation tagging at every transition." },
-              { n: "03", t: "Barrel Intelligence", d: "Track every barrel from fill to dump. Angel's share, proof retention, aging milestones, and bonded warehouse balance." },
-              { n: "04", t: "Inventory & Lots", d: "Real-time lot tracking with TTB movement categories, warehouse locations, and full chain of custody records." },
-              { n: "05", t: "Regulatory Automation", d: "COLA registrations, all 50-state excise returns, permit renewals — tracked with deadline alerts." },
-              { n: "06", t: "AI Assistant", d: "Ask about compliance deadlines, batch status, or barrel inventory in plain English and get instant data-backed answers." },
-            ].map((f) => (
-              <div key={f.n} className="lnd-feature-card">
-                <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", color: "rgba(255,255,255,0.25)", marginBottom: 12 }}>{f.n}</p>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: WHITE, marginBottom: 9 }}>{f.t}</h3>
-                <p style={{ fontSize: 13, lineHeight: 1.65, color: "rgba(255,255,255,0.4)", margin: 0 }}>{f.d}</p>
+          <div className="pub-grid-3">
+            {FEATURES.map((f) => (
+              <div key={f.n} className="pub-card">
+                <div className="pub-card__icon">
+                  <f.icon size={18} strokeWidth={2} />
+                </div>
+                <p className="pub-card__num">{f.n}</p>
+                <h3>{f.t}</h3>
+                <p>{f.d}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── DIVIDER ── */}
-      <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "0 48px" }} />
-
-      {/* ── PRICING ── */}
-      <section id="pricing" className="lnd-section-pad" style={{ background: BLACK }}>
-        <div style={{ maxWidth: 1020, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Pricing</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.6rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE, marginBottom: 12 }}>
-              Simple, transparent pricing.
-            </h2>
-            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Month-to-month. No lock-in. 14-day free trial on all plans.</p>
+      {/* ── Pricing ── */}
+      <section id="pricing" className="pub-section" style={{ paddingTop: 0 }}>
+        <div className="pub-wrap">
+          <div className="pub-center" style={{ marginBottom: 44 }}>
+            <p className="pub-eyebrow">Pricing</p>
+            <h2 className="pub-h2">Simple, transparent pricing.</h2>
+            <p className="pub-lead">Month-to-month. No lock-in. 14-day free trial on all plans.</p>
           </div>
-          <div className="lnd-pricing-grid">
+          <div className="pub-plans">
             {PLANS.map((p) => (
-              <div key={p.name} style={{
-                borderRadius: 20,
-                padding: "36px 28px",
-                position: "relative",
-                background: p.featured ? WHITE : "rgba(255,255,255,0.04)",
-                border: p.featured ? `1px solid rgba(255,255,255,0.9)` : "1px solid rgba(255,255,255,0.1)",
-                boxShadow: p.featured ? `0 0 0 1px rgba(255,255,255,0.2), 0 20px 60px rgba(255,255,255,0.08)` : "none",
-                backdropFilter: p.featured ? "none" : "blur(12px)",
-              }}>
-                {p.featured && (
-                  <div style={{
-                    position: "absolute",
-                    top: -14,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    background: BLACK,
-                    color: WHITE,
-                    fontSize: 10,
-                    fontWeight: 800,
-                    padding: "5px 16px",
-                    borderRadius: 100,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    whiteSpace: "nowrap",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                  }}>
-                    Most Popular
-                  </div>
-                )}
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: p.featured ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.3)", marginBottom: 16 }}>
-                  {p.name}
-                </p>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, marginBottom: 8 }}>
-                  <span style={{ fontSize: 44, fontWeight: 900, color: p.featured ? BLACK : WHITE, lineHeight: 1, letterSpacing: "-0.04em" }}>{p.price}</span>
-                  {p.per && <span style={{ fontSize: 14, color: p.featured ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.35)", marginBottom: 6 }}>{p.per}</span>}
-                </div>
-                <p style={{ fontSize: 13, color: p.featured ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.4)", lineHeight: 1.6, marginBottom: 24 }}>{p.desc}</p>
-                <button
-                  onClick={() => navigate("/signup")}
-                  className="lnd-plan-btn"
-                  style={{
-                    background: p.featured ? BLACK : WHITE,
-                    color: p.featured ? WHITE : BLACK,
-                    border: "none",
-                  }}
-                >
-                  {p.price === "Custom" ? "Contact Sales" : "Request Access"}
-                </button>
-                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                  {p.features.map((f) => (
-                    <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
-                      <PricingCheck featured={p.featured} />
-                      <span style={{ fontSize: 13, color: p.featured ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PlanCard key={p.name} plan={p} onSelect={() => navigate("/signup")} />
             ))}
           </div>
         </div>
       </section>
 
       {/* ── FAQ ── */}
-      <section id="faq" className="lnd-section-pad" style={{ background: BLACK, paddingTop: 40 }}>
-        <div style={{ maxWidth: 680, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>FAQ</p>
-            <h2 style={{ fontSize: "clamp(1.6rem, 3vw, 2.4rem)", fontWeight: 800, letterSpacing: "-0.025em", color: WHITE }}>
-              Common questions.
-            </h2>
+      <section id="faq" className="pub-section" style={{ paddingTop: 0 }}>
+        <div className="pub-wrap" style={{ maxWidth: 760 }}>
+          <div className="pub-center" style={{ marginBottom: 32 }}>
+            <p className="pub-eyebrow">FAQ</p>
+            <h2 className="pub-h2">Common questions.</h2>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {FAQS.map((faq, i) => (
-              <div
-                key={i}
-                style={{
-                  borderRadius: 12,
-                  border: `1px solid ${openFaq === i ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`,
-                  background: openFaq === i ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
-                  overflow: "hidden",
-                  transition: "background 0.2s, border-color 0.2s",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <button
-                  className="lnd-faq-btn"
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                >
-                  <span style={{ fontSize: 14.5, fontWeight: 600, color: openFaq === i ? WHITE : "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>{faq.q}</span>
-                  <span style={{
-                    fontSize: 20,
-                    color: openFaq === i ? WHITE : "rgba(255,255,255,0.3)",
-                    flexShrink: 0,
-                    transition: "transform .2s, color .2s",
-                    transform: openFaq === i ? "rotate(45deg)" : "none",
-                    lineHeight: 1,
-                    display: "block",
-                    fontWeight: 300,
-                  }}>+</span>
-                </button>
-                {openFaq === i && (
-                  <div style={{ padding: "0 22px 18px" }}>
-                    <p style={{ fontSize: 13.5, lineHeight: 1.75, color: "rgba(255,255,255,0.45)", margin: 0 }}>{faq.a}</p>
-                  </div>
-                )}
-              </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {FAQS.map((f, i) => (
+              <FaqItem key={f.q} q={f.q} a={f.a} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? null : i)} />
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── CTA BANNER ── */}
-      <section className="lnd-section-pad" style={{ background: BLACK }}>
-        <div style={{ maxWidth: 700, margin: "0 auto" }}>
-          <div style={{
-            background: "rgba(255,255,255,0.04)",
-            borderRadius: 24,
-            padding: "72px 48px",
-            textAlign: "center",
-            position: "relative",
-            overflow: "hidden",
-            border: "1px solid rgba(255,255,255,0.1)",
-            backdropFilter: "blur(20px)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 80px rgba(0,0,0,0.4)",
-          }}>
-            {/* Glass highlight orb */}
-            <div style={{
-              position: "absolute",
-              top: "-40%",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 600,
-              height: 360,
-              background: "radial-gradient(ellipse, rgba(255,255,255,0.06) 0%, transparent 65%)",
-              filter: "blur(40px)",
-              pointerEvents: "none",
-            }} />
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 18, position: "relative", zIndex: 1 }}>
-              Start Today
-            </p>
-            <h2 style={{
-              fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)",
-              fontWeight: 900,
-              letterSpacing: "-0.03em",
-              color: WHITE,
-              lineHeight: 1.1,
-              marginBottom: 16,
-              position: "relative",
-              zIndex: 1,
-            }}>
-              Your distillery deserves<br />better than spreadsheets.
-            </h2>
-            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", maxWidth: 420, margin: "0 auto 32px", lineHeight: 1.7, position: "relative", zIndex: 1 }}>
-              Join craft distilleries that have replaced manual TTB filings, lost barrel records, and disconnected tools with one platform.
-            </p>
-            <button
-              onClick={() => navigate("/signup")}
-              className="lnd-btn-primary"
-              style={{ fontSize: 15, padding: "14px 40px", position: "relative", zIndex: 1 }}
-            >
-              Request Access
-            </button>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 16, position: "relative", zIndex: 1 }}>
-              We'll reach out within 24 hours
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer style={{ background: OFF, padding: "40px 48px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="lnd-footer-inner" style={{ maxWidth: 1060, margin: "0 auto" }}>
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <FooterBarrelMark />
-            <span style={{ fontWeight: 800, fontSize: 15, color: WHITE, letterSpacing: "-0.03em" }}>Distillr</span>
-          </div>
-          {/* Nav links */}
-          <div className="lnd-footer-links">
-            {footerLinks.map((lk) => (
-              <a
-                key={lk.l}
-                href={lk.h}
-                style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none", transition: "color 0.15s" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-              >
-                {lk.l}
-              </a>
-            ))}
-            <button
-              onClick={() => navigate("/login")}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "rgba(255,255,255,0.3)", padding: 0, transition: "color 0.15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.75)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-            >
-              Sign in
-            </button>
-          </div>
-          {/* Copyright */}
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", margin: 0 }}>
-            &copy; {new Date().getFullYear()} Distillr &middot; A Loogo Labs Software
+          <p className="pub-center" style={{ marginTop: 20, fontSize: 14, color: "#64748b" }}>
+            <Link href="/faq" className="pub-link">
+              More questions answered <ArrowRight size={14} />
+            </Link>
           </p>
         </div>
+      </section>
 
-        {/* Legal links row */}
-        <div style={{ maxWidth: 1060, margin: "20px auto 0", paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: "8px 24px", justifyContent: "center" }}>
-          {[
-            { l: "Privacy Policy", h: "/privacy" },
-            { l: "Terms of Service", h: "/terms" },
-            { l: "Acceptable Use", h: "/acceptable-use" },
-          ].map(lk => (
-            <a
-              key={lk.l}
-              href={lk.h}
-              style={{ fontSize: 11.5, color: "rgba(255,255,255,0.18)", textDecoration: "none", transition: "color 0.15s" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.18)")}
-            >
-              {lk.l}
-            </a>
-          ))}
+      {/* ── CTA band ── */}
+      <section className="pub-section" style={{ paddingTop: 0, paddingBottom: 0 }}>
+        <div className="pub-wrap">
+          <div className="pub-band">
+            <p className="pub-eyebrow">Start today</p>
+            <h2 className="pub-h2" style={{ fontSize: "clamp(1.8rem, 3.6vw, 2.8rem)" }}>
+              Your distillery deserves better than spreadsheets.
+            </h2>
+            <p className="pub-lead" style={{ margin: "0 auto 32px" }}>
+              Join craft distilleries that replaced manual TTB filings, lost barrel records and disconnected tools with one platform.
+            </p>
+            <button className="pub-btn pub-btn--on-dark pub-btn--lg" onClick={() => navigate("/signup")}>
+              Request access <ArrowRight size={16} />
+            </button>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 16 }}>We'll reach out within 24 hours.</p>
+          </div>
         </div>
-      </footer>
-    </div>
+      </section>
+
+    </PublicShell>
   );
 }

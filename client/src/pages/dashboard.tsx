@@ -973,7 +973,10 @@ export default function Dashboard() {
     queryFn: () => apiRequest("/api/platform-config"),
     staleTime: 60_000,
   });
-  const heroBg = platformConfig?.dashboardColor ?? "#0F1B42";
+  // The org's own color paints the dashboard; the Distillr default keeps the
+  // canvas on brand Night so indigo stays an accent (header, buttons, highlights).
+  const customColor = platformConfig?.dashboardColor;
+  const heroBg = customColor && customColor.toLowerCase() !== "#4f46e5" ? customColor : "#0B0D12";
 
   // Filter batches for pipeline/stage display by selected month
   const batches = selectedMonth

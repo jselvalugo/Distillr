@@ -1,8 +1,5 @@
-import { useLocation } from "wouter";
-import { LandingNav } from "../components/LandingNav";
+import { LegalPage } from "../components/public/legal-page";
 
-const NAVY = "#0F1B42";
-const CREAM = "#FAF0E2";
 const LAST_UPDATED = "July 31, 2026";
 
 const SECTIONS = [
@@ -118,60 +115,5 @@ Email: legal@distillrsoftware.com`,
 ];
 
 export default function TermsPage() {
-  const [, navigate] = useLocation();
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#fff", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" }}>
-      <LandingNav />
-
-      {/* Hero */}
-      <div style={{ background: NAVY, paddingTop: 100, paddingBottom: 56, paddingLeft: 24, paddingRight: 24, textAlign: "center" }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "rgba(250,240,226,0.4)", marginBottom: 12 }}>Legal</p>
-        <h1 style={{ fontSize: "clamp(2rem, 4vw, 3rem)", fontWeight: 800, color: CREAM, letterSpacing: "-0.035em", lineHeight: 1.1, margin: "0 0 16px" }}>
-          Terms of Service
-        </h1>
-        <p style={{ fontSize: 14, color: "rgba(250,240,226,0.4)", margin: 0 }}>Last updated: {LAST_UPDATED}</p>
-      </div>
-
-      {/* Content */}
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "64px 24px 96px" }}>
-
-        <p style={{ fontSize: 15, color: "#374151", lineHeight: 1.8, marginBottom: 40, padding: "20px 24px", background: "#f9fafb", borderLeft: `3px solid ${NAVY}`, borderRadius: "0 8px 8px 0" }}>
-          Please read these Terms of Service carefully before using Distillr. These Terms form a binding legal agreement between you and Loogo Labs regarding your use of the Distillr platform.
-        </p>
-
-        {SECTIONS.map((s, i) => (
-          <div key={i} style={{ marginBottom: 40 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: NAVY, letterSpacing: "-0.02em", marginBottom: 14 }}>{s.title}</h2>
-            <div style={{ fontSize: 14.5, color: "#374151", lineHeight: 1.85 }}>
-              {s.body.split("\n").map((line, j) => {
-                if (!line.trim()) return <div key={j} style={{ height: 8 }} />;
-                const html = line
-                  .replace(/\*\*(.+?)\*\*/g, `<strong style="color:${NAVY}">$1</strong>`)
-                  .replace(/^•\s/, "");
-                const isBullet = line.startsWith("•");
-                return isBullet ? (
-                  <div key={j} style={{ display: "flex", gap: 10, marginBottom: 6, alignItems: "flex-start" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: NAVY, opacity: 0.4, marginTop: 7, flexShrink: 0 }} />
-                    <span dangerouslySetInnerHTML={{ __html: html }} />
-                  </div>
-                ) : (
-                  <p key={j} style={{ margin: "0 0 8px" }} dangerouslySetInnerHTML={{ __html: html }} />
-                );
-              })}
-            </div>
-            {i < SECTIONS.length - 1 && <div style={{ height: 1, background: "#f0f0f0", marginTop: 40 }} />}
-          </div>
-        ))}
-
-        <div style={{ marginTop: 64, paddingTop: 32, borderTop: "1px solid #e5e7eb", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
-          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: NAVY, fontWeight: 600, padding: 0 }}>← Back to home</button>
-          <div style={{ display: "flex", gap: 20 }}>
-            <a href="/privacy" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Privacy Policy</a>
-            <a href="/acceptable-use" style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}>Acceptable Use</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <LegalPage title="Terms of Service" current="/terms" lastUpdated={LAST_UPDATED} intro={"Please read these Terms of Service carefully before using Distillr. These Terms form a binding legal agreement between you and Loogo Labs regarding your use of the Distillr platform."} sections={SECTIONS} />;
 }
