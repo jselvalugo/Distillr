@@ -128,6 +128,7 @@ export default function App() {
             <Route path="/users/new" component={UserForm} />
             <Route path="/users/:id/edit" component={UserForm} />
             <Route path="/reports" component={Reports} />
+            <Route path="/reports/:kind" component={Reports} />
             <Route path="/settings" component={Settings} />
             <Route path="/floor-plan" component={FloorPlan} />
             <Route component={NotFound} />

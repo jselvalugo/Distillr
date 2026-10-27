@@ -139,10 +139,23 @@ const ZERO_DISTILLING_BOTTLES_MADE: DistillingBottlesMade = {
   riskey: 0,
 };
 
+/**
+ * Case/bottle counts keyed by bottle size ("750ml", "1000ml", …) or product.
+ * Every key the caller sends is kept (as a non-negative integer); the legacy
+ * per-product defaults are only used when the source is empty, so older rows
+ * keep their shape. Unknown keys used to be dropped, which silently zeroed the
+ * cases the bottling form records.
+ */
 function normalizeNumericRecord<T extends Record<string, number>>(value: unknown, defaults: T): T {
   const source = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-  const entries = Object.keys(defaults).map((key) => [key, Math.max(0, toInt(source[key], defaults[key]))]);
-  return Object.fromEntries(entries) as T;
+  const keys = Object.keys(source).filter((key) => key !== "total");
+  if (!keys.length) return { ...defaults };
+  const out: Record<string, number> = {};
+  for (const key of keys) {
+    const n = toInt(source[key], 0);
+    if (Number.isFinite(n)) out[key] = Math.max(0, n);
+  }
+  return out as T;
 }
 
 function sumNumericRecord(value: Record<string, number>): number {
@@ -787,6 +800,7 @@ export interface IStorage {
   deleteBarrel(id: string): Promise<void>;
 
   getBarrelEvents(barrelId: string): Promise<BarrelEvent[]>;
+  getAllBarrelEvents(): Promise<BarrelEvent[]>;
   createBarrelEvent(event: InsertBarrelEvent): Promise<BarrelEvent>;
 
   getTtbReports(): Promise<TtbReport[]>;
@@ -1680,6 +1694,12 @@ export class PostgresStorage implements IStorage {
   async deleteBarrel(id: string): Promise<void> {
     const tenantId = getCurrentTenantId();
     await query("DELETE FROM barrels WHERE id = $1 AND tenant_id = $2", [id, tenantId]);
+  }
+
+  async getAllBarrelEvents(): Promise<BarrelEvent[]> {
+    const tenantId = getCurrentTenantId();
+    const rows = await query("SELECT * FROM barrel_events WHERE tenant_id = $1 ORDER BY event_at ASC", [tenantId]);
+    return rows.map(mapBarrelEvent);
   }
 
   async getBarrelEvents(barrelId: string): Promise<BarrelEvent[]> {
