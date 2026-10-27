@@ -379,6 +379,9 @@ export const barrelEventSchema = z.object({
   toLocationId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   performedBy: z.string().nullable().optional(),
+  /** Gauge readings: measured wine gallons at proofAtEvent. */
+  wineGallons: z.number().nullable().optional(),
+  outdoorTemp: z.number().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
