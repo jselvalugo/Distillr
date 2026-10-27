@@ -91,6 +91,9 @@ function newId(tableName: string): string {
 
 /** Columns that are the system's, never the customer's. */
 const HIDDEN_COLS = new Set(["tenant_id"]);
+
+/** Every exportable table holds one workspace's data; exporting any of them unfiltered is a bug. */
+const TENANT_SCOPED_REQUIRED = new Set(Object.values(EXPORTABLE_TABLES));
 const SYSTEM_COLS = new Set(["created_at", "updated_at"]);
 
 const ACRONYMS: Record<string, string> = {
@@ -148,10 +151,16 @@ function tenantClause(cols: ColumnMeta[], tenantId: string, params: unknown[]): 
   return `WHERE tenant_id = $${params.length}`;
 }
 
-export async function fetchTableRows(tableName: string, cols: ColumnMeta[]): Promise<Record<string, unknown>[]> {
+export async function fetchTableRows(tableName: string, _cols?: ColumnMeta[]): Promise<Record<string, unknown>[]> {
   const tenantId = getCurrentTenantId();
+  // Always decide the tenant filter from the table's real columns — callers pass
+  // a display list with tenant_id hidden, which must never drop the filter.
+  const cols = await tableColumns(tableName);
   const params: unknown[] = [];
   const where = tenantClause(cols, tenantId, params);
+  if (!where && TENANT_SCOPED_REQUIRED.has(tableName)) {
+    throw new Error(`Refusing to export ${tableName} without a workspace filter`);
+  }
   const order = cols.some((c) => c.name === "created_at") ? "ORDER BY created_at ASC NULLS LAST" : "";
   return query(`SELECT * FROM ${tableName} ${where} ${order}`, params) as Promise<Record<string, unknown>[]>;
 }
