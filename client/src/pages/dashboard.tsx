@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -40,33 +40,33 @@ const STAGE_COLORS: Record<string, string> = {
   planning: "#6366f1", mash_fermentation: "#8b5cf6", distillation: "#d97706",
   barreling: "#0369a1", aging: "#15803d", bottling: "#b45309", closed: "#6b7280",
 };
-const CREAM = "#FAF0E2";
-const CREAM_ON_WHITE = "rgba(250,240,226,0.85)";
-const CREAM_ON_DARK  = "rgba(250,240,226,0.55)";
+// Accent for the "highlight" metrics: cream on the Night canvas, indigo on paper.
+const CREAM = "var(--dash-accent)";
+const CREAM_ON_DARK  = "var(--dash-accent-soft)";
 
 // Glass style constants
 const GLASS: React.CSSProperties = {
-  background: "rgba(255,255,255,0.07)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: "var(--dash-card)",
+  border: "1px solid var(--dash-card-border)",
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
 };
 const GLASS_STRONG: React.CSSProperties = {
-  background: "rgba(255,255,255,0.11)",
-  border: "1px solid rgba(255,255,255,0.18)",
+  background: "var(--dash-card-strong)",
+  border: "1px solid var(--dash-card-border-strong)",
   backdropFilter: "blur(16px)",
   WebkitBackdropFilter: "blur(16px)",
 };
 const GLASS_HERO: React.CSSProperties = {
-  background: "rgba(255,255,255,0.10)",
-  border: "1px solid rgba(255,255,255,0.16)",
+  background: "var(--dash-card-strong)",
+  border: "1px solid var(--dash-card-border-strong)",
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
 };
 
 // ─── SVG Ring Progress ───────────────────────────────────────────────────────
 function Ring({
-  pct, size = 52, strokeW = 4, color = "#0a0a0a", bg = "rgba(255,255,255,0.1)",
+  pct, size = 52, strokeW = 4, color = "#0a0a0a", bg = "rgba(var(--dash-fg-rgb),0.1)",
 }: {
   pct: number; size?: number; strokeW?: number; color?: string; bg?: string;
 }) {
@@ -91,7 +91,7 @@ function Ring({
 // ─── Mini horizontal fill bar ────────────────────────────────────────────────
 function FillBar({ pct, color = "#0a0a0a", height = 4 }: { pct: number; color?: string; height?: number }) {
   return (
-    <div className="w-full rounded-full overflow-hidden" style={{ height, background: "rgba(255,255,255,0.1)" }}>
+    <div className="w-full rounded-full overflow-hidden" style={{ height, background: "rgba(var(--dash-fg-rgb),0.1)" }}>
       <div
         className="h-full rounded-full"
         style={{ width: `${Math.min(Math.max(pct, 0), 100)}%`, background: color, transition: "width 0.8s cubic-bezier(0.4,0,0.2,1)" }}
@@ -114,10 +114,10 @@ function SplitBar({ a, b, colorA, colorB, labelA, labelB }: { a: number; b: numb
       <div className="flex justify-between">
         <div className="flex items-center gap-1">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: colorA }} />
-          <span className="text-[9px] text-white/50">{labelA} {total > 0 ? `${Math.round(pctA)}%` : ""}</span>
+          <span className="text-[9px] text-dashfg/50">{labelA} {total > 0 ? `${Math.round(pctA)}%` : ""}</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-white/50">{labelB} {total > 0 ? `${Math.round(pctB)}%` : ""}</span>
+          <span className="text-[9px] text-dashfg/50">{labelB} {total > 0 ? `${Math.round(pctB)}%` : ""}</span>
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: colorB }} />
         </div>
       </div>
@@ -129,8 +129,8 @@ function SplitBar({ a, b, colorA, colorB, labelA, labelB }: { a: number; b: numb
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 mb-5">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">{children}</span>
-      <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+      <span className="text-[10px] font-bold uppercase tracking-widest text-dashfg/35">{children}</span>
+      <div className="flex-1 h-px" style={{ background: "rgba(var(--dash-fg-rgb),0.08)" }} />
     </div>
   );
 }
@@ -153,7 +153,7 @@ function MetricCard({
 
       {/* Icon top-right */}
       <div className="absolute top-4 right-4 opacity-15">
-        <Icon size={28} color="white" />
+        <Icon size={28} color="var(--dash-fg)" />
       </div>
 
       <div className="flex items-end gap-3">
@@ -161,7 +161,7 @@ function MetricCard({
         <div className="relative shrink-0">
           <Ring pct={pct} size={52} color={color} />
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[8px] font-bold text-white/35" style={{ transform: "none" }}>
+            <span className="text-[8px] font-bold text-dashfg/35" style={{ transform: "none" }}>
               {pct > 0 ? `${Math.round(pct)}%` : ""}
             </span>
           </div>
@@ -169,9 +169,9 @@ function MetricCard({
 
         {/* Text */}
         <div className="flex-1 min-w-0 pb-0.5">
-          <p className="text-[9px] font-semibold uppercase tracking-widest text-white/35 mb-1">{label}</p>
-          <p className="text-2xl font-bold text-white tabular-nums leading-none">{value}</p>
-          {sub && <p className="text-[10px] text-white/25 mt-1">{sub}</p>}
+          <p className="text-[9px] font-semibold uppercase tracking-widest text-dashfg/35 mb-1">{label}</p>
+          <p className="text-2xl font-bold text-dashfg tabular-nums leading-none">{value}</p>
+          {sub && <p className="text-[10px] text-dashfg/25 mt-1">{sub}</p>}
         </div>
       </div>
     </div>
@@ -184,11 +184,11 @@ function BatchPipeline({ batches }: { batches: BatchRow[] }) {
   const active = batches.filter(b => b.stage !== "closed").slice(0, 6);
 
   if (!active.length) return (
-    <div className="flex flex-col items-center justify-center h-36 rounded-xl" style={{ border: "1px dashed rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.03)" }}>
-      <p className="text-sm font-medium text-white/40">No active batches</p>
+    <div className="flex flex-col items-center justify-center h-36 rounded-xl" style={{ border: "1px dashed rgba(var(--dash-fg-rgb),0.15)", background: "rgba(var(--dash-fg-rgb),0.03)" }}>
+      <p className="text-sm font-medium text-dashfg/40">No active batches</p>
       <button
         onClick={() => navigate("/production")}
-        className="mt-2 text-xs font-semibold text-white/60 underline underline-offset-2 hover:text-white"
+        className="mt-2 text-xs font-semibold text-dashfg/60 underline underline-offset-2 hover:text-dashfg"
       >
         Create one in Production →
       </button>
@@ -207,15 +207,15 @@ function BatchPipeline({ batches }: { batches: BatchRow[] }) {
             onClick={() => navigate(`/production/${b.id}`)}
             className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-150 group"
             style={{ ...GLASS, transition: "background 0.15s ease" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.10)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
+            onMouseEnter={e => (e.currentTarget.style.background = "var(--dash-card-strong)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "var(--dash-card)")}
           >
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white font-mono">{b.batchCode}</span>
-                  {b.productName && <span className="text-xs text-white/40 hidden sm:block">· {b.productName}</span>}
+                  <span className="text-xs font-bold text-dashfg font-mono">{b.batchCode}</span>
+                  {b.productName && <span className="text-xs text-dashfg/40 hidden sm:block">· {b.productName}</span>}
                 </div>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: color + "28", color }}>
                   {STAGE_LABEL[b.stage] ?? b.stage}
@@ -223,12 +223,12 @@ function BatchPipeline({ batches }: { batches: BatchRow[] }) {
               </div>
               <FillBar pct={pct} color={color} height={3} />
               <div className="flex justify-between mt-1">
-                <span className="text-[9px] text-white/25">Start</span>
+                <span className="text-[9px] text-dashfg/25">Start</span>
                 <span className="text-[9px] font-semibold" style={{ color }}>{pct}%</span>
-                <span className="text-[9px] text-white/25">Complete</span>
+                <span className="text-[9px] text-dashfg/25">Complete</span>
               </div>
             </div>
-            <ArrowRight size={14} className="text-white/25 group-hover:text-white/60 transition-colors shrink-0" />
+            <ArrowRight size={14} className="text-dashfg/25 group-hover:text-dashfg/60 transition-colors shrink-0" />
           </div>
         );
       })}
@@ -248,7 +248,7 @@ function StageDistribution({ batches }: { batches: BatchRow[] }) {
   const stages = ["planning", "mash_fermentation", "distillation", "barreling", "aging", "bottling"];
   return (
     <div className="rounded-xl p-5 mb-2" style={GLASS}>
-      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Stage Distribution — {total} active</p>
+      <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-3">Stage Distribution — {total} active</p>
       <div className="flex w-full h-3 rounded-full overflow-hidden gap-0.5">
         {stages.map(s => {
           const pct = ((counts[s] ?? 0) / total) * 100;
@@ -262,7 +262,7 @@ function StageDistribution({ batches }: { batches: BatchRow[] }) {
         {stages.filter(s => counts[s]).map(s => (
           <div key={s} className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full shrink-0" style={{ background: STAGE_COLORS[s] }} />
-            <span className="text-[10px] text-white/60">{STAGE_LABEL[s]} <strong className="text-white">{counts[s]}</strong></span>
+            <span className="text-[10px] text-dashfg/60">{STAGE_LABEL[s]} <strong className="text-dashfg">{counts[s]}</strong></span>
           </div>
         ))}
       </div>
@@ -335,25 +335,25 @@ function MonthNavigator({
     <div className="flex items-center gap-1">
       <button
         onClick={() => shift(-1)}
-        className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+        className="p-1.5 rounded-md text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10 transition-colors"
       >
         <ChevronLeft size={14} />
       </button>
-      <span className="text-sm font-semibold text-white min-w-[130px] text-center">{label}</span>
+      <span className="text-sm font-semibold text-dashfg min-w-[130px] text-center">{label}</span>
       <button
         onClick={() => shift(1)}
         disabled={isCurrentMonth || !value}
-        className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+        className="p-1.5 rounded-md text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
       >
         <ChevronRight size={14} />
       </button>
-      <div className="w-px h-4 bg-white/15 mx-1" />
+      <div className="w-px h-4 bg-dashfg/15 mx-1" />
       <button
         onClick={() => onChange(value ? null : currentYM)}
         className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md transition-colors ${
           !value
-            ? "bg-white/15 text-white"
-            : "text-white/40 hover:text-white hover:bg-white/10"
+            ? "bg-dashfg/15 text-dashfg"
+            : "text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10"
         }`}
       >
         {value ? "All Time" : "By Month"}
@@ -433,12 +433,12 @@ function NotificationCenter({ permits, colas }: { permits: PermitRow[]; colas: C
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="relative p-1.5 rounded-md text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+        className="relative p-1.5 rounded-md text-dashfg/50 hover:text-dashfg hover:bg-dashfg/10 transition-colors"
         aria-label="Notifications"
       >
         <Bell size={16} />
         {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-[8px] font-bold text-white rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 leading-none">
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-[8px] font-bold text-dashfg rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 leading-none">
             {badge}
           </span>
         )}
@@ -450,17 +450,17 @@ function NotificationCenter({ permits, colas }: { permits: PermitRow[]; colas: C
           style={GLASS_STRONG}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            <span className="text-xs font-bold text-white">Notifications</span>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid rgba(var(--dash-fg-rgb),0.08)" }}>
+            <span className="text-xs font-bold text-dashfg">Notifications</span>
             {count > 0 && (
-              <span className="text-[10px] text-white/40">{count} active alert{count !== 1 ? "s" : ""}</span>
+              <span className="text-[10px] text-dashfg/40">{count} active alert{count !== 1 ? "s" : ""}</span>
             )}
           </div>
 
           {count === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
               <CheckCircle2 size={20} className="text-emerald-400/60" />
-              <p className="text-xs text-white/40">All clear — no active alerts</p>
+              <p className="text-xs text-dashfg/40">All clear — no active alerts</p>
             </div>
           ) : (
             <div className="max-h-80 overflow-y-auto">
@@ -468,8 +468,8 @@ function NotificationCenter({ permits, colas }: { permits: PermitRow[]; colas: C
                 <button
                   key={n.id}
                   onClick={() => { navigate(n.href); setOpen(false); }}
-                  className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5"
-                  style={i > 0 ? { borderTop: "1px solid rgba(255,255,255,0.06)" } : undefined}
+                  className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-dashfg/5"
+                  style={i > 0 ? { borderTop: "1px solid rgba(var(--dash-fg-rgb),0.06)" } : undefined}
                 >
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
@@ -478,7 +478,7 @@ function NotificationCenter({ permits, colas }: { permits: PermitRow[]; colas: C
                     <Bell size={10} style={{ color: n.color }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white/80 truncate">{n.title}</p>
+                    <p className="text-xs font-semibold text-dashfg/80 truncate">{n.title}</p>
                     <p className="text-[10px] mt-0.5" style={{ color: n.color }}>{n.message}</p>
                   </div>
                 </button>
@@ -556,24 +556,24 @@ function EmbeddedCalendar({
       {/* Section header row */}
       <div className="flex flex-wrap items-center justify-between gap-y-3 mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">Distilling Calendar</span>
-          <div className="h-px w-8" style={{ background: "rgba(255,255,255,0.08)" }} />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-dashfg/35">Distilling Calendar</span>
+          <div className="h-px w-8" style={{ background: "rgba(var(--dash-fg-rgb),0.08)" }} />
           <div className="hidden sm:flex items-center gap-3">
             {[{ label: "Batch", color: "#6366f1" }, { label: "Permit", color: "#f59e0b" }, { label: "Excise", color: "#a78bfa" }, { label: "COLA", color: "#f472b6" }].map(l => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: l.color }} />
-                <span className="text-[9px] text-white/35">{l.label}</span>
+                <span className="text-[9px] text-dashfg/35">{l.label}</span>
               </div>
             ))}
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => shiftCal(-1)} className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"><ChevronLeft size={13} /></button>
-          <span className="text-xs font-semibold text-white min-w-[130px] text-center">{monthLabel}</span>
-          <button onClick={() => shiftCal(1)} className="p-1.5 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"><ChevronRight size={13} /></button>
+          <button onClick={() => shiftCal(-1)} className="p-1.5 rounded-md text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10 transition-colors"><ChevronLeft size={13} /></button>
+          <span className="text-xs font-semibold text-dashfg min-w-[130px] text-center">{monthLabel}</span>
+          <button onClick={() => shiftCal(1)} className="p-1.5 rounded-md text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10 transition-colors"><ChevronRight size={13} /></button>
           <button
             onClick={() => setCalYM(todayStr.slice(0, 7))}
-            className={`ml-1 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md transition-colors ${calYM === todayStr.slice(0, 7) ? "bg-white/15 text-white" : "text-white/35 hover:text-white hover:bg-white/10"}`}
+            className={`ml-1 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md transition-colors ${calYM === todayStr.slice(0, 7) ? "bg-dashfg/15 text-dashfg" : "text-dashfg/35 hover:text-dashfg hover:bg-dashfg/10"}`}
           >Today</button>
         </div>
       </div>
@@ -582,9 +582,9 @@ function EmbeddedCalendar({
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-4">
         {/* Calendar grid */}
         <div className="rounded-xl overflow-hidden" style={GLASS}>
-          <div className="grid grid-cols-7" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="grid grid-cols-7" style={{ borderBottom: "1px solid rgba(var(--dash-fg-rgb),0.08)" }}>
             {CAL_DAYS.map(d => (
-              <div key={d} className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-white/25">{d}</div>
+              <div key={d} className="py-2 text-center text-[9px] font-bold uppercase tracking-widest text-dashfg/25">{d}</div>
             ))}
           </div>
           <div className="grid grid-cols-7">
@@ -598,8 +598,8 @@ function EmbeddedCalendar({
               const cellEvs = dateStr ? (eventsByDate[dateStr] ?? []) : [];
               const extra = Math.max(0, cellEvs.length - 2);
               return (
-                <div key={i} className="min-h-[80px] p-1.5" style={{ borderRight: i % 7 !== 6 ? "1px solid rgba(255,255,255,0.06)" : undefined, borderBottom: i < totalCells - 7 ? "1px solid rgba(255,255,255,0.06)" : undefined }}>
-                  <span className={`w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] font-semibold mb-1 ${isToday ? "bg-white text-[#0a0a0a] font-bold" : isCur ? (isWknd ? "text-white/40" : "text-white/65") : "text-white/15"}`}>{dayNum}</span>
+                <div key={i} className="min-h-[80px] p-1.5" style={{ borderRight: i % 7 !== 6 ? "1px solid rgba(var(--dash-fg-rgb),0.06)" : undefined, borderBottom: i < totalCells - 7 ? "1px solid rgba(var(--dash-fg-rgb),0.06)" : undefined }}>
+                  <span className={`w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] font-semibold mb-1 ${isToday ? "bg-dashfg text-[var(--dash-bg)] font-bold" : isCur ? (isWknd ? "text-dashfg/40" : "text-dashfg/65") : "text-dashfg/15"}`}>{dayNum}</span>
                   <div className="space-y-0.5">
                     {cellEvs.slice(0, 2).map(ev => (
                       <button key={ev.id} onClick={() => navigate(ev.href)} title={ev.label}
@@ -607,7 +607,7 @@ function EmbeddedCalendar({
                         style={{ background: ev.color + "28", color: ev.color, border: `1px solid ${ev.color}35` }}
                       >{ev.label}</button>
                     ))}
-                    {extra > 0 && <p className="text-[8px] text-white/25 px-0.5">+{extra} more</p>}
+                    {extra > 0 && <p className="text-[8px] text-dashfg/25 px-0.5">+{extra} more</p>}
                   </div>
                 </div>
               );
@@ -617,17 +617,17 @@ function EmbeddedCalendar({
 
         {/* Sidebar */}
         <div className="rounded-xl p-4" style={GLASS}>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Next 30 Days</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-3">Next 30 Days</p>
           {upcoming.length === 0 ? (
-            <p className="text-[11px] text-white/30">No upcoming events</p>
+            <p className="text-[11px] text-dashfg/30">No upcoming events</p>
           ) : (
             <div className="space-y-2.5">
               {upcoming.map(ev => (
                 <button key={ev.id} onClick={() => navigate(ev.href)} className="w-full flex items-start gap-2 text-left group">
                   <div className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: ev.color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold text-white/65 truncate group-hover:text-white transition-colors leading-tight">{ev.label}</p>
-                    <p className="text-[9px] text-white/30 mt-0.5">{new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                    <p className="text-[10px] font-semibold text-dashfg/65 truncate group-hover:text-dashfg transition-colors leading-tight">{ev.label}</p>
+                    <p className="text-[9px] text-dashfg/30 mt-0.5">{new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
                   </div>
                 </button>
               ))}
@@ -669,8 +669,9 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
   }
 
   const glassBase: React.CSSProperties = {
-    background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.14)",
+    background: "var(--dash-card-strong)",
+    border: "1px solid var(--dash-card-border-strong)",
+    boxShadow: "var(--dash-float-shadow)",
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
   };
@@ -697,7 +698,7 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
         }}
         title="Section navigator"
       >
-        <LayoutList size={15} className="text-white/60" />
+        <LayoutList size={15} className="text-dashfg/60" />
       </div>
 
       {/* Expanded panel — fades in on hover */}
@@ -714,29 +715,29 @@ function SectionNav({ widgetOrder, activeId }: { widgetOrder: string[]; activeId
       >
         {widgetOrder.map(id => {
           const isActive = id === activeId;
-          const dotColor = NAV_DOT[id] ?? "white";
+          const dotColor = NAV_DOT[id] ?? "var(--dash-fg)";
           return (
             <button
               key={id}
               onClick={() => scrollTo(id)}
               className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl w-full text-left transition-colors duration-150"
-              style={{ background: isActive ? "rgba(255,255,255,0.12)" : "transparent" }}
-              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(255,255,255,0.12)" : "transparent"; }}
+              style={{ background: isActive ? "rgba(var(--dash-fg-rgb),0.12)" : "transparent" }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--dash-card)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(var(--dash-fg-rgb),0.12)" : "transparent"; }}
             >
               <div
                 className="shrink-0 rounded-full"
                 style={{
                   width: isActive ? 8 : 6,
                   height: isActive ? 8 : 6,
-                  background: isActive ? dotColor : "rgba(255,255,255,0.3)",
+                  background: isActive ? dotColor : "rgba(var(--dash-fg-rgb),0.3)",
                   boxShadow: isActive ? `0 0 8px ${dotColor}80` : "none",
                   transition: "all 0.2s ease",
                 }}
               />
               <span
                 className="text-[9px] font-bold uppercase tracking-widest leading-none whitespace-nowrap"
-                style={{ color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)" }}
+                style={{ color: isActive ? "rgba(var(--dash-fg-rgb),0.9)" : "rgba(var(--dash-fg-rgb),0.4)" }}
               >
                 {NAV_SHORT[id] ?? id}
               </span>
@@ -785,20 +786,20 @@ function DashboardPicker({ value, onChange }: { value: DashboardViewKey; onChang
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/15 bg-white/8 hover:bg-white/12 transition-colors group"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashfg/15 bg-dashfg/8 hover:bg-dashfg/12 transition-colors group"
       >
-        <current.icon size={13} className="text-white/50 group-hover:text-white/70 transition-colors shrink-0" />
+        <current.icon size={13} className="text-dashfg/50 group-hover:text-dashfg/70 transition-colors shrink-0" />
         <div className="text-left">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 leading-none mb-0.5">Dashboard</p>
-          <p className="text-xs font-semibold text-white leading-none">{current.label}</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/30 leading-none mb-0.5">Dashboard</p>
+          <p className="text-xs font-semibold text-dashfg leading-none">{current.label}</p>
         </div>
-        {open ? <ChevronUp size={12} className="text-white/40 ml-1 shrink-0" /> : <ChevronDown size={12} className="text-white/40 ml-1 shrink-0" />}
+        {open ? <ChevronUp size={12} className="text-dashfg/40 ml-1 shrink-0" /> : <ChevronDown size={12} className="text-dashfg/40 ml-1 shrink-0" />}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-white/15 overflow-hidden shadow-2xl" style={{ background: "rgba(15,27,66,0.97)", backdropFilter: "blur(20px)", zIndex: 200 }}>
-          <div className="px-3 py-2 border-b border-white/10">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-white/25">Select Dashboard</p>
+        <div className="absolute left-0 top-full mt-2 w-64 rounded-xl border border-dashfg/15 overflow-hidden shadow-2xl" style={{ background: "var(--dash-popover)", backdropFilter: "blur(20px)", zIndex: 200 }}>
+          <div className="px-3 py-2 border-b border-dashfg/10">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/25">Select Dashboard</p>
           </div>
           {DASHBOARD_VIEWS.map(d => {
             const Icon = d.icon;
@@ -807,16 +808,16 @@ function DashboardPicker({ value, onChange }: { value: DashboardViewKey; onChang
               <button
                 key={d.key}
                 onClick={() => { onChange(d.key); setOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-white/5 last:border-0 ${active ? "bg-white/12" : "hover:bg-white/8"}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-dashfg/5 last:border-0 ${active ? "bg-dashfg/12" : "hover:bg-dashfg/8"}`}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-white/20" : "bg-white/8"}`}>
-                  <Icon size={15} className={active ? "text-white" : "text-white/40"} />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-dashfg/20" : "bg-dashfg/8"}`}>
+                  <Icon size={15} className={active ? "text-dashfg" : "text-dashfg/40"} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-semibold leading-none mb-1 ${active ? "text-white" : "text-white/60"}`}>{d.label}</p>
-                  <p className="text-[10px] text-white/30 leading-tight truncate">{d.sub}</p>
+                  <p className={`text-xs font-semibold leading-none mb-1 ${active ? "text-dashfg" : "text-dashfg/60"}`}>{d.label}</p>
+                  <p className="text-[10px] text-dashfg/30 leading-tight truncate">{d.sub}</p>
                 </div>
-                {active && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+                {active && <div className="w-1.5 h-1.5 rounded-full bg-dashfg shrink-0" />}
               </button>
             );
           })}
@@ -839,11 +840,11 @@ function WidgetShell({
       {editMode && (
         <div
           className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg select-none"
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          style={{ background: "rgba(var(--dash-fg-rgb),0.06)", border: "1px solid rgba(var(--dash-fg-rgb),0.12)" }}
         >
           <div className="flex items-center gap-2">
-            <GripVertical size={13} className="text-white/25" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/45">
+            <GripVertical size={13} className="text-dashfg/25" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-dashfg/45">
               {SECTION_LABELS[id] ?? id}
             </span>
           </div>
@@ -851,7 +852,7 @@ function WidgetShell({
             <button
               onClick={() => onMove(id, -1)}
               disabled={isFirst}
-              className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded text-dashfg/50 hover:text-dashfg hover:bg-dashfg/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
               title="Move up"
             >
               <ChevronUp size={14} />
@@ -859,7 +860,7 @@ function WidgetShell({
             <button
               onClick={() => onMove(id, 1)}
               disabled={isLast}
-              className="p-1.5 rounded text-white/50 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded text-dashfg/50 hover:text-dashfg hover:bg-dashfg/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
               title="Move down"
             >
               <ChevronDown size={14} />
@@ -968,7 +969,7 @@ export default function Dashboard() {
     queryKey: ["/api/state-excise"],
     queryFn: () => apiRequest("/api/state-excise"),
   });
-  const { data: platformConfig } = useQuery<{ dashboardColor: string | null }>({
+  const { data: platformConfig } = useQuery<{ dashboardColor: string | null; theme?: "light" | "dark" | null }>({
     queryKey: ["/api/platform-config"],
     queryFn: () => apiRequest("/api/platform-config"),
     staleTime: 60_000,
@@ -976,7 +977,32 @@ export default function Dashboard() {
   // The org's own color paints the dashboard; the Distillr default keeps the
   // canvas on brand Night so indigo stays an accent (header, buttons, highlights).
   const customColor = platformConfig?.dashboardColor;
-  const heroBg = customColor && customColor.toLowerCase() !== "#4f46e5" ? customColor : "#0B0D12";
+  const theme = platformConfig?.theme === "light" ? "light" : "dark";
+  const heroBg = theme === "light"
+    ? "#F4F6FB"
+    : customColor && customColor.toLowerCase() !== "#4f46e5" ? customColor : "#0B0D12";
+  const dashVars: Record<string, string> = theme === "light"
+    ? { "--dash-fg": "#0F172A", "--dash-fg-rgb": "15,23,42", "--dash-bg": "#F4F6FB",
+        "--dash-card": "#ffffff", "--dash-card-border": "rgba(15,23,42,0.08)",
+        "--dash-card-strong": "#ffffff", "--dash-card-border-strong": "rgba(15,23,42,0.14)",
+        "--dash-accent": "#4F46E5", "--dash-accent-soft": "rgba(79,70,229,0.75)",
+        "--dash-popover": "#ffffff", "--dash-float-shadow": "0 1px 2px rgba(15,23,42,0.05), 0 12px 32px -16px rgba(15,23,42,0.3)" }
+    : { "--dash-fg": "#ffffff", "--dash-fg-rgb": "255,255,255", "--dash-bg": heroBg,
+        "--dash-card": "rgba(255,255,255,0.07)", "--dash-card-border": "rgba(255,255,255,0.12)",
+        "--dash-card-strong": "rgba(255,255,255,0.11)", "--dash-card-border-strong": "rgba(255,255,255,0.18)",
+        "--dash-accent": "#FAF0E2", "--dash-accent-soft": "rgba(250,240,226,0.55)",
+        "--dash-popover": "rgba(15,27,66,0.97)", "--dash-float-shadow": "none" };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.keys(dashVars).forEach((k) => root.style.setProperty(k, dashVars[k]));
+    root.setAttribute("data-dash-theme", theme);
+    return () => {
+      Object.keys(dashVars).forEach((k) => root.style.removeProperty(k));
+      root.removeAttribute("data-dash-theme");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme, heroBg]);
 
   // Filter batches for pipeline/stage display by selected month
   const batches = selectedMonth
@@ -1021,7 +1047,7 @@ export default function Dashboard() {
   return (
     <Layout>
       {createPortal(<SectionNav widgetOrder={widgetOrder} activeId={activeSection} />, document.body)}
-      <div className="min-h-screen relative" style={{ background: heroBg }}>
+      <div className="min-h-screen relative" data-dash-theme={theme} style={{ background: heroBg }}>
 
         {/* ── Decorative blobs ── */}
         <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
@@ -1036,23 +1062,23 @@ export default function Dashboard() {
             <div className="max-w-6xl mx-auto">
               <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-dashfg/30 mb-1">
                     {dashboardView === "operations" ? "Operations Overview" : "Finished Products"}
                   </p>
-                  <h1 className="text-3xl font-bold text-white leading-none">{monthLabel}</h1>
+                  <h1 className="text-3xl font-bold text-dashfg leading-none">{monthLabel}</h1>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <DashboardPicker value={dashboardView} onChange={switchView} />
-                  <div className="w-px h-6 bg-white/15" />
+                  <div className="w-px h-6 bg-dashfg/15" />
                   <MonthNavigator value={selectedMonth} onChange={setSelectedMonth} />
-                  <div className="w-px h-6 bg-white/15" />
+                  <div className="w-px h-6 bg-dashfg/15" />
                   <NotificationCenter permits={permits} colas={colas} />
                   {dashboardView === "operations" && <>
-                    <div className="w-px h-6 bg-white/15" />
+                    <div className="w-px h-6 bg-dashfg/15" />
                     <button
                       onClick={() => setEditMode(v => !v)}
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        editMode ? "bg-white/15 text-white" : "text-white/40 hover:text-white hover:bg-white/10"
+                        editMode ? "bg-dashfg/15 text-dashfg" : "text-dashfg/40 hover:text-dashfg hover:bg-dashfg/10"
                       }`}
                       title="Customize layout"
                     >
@@ -1077,14 +1103,14 @@ export default function Dashboard() {
                       <div key={k.label} className="rounded-xl p-4 relative overflow-hidden" style={GLASS_HERO}>
                         {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
                         <div className="flex items-start justify-between mb-3">
-                          <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
+                          <p className="text-[9px] uppercase tracking-widest text-dashfg/30 font-semibold leading-tight">{k.label}</p>
                           <Icon size={14} color={k.color} opacity={0.7} />
                         </div>
                         <div className="flex items-end gap-2">
-                          <p className="text-3xl font-bold text-white tabular-nums leading-none">{k.value}</p>
-                          {k.pct > 0 && <div className="mb-0.5"><Ring pct={k.pct} size={32} strokeW={3} color={k.color} bg="rgba(255,255,255,0.1)" /></div>}
+                          <p className="text-3xl font-bold text-dashfg tabular-nums leading-none">{k.value}</p>
+                          {k.pct > 0 && <div className="mb-0.5"><Ring pct={k.pct} size={32} strokeW={3} color={k.color} bg="rgba(var(--dash-fg-rgb),0.1)" /></div>}
                         </div>
-                        <p className="text-[10px] text-white/25 mt-1.5">{k.sub}</p>
+                        <p className="text-[10px] text-dashfg/25 mt-1.5">{k.sub}</p>
                       </div>
                     );
                   })}
@@ -1114,11 +1140,11 @@ export default function Dashboard() {
                         <div key={k.label} className="rounded-xl p-4 relative overflow-hidden" style={GLASS_HERO}>
                           {k.accent && <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl" style={{ background: CREAM_ON_DARK }} />}
                           <div className="flex items-start justify-between mb-3">
-                            <p className="text-[9px] uppercase tracking-widest text-white/30 font-semibold leading-tight">{k.label}</p>
+                            <p className="text-[9px] uppercase tracking-widest text-dashfg/30 font-semibold leading-tight">{k.label}</p>
                             <Icon size={14} color={k.color} opacity={0.7} />
                           </div>
-                          <p className="text-3xl font-bold text-white tabular-nums leading-none">{k.value}</p>
-                          <p className="text-[10px] text-white/25 mt-1.5">{k.sub}</p>
+                          <p className="text-3xl font-bold text-dashfg tabular-nums leading-none">{k.value}</p>
+                          <p className="text-[10px] text-dashfg/25 mt-1.5">{k.sub}</p>
                         </div>
                       );
                     })}
@@ -1142,11 +1168,11 @@ export default function Dashboard() {
                 {id === "pipeline" && <>
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/35">Active Batch Pipeline</span>
-                      <div className="h-px w-8" style={{ background: "rgba(255,255,255,0.08)" }} />
-                      <span className="text-[10px] text-white/25">live — not filtered by month</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-dashfg/35">Active Batch Pipeline</span>
+                      <div className="h-px w-8" style={{ background: "rgba(var(--dash-fg-rgb),0.08)" }} />
+                      <span className="text-[10px] text-dashfg/25">live — not filtered by month</span>
                     </div>
-                    <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-white/40 hover:text-white transition-colors flex items-center gap-1">
+                    <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-dashfg/40 hover:text-dashfg transition-colors flex items-center gap-1">
                       View all <ArrowRight size={11} />
                     </button>
                   </div>
@@ -1166,15 +1192,15 @@ export default function Dashboard() {
                   {gallons > 0 && proof > 0 && (
                     <div className="mt-3 rounded-xl px-5 py-3 flex items-center gap-4" style={GLASS}>
                       <div className="flex-1">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35">Proof Efficiency</p>
-                        <p className="text-xs text-white/60 mt-0.5"><span className="font-bold text-white">{fmtNum(proof / gallons, 2)}</span> proof gallons per gallon distilled</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35">Proof Efficiency</p>
+                        <p className="text-xs text-dashfg/60 mt-0.5"><span className="font-bold text-dashfg">{fmtNum(proof / gallons, 2)}</span> proof gallons per gallon distilled</p>
                       </div>
                       <div className="flex-1">
                         <FillBar pct={Math.min((proof / gallons) * 50, 100)} color={CREAM_ON_DARK} height={6} />
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-white tabular-nums">{Math.round((proof / gallons) * 100)}%</p>
-                        <p className="text-[9px] text-white/35">of yield</p>
+                        <p className="text-xl font-bold text-dashfg tabular-nums">{Math.round((proof / gallons) * 100)}%</p>
+                        <p className="text-[9px] text-dashfg/35">of yield</p>
                       </div>
                     </div>
                   )}
@@ -1197,58 +1223,58 @@ export default function Dashboard() {
                     <div className="lg:col-span-2 space-y-3">
                       <SectionLabel>Sales & Inventory Position</SectionLabel>
                       <div className="rounded-xl p-5" style={GLASS}>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Case Summary</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-4">Case Summary</p>
                         <div className="grid grid-cols-3 gap-6 mb-4">
                           <div>
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Bottled</p>
-                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(casesProduced, 0)}</p>
-                            <p className="text-[10px] text-white/25">total cases</p>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-dashfg/35">Bottled</p>
+                            <p className="text-2xl font-bold text-dashfg tabular-nums mt-1">{fmtNum(casesProduced, 0)}</p>
+                            <p className="text-[10px] text-dashfg/25">total cases</p>
                           </div>
                           <div>
                             <div className="flex items-end gap-1.5">
                               <ShoppingCart size={13} color="#60a5fa" />
-                              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Sold</p>
+                              <p className="text-[9px] font-semibold uppercase tracking-wider text-dashfg/35">Sold</p>
                             </div>
-                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(totalSold, 0)}</p>
-                            <p className="text-[10px] text-white/25">cases on orders</p>
+                            <p className="text-2xl font-bold text-dashfg tabular-nums mt-1">{fmtNum(totalSold, 0)}</p>
+                            <p className="text-[10px] text-dashfg/25">cases on orders</p>
                           </div>
                           <div>
-                            <p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">On Hand</p>
-                            <p className="text-2xl font-bold text-white tabular-nums mt-1">{fmtNum(Math.max(0, casesProduced - totalSold), 0)}</p>
-                            <p className="text-[10px] text-white/25">estimated remaining</p>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider text-dashfg/35">On Hand</p>
+                            <p className="text-2xl font-bold text-dashfg tabular-nums mt-1">{fmtNum(Math.max(0, casesProduced - totalSold), 0)}</p>
+                            <p className="text-[10px] text-dashfg/25">estimated remaining</p>
                           </div>
                         </div>
                         <FillBar pct={casesProduced > 0 ? (totalSold / casesProduced) * 100 : 0} color="#60a5fa" height={6} />
                         <div className="flex justify-between mt-1.5">
-                          <span className="text-[9px] text-white/25">0 cases sold</span>
-                          <span className="text-[9px] text-white/50 font-semibold">{casesProduced > 0 ? `${Math.round((totalSold / casesProduced) * 100)}% sold` : "No production yet"}</span>
-                          <span className="text-[9px] text-white/25">{fmtNum(casesProduced, 0)} bottled</span>
+                          <span className="text-[9px] text-dashfg/25">0 cases sold</span>
+                          <span className="text-[9px] text-dashfg/50 font-semibold">{casesProduced > 0 ? `${Math.round((totalSold / casesProduced) * 100)}% sold` : "No production yet"}</span>
+                          <span className="text-[9px] text-dashfg/25">{fmtNum(casesProduced, 0)} bottled</span>
                         </div>
                       </div>
                       <div className="rounded-xl p-5" style={GLASS}>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Distribution Channel</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-4">Distribution Channel</p>
                         <div className="grid grid-cols-2 gap-6 mb-4">
                           <div>
-                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Distributor</p></div>
-                            <p className="text-2xl font-bold text-white tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
-                            <p className="text-[10px] text-white/25">cases</p>
+                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-dashfg/35">Distributor</p></div>
+                            <p className="text-2xl font-bold text-dashfg tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
+                            <p className="text-[10px] text-dashfg/25">cases</p>
                           </div>
                           <div>
-                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-white/35">Retail</p></div>
-                            <p className="text-2xl font-bold text-white tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
-                            <p className="text-[10px] text-white/25">cases</p>
+                            <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] font-semibold uppercase tracking-wider text-dashfg/35">Retail</p></div>
+                            <p className="text-2xl font-bold text-dashfg tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
+                            <p className="text-[10px] text-dashfg/25">cases</p>
                           </div>
                         </div>
-                        {(distCases > 0 || retailCases > 0) ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" /> : <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }} />}
+                        {(distCases > 0 || retailCases > 0) ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" /> : <div className="h-2 rounded-full" style={{ background: "rgba(var(--dash-fg-rgb),0.1)" }} />}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <MetricCard label="Orders Fulfilled" value={fulfilled || "—"} sub="approved + fulfilled" pct={relPct(fulfilled, totalSold / 10)} icon={CheckCircle2} color="#34d399" />
                         <div className="rounded-xl p-5" style={GLASS}>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-3">Production Totals</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-3">Production Totals</p>
                           <div className="space-y-3">
                             {[{ label: "Proof Gal. distilled (produced)", value: fmtNum(proof, 1), pct: relPct(proof, gallons), color: "#818cf8" }, { label: "Proof Gal. bottled (processed)", value: fmtNum(proofProcessed, 1), pct: relPct(proofProcessed, proof), color: "#f59e0b" }, { label: "Wine Gallons barreled", value: fmtNum(gallons, 1), pct: relPct(gallons, proof), color: "#6366f1" }].map(item => (
                               <div key={item.label}>
-                                <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">{item.label}</span><span className="text-[10px] font-bold text-white tabular-nums">{item.value}</span></div>
+                                <div className="flex justify-between mb-1"><span className="text-[9px] text-dashfg/40">{item.label}</span><span className="text-[10px] font-bold text-dashfg tabular-nums">{item.value}</span></div>
                                 <FillBar pct={item.pct} color={item.color} height={4} />
                               </div>
                             ))}
@@ -1260,37 +1286,37 @@ export default function Dashboard() {
                       <SectionLabel>Compliance</SectionLabel>
                       <PermitAlert permits={permits} />
                       <div className="rounded-xl p-5 mb-3" style={GLASS}>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-4">Batch Lifecycle</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-4">Batch Lifecycle</p>
                         <div className="flex items-center gap-4">
                           <div className="relative shrink-0">
-                            <Ring pct={completedPct} size={64} strokeW={5} color="white" />
+                            <Ring pct={completedPct} size={64} strokeW={5} color="var(--dash-fg)" />
                             <div className="absolute inset-0 flex items-center justify-center flex-col">
-                              <span className="text-sm font-bold text-white leading-none">{completed}</span>
-                              <span className="text-[7px] text-white/40 leading-none mt-0.5">closed</span>
+                              <span className="text-sm font-bold text-dashfg leading-none">{completed}</span>
+                              <span className="text-[7px] text-dashfg/40 leading-none mt-0.5">closed</span>
                             </div>
                           </div>
                           <div className="flex-1 space-y-2">
                             <div>
-                              <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">Active</span><span className="text-[10px] font-bold tabular-nums text-white">{activeBatches.length}</span></div>
+                              <div className="flex justify-between mb-1"><span className="text-[9px] text-dashfg/40">Active</span><span className="text-[10px] font-bold tabular-nums text-dashfg">{activeBatches.length}</span></div>
                               <FillBar pct={totalBatches > 0 ? (activeBatches.length / totalBatches) * 100 : 0} color={CREAM_ON_DARK} height={4} />
                             </div>
                             <div>
-                              <div className="flex justify-between mb-1"><span className="text-[9px] text-white/40">Completed</span><span className="text-[10px] font-bold tabular-nums text-white">{completed}</span></div>
-                              <FillBar pct={completedPct} color="white" height={4} />
+                              <div className="flex justify-between mb-1"><span className="text-[9px] text-dashfg/40">Completed</span><span className="text-[10px] font-bold tabular-nums text-dashfg">{completed}</span></div>
+                              <FillBar pct={completedPct} color="var(--dash-fg)" height={4} />
                             </div>
                           </div>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => navigate("/compliance-regulatory")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">Permits</p>
-                          <p className="text-2xl font-bold text-white tabular-nums">{permits.length}</p>
-                          <p className="text-[10px] text-white/25 mt-0.5">on file</p>
+                        <button onClick={() => navigate("/compliance-regulatory")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "var(--dash-card-strong)")} onMouseLeave={e => (e.currentTarget.style.background = "var(--dash-card)")}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-2">Permits</p>
+                          <p className="text-2xl font-bold text-dashfg tabular-nums">{permits.length}</p>
+                          <p className="text-[10px] text-dashfg/25 mt-0.5">on file</p>
                         </button>
-                        <button onClick={() => navigate("/reports")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.11)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">TTB Reports</p>
-                          <BarChart3 size={22} className="text-white/60 mb-1" />
-                          <p className="text-[10px] text-white/25">view filings</p>
+                        <button onClick={() => navigate("/reports")} className="rounded-xl p-4 text-left transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "var(--dash-card-strong)")} onMouseLeave={e => (e.currentTarget.style.background = "var(--dash-card)")}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-2">TTB Reports</p>
+                          <BarChart3 size={22} className="text-dashfg/60 mb-1" />
+                          <p className="text-[10px] text-dashfg/25">view filings</p>
                         </button>
                       </div>
                     </div>
@@ -1314,10 +1340,10 @@ export default function Dashboard() {
                     ].map((nav) => {
                       const Icon = nav.icon;
                       return (
-                        <button key={nav.href} onClick={() => navigate(nav.href)} className="rounded-xl p-4 text-left group transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.14)")} onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}>
-                          <Icon size={16} className="text-white/40 group-hover:text-white/60 transition-colors mb-2" />
-                          <p className="text-sm font-semibold text-white">{nav.label}</p>
-                          <p className="text-[11px] text-white/35 mt-0.5">{nav.sub}</p>
+                        <button key={nav.href} onClick={() => navigate(nav.href)} className="rounded-xl p-4 text-left group transition-all duration-200" style={GLASS} onMouseEnter={e => (e.currentTarget.style.background = "var(--dash-card-strong)")} onMouseLeave={e => (e.currentTarget.style.background = "var(--dash-card)")}>
+                          <Icon size={16} className="text-dashfg/40 group-hover:text-dashfg/60 transition-colors mb-2" />
+                          <p className="text-sm font-semibold text-dashfg">{nav.label}</p>
+                          <p className="text-[11px] text-dashfg/35 mt-0.5">{nav.sub}</p>
                         </button>
                       );
                     })}
@@ -1360,37 +1386,37 @@ export default function Dashboard() {
                 <>
                   {/* By Product */}
                   <div className="rounded-xl overflow-hidden" style={GLASS}>
-                    <div className="px-5 py-4 border-b border-white/10">
+                    <div className="px-5 py-4 border-b border-dashfg/10">
                       <SectionLabel>By Product</SectionLabel>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-white/10">
-                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Product</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">750 ml</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">1 L</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">1.75 L</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Total Cases</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">PG Processed</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Excise Tax</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Batches</th>
+                          <tr className="border-b border-dashfg/10">
+                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Product</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">750 ml</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">1 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">1.75 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Total Cases</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">PG Processed</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Excise Tax</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Batches</th>
                           </tr>
                         </thead>
                         <tbody>
                           {productRows.length === 0 && (
-                            <tr><td colSpan={8} className="px-5 py-8 text-center text-white/25 text-xs">No finished products yet</td></tr>
+                            <tr><td colSpan={8} className="px-5 py-8 text-center text-dashfg/25 text-xs">No finished products yet</td></tr>
                           )}
                           {productRows.map(([name, row]) => (
-                            <tr key={name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                              <td className="px-5 py-3 font-semibold text-white">{name}</td>
-                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases750 > 0 ? fmtNum(row.cases750, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases1000 > 0 ? fmtNum(row.cases1000, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.cases1750 > 0 ? fmtNum(row.cases1750, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right font-bold text-white tabular-nums">{row.total > 0 ? fmtNum(row.total, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/60 tabular-nums">{row.pg > 0 ? fmtNum(row.pg, 2) : "—"}</td>
+                            <tr key={name} className="border-b border-dashfg/5 hover:bg-dashfg/5 transition-colors">
+                              <td className="px-5 py-3 font-semibold text-dashfg">{name}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.cases750 > 0 ? fmtNum(row.cases750, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.cases1000 > 0 ? fmtNum(row.cases1000, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.cases1750 > 0 ? fmtNum(row.cases1750, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right font-bold text-dashfg tabular-nums">{row.total > 0 ? fmtNum(row.total, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/60 tabular-nums">{row.pg > 0 ? fmtNum(row.pg, 2) : "—"}</td>
                               <td className="px-4 py-3 text-right text-amber-300 tabular-nums">{row.excise > 0 ? `$${fmtNum(row.excise, 0)}` : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/40 tabular-nums">{row.count}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/40 tabular-nums">{row.count}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1402,7 +1428,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Bottle size breakdown */}
                     <div className="rounded-xl p-5" style={GLASS}>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-5">Bottle Size Mix</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-5">Bottle Size Mix</p>
                       <div className="space-y-4">
                         {[
                           { label: "750 mL", cases: sz750, color: CREAM_ON_DARK },
@@ -1411,8 +1437,8 @@ export default function Dashboard() {
                         ].map(sz => (
                           <div key={sz.label}>
                             <div className="flex justify-between mb-1.5">
-                              <span className="text-xs font-semibold text-white/60">{sz.label}</span>
-                              <span className="text-xs font-bold text-white tabular-nums">{sz.cases > 0 ? fmtNum(sz.cases, 0) : "—"} cases · {sz.cases > 0 ? Math.round((sz.cases / szTotal) * 100) : 0}%</span>
+                              <span className="text-xs font-semibold text-dashfg/60">{sz.label}</span>
+                              <span className="text-xs font-bold text-dashfg tabular-nums">{sz.cases > 0 ? fmtNum(sz.cases, 0) : "—"} cases · {sz.cases > 0 ? Math.round((sz.cases / szTotal) * 100) : 0}%</span>
                             </div>
                             <FillBar pct={(sz.cases / szTotal) * 100} color={sz.color} height={6} />
                           </div>
@@ -1422,67 +1448,67 @@ export default function Dashboard() {
 
                     {/* Distribution channel */}
                     <div className="rounded-xl p-5" style={GLASS}>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-5">Distribution Channel</p>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-dashfg/35 mb-5">Distribution Channel</p>
                       <div className="grid grid-cols-3 gap-4 mb-5">
                         <div>
-                          <p className="text-[9px] text-white/30 uppercase tracking-wider mb-1">Bottled</p>
-                          <p className="text-2xl font-bold text-white tabular-nums">{fmtNum(casesProduced, 0)}</p>
-                          <p className="text-[10px] text-white/25">cases</p>
+                          <p className="text-[9px] text-dashfg/30 uppercase tracking-wider mb-1">Bottled</p>
+                          <p className="text-2xl font-bold text-dashfg tabular-nums">{fmtNum(casesProduced, 0)}</p>
+                          <p className="text-[10px] text-dashfg/25">cases</p>
                         </div>
                         <div>
-                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] text-white/30 uppercase tracking-wider">Distributor</p></div>
-                          <p className="text-2xl font-bold text-white tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
-                          <p className="text-[10px] text-white/25">cases</p>
+                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#0369a1]" /><p className="text-[9px] text-dashfg/30 uppercase tracking-wider">Distributor</p></div>
+                          <p className="text-2xl font-bold text-dashfg tabular-nums">{distCases > 0 ? fmtNum(distCases, 0) : "—"}</p>
+                          <p className="text-[10px] text-dashfg/25">cases</p>
                         </div>
                         <div>
-                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] text-white/30 uppercase tracking-wider">Retail</p></div>
-                          <p className="text-2xl font-bold text-white tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
-                          <p className="text-[10px] text-white/25">cases</p>
+                          <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-[#f472b6]" /><p className="text-[9px] text-dashfg/30 uppercase tracking-wider">Retail</p></div>
+                          <p className="text-2xl font-bold text-dashfg tabular-nums">{retailCases > 0 ? fmtNum(retailCases, 0) : "—"}</p>
+                          <p className="text-[10px] text-dashfg/25">cases</p>
                         </div>
                       </div>
                       {(distCases > 0 || retailCases > 0)
                         ? <SplitBar a={distCases} b={retailCases} colorA="#0369a1" colorB="#f472b6" labelA="Distributor" labelB="Retail" />
-                        : <div className="h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }} />
+                        : <div className="h-2 rounded-full" style={{ background: "rgba(var(--dash-fg-rgb),0.1)" }} />
                       }
                     </div>
                   </div>
 
                   {/* Recent Bottlings */}
                   <div className="rounded-xl overflow-hidden" style={GLASS}>
-                    <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div className="px-5 py-4 border-b border-dashfg/10 flex items-center justify-between">
                       <SectionLabel>Recent Bottlings</SectionLabel>
-                      <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-white/40 hover:text-white transition-colors flex items-center gap-1">
+                      <button onClick={() => navigate("/production")} className="text-[11px] font-semibold text-dashfg/40 hover:text-dashfg transition-colors flex items-center gap-1">
                         View all <ArrowRight size={11} />
                       </button>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-white/10">
-                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Batch</th>
-                            <th className="text-left px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Product</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30">Total Cases</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">750 ml</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">1 L</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden sm:table-cell">1.75 L</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden md:table-cell">PG Processed</th>
-                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-white/30 hidden md:table-cell">Label Barrel #</th>
+                          <tr className="border-b border-dashfg/10">
+                            <th className="text-left px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Batch</th>
+                            <th className="text-left px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Product</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30">Total Cases</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30 hidden sm:table-cell">750 ml</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30 hidden sm:table-cell">1 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30 hidden sm:table-cell">1.75 L</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30 hidden md:table-cell">PG Processed</th>
+                            <th className="text-right px-4 py-3 text-[9px] font-bold uppercase tracking-widest text-dashfg/30 hidden md:table-cell">Label Barrel #</th>
                           </tr>
                         </thead>
                         <tbody>
                           {recent.length === 0 && (
-                            <tr><td colSpan={8} className="px-5 py-8 text-center text-white/25">No bottling records yet</td></tr>
+                            <tr><td colSpan={8} className="px-5 py-8 text-center text-dashfg/25">No bottling records yet</td></tr>
                           )}
                           {recent.map(b => (
-                            <tr key={b.id} className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => navigate(`/production/${b.id}`)}>
-                              <td className="px-5 py-3 font-mono text-white/70">{b.batchCode}</td>
-                              <td className="px-4 py-3 text-white/60">{b.productName ?? "—"}</td>
-                              <td className="px-4 py-3 text-right font-bold text-white tabular-nums">{b.totalCases ? fmtNum(b.totalCases, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases750ml ? fmtNum(b.cases750ml, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases1000ml ? fmtNum(b.cases1000ml, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden sm:table-cell">{b.cases1750ml ? fmtNum(b.cases1750ml, 0) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/50 tabular-nums hidden md:table-cell">{b.proofGallonsProcessed ? fmtNum(b.proofGallonsProcessed, 2) : "—"}</td>
-                              <td className="px-4 py-3 text-right text-white/40 hidden md:table-cell">{b.lotNumber ?? "—"}</td>
+                            <tr key={b.id} className="border-b border-dashfg/5 hover:bg-dashfg/5 transition-colors cursor-pointer" onClick={() => navigate(`/production/${b.id}`)}>
+                              <td className="px-5 py-3 font-mono text-dashfg/70">{b.batchCode}</td>
+                              <td className="px-4 py-3 text-dashfg/60">{b.productName ?? "—"}</td>
+                              <td className="px-4 py-3 text-right font-bold text-dashfg tabular-nums">{b.totalCases ? fmtNum(b.totalCases, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/50 tabular-nums hidden sm:table-cell">{b.cases750ml ? fmtNum(b.cases750ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/50 tabular-nums hidden sm:table-cell">{b.cases1000ml ? fmtNum(b.cases1000ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/50 tabular-nums hidden sm:table-cell">{b.cases1750ml ? fmtNum(b.cases1750ml, 0) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/50 tabular-nums hidden md:table-cell">{b.proofGallonsProcessed ? fmtNum(b.proofGallonsProcessed, 2) : "—"}</td>
+                              <td className="px-4 py-3 text-right text-dashfg/40 hidden md:table-cell">{b.lotNumber ?? "—"}</td>
                             </tr>
                           ))}
                         </tbody>

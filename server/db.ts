@@ -184,6 +184,7 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS organization_name_override TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS dsp_number TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS dashboard_color TEXT;
+    ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS theme TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS ein TEXT;
 
     CREATE TABLE IF NOT EXISTS clients (

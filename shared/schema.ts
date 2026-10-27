@@ -778,6 +778,8 @@ export const platformConfigSchema = z.object({
   ein: z.string().nullable().optional(),
   logoDataUrl: z.string().nullable().optional(),
   dashboardColor: z.string().nullable().optional(),
+  /** Dashboard appearance; "dark" (brand Night) is the default when unset. */
+  theme: z.enum(["light", "dark"]).nullable().optional(),
   inventoryLossRates: z.record(z.number()).nullable().optional(),
   productLabelCounts: z.record(z.number()).nullable().optional(),
   accountTypes: z.array(z.string()),
