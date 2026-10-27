@@ -445,10 +445,44 @@ function findHeaderRow(ws: ExcelJS.Worksheet, validCols: Set<string>): number | 
   return null;
 }
 
+/**
+ * Removes drawings (logos, images, shapes) from an .xlsx so exceljs can parse
+ * files saved by apps whose drawing anchors it doesn't understand. Cell data
+ * is untouched.
+ */
+async function stripDrawings(buffer: Buffer): Promise<Buffer> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const names = Object.keys(zip.files);
+  for (const name of names) {
+    if (/^xl\/(drawings|media)\//.test(name)) zip.remove(name);
+  }
+  for (const name of names) {
+    if (/^xl\/worksheets\/sheet\d+\.xml$/.test(name)) {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<drawing\b[^>]*\/>/g, "").replace(/<legacyDrawing\b[^>]*\/>/g, ""));
+    }
+    if (/^xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/.test(name)) {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<Relationship\b[^>]*Type="[^"]*\/drawing"[^>]*\/>/g, ""));
+    }
+    if (name === "[Content_Types].xml") {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<Override\b[^>]*PartName="\/xl\/drawings\/[^"]*"[^>]*\/>/g, ""));
+    }
+  }
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
 export async function importWorkbook(buffer: Buffer): Promise<ImportResult[]> {
   const tenantId = getCurrentTenantId();
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer as any);
+  let wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(buffer as any);
+  } catch {
+    wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await stripDrawings(buffer)) as any);
+  }
   // The zip/stream parsing above can drop the AsyncLocalStorage context, so re-enter it.
   return runWithTenant(tenantId, () => importSheets(wb, tenantId));
 }
