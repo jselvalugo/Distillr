@@ -8,6 +8,12 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { fmt, fmtNum } from "../lib/utils";
+import { SPIRIT_TYPES } from "@shared/spirits";
+import type { Product } from "@shared/reference";
+import { LocationSelect, ProductSelect, SpiritClassSelect, VariantSelect } from "../components/reference/pickers";
+import { IngredientRows } from "./settings-reference";
+import { findProduct, useProducts } from "../lib/reference";
+import type { Ingredient } from "@shared/spirits";
 import type {
   AuditLog,
   DistillingBatchRecord,
@@ -133,9 +139,6 @@ const STAGE_LABELS: Record<Stage, string> = {
   closed: "Closed",
 };
 
-const SPIRIT_TYPES = [
-  { value: "rum", label: "Rum" },
-];
 
 const TAX_CLASSES = [
   { value: "craft_tier1", label: "Craft Tier 1 — ≤100,000 PG ($2.70/PG)" },
@@ -149,54 +152,9 @@ function calcExciseTax(proofGallons: number, taxClass: string): number {
   return proofGallons * 13.50;
 }
 
-// ---------------------------------------------------------------------------
-// Location Picker — Suite / Zone / Level → "207-C-2"
-// ---------------------------------------------------------------------------
-const LOC_SUITES = ["206", "207", "208"];
-const LOC_ZONES  = ["A", "B", "C"];
-const LOC_LEVELS = ["1", "2", "3"];
-
-function parseLocation(val: string) {
-  const [suite = "", zone = "", level = ""] = val.split("-");
-  return { suite, zone, level };
-}
-
+// Location picker — from Settings → Reference Data → Storage Locations.
 function LocationPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { suite, zone, level } = parseLocation(value);
-  const emit = (s: string, z: string, l: string) => {
-    const combined = [s, z, l].filter(Boolean).join("-");
-    onChange(combined);
-  };
-  return (
-    <div className="space-y-1">
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Suite</p>
-          <Select value={suite} onChange={(e) => emit(e.target.value, zone, level)}>
-            <option value="">—</option>
-            {LOC_SUITES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
-        </div>
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Zone</p>
-          <Select value={zone} onChange={(e) => emit(suite, e.target.value, level)}>
-            <option value="">—</option>
-            {LOC_ZONES.map(z => <option key={z} value={z}>{z}</option>)}
-          </Select>
-        </div>
-        <div className="flex-1">
-          <p className="text-[10px] text-[#a3a3a3] mb-0.5">Level</p>
-          <Select value={level} onChange={(e) => emit(suite, zone, e.target.value)}>
-            <option value="">—</option>
-            {LOC_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </Select>
-        </div>
-      </div>
-      {value && (
-        <p className="text-[10px] text-[#737373] font-mono">{value}</p>
-      )}
-    </div>
-  );
+  return <LocationSelect value={value} onChange={onChange} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,20 +324,21 @@ function PlanningForm({ data }: { data: BatchFull }) {
           <Input
             value={form.batchCode}
             onChange={(e) => setForm((f) => ({ ...f, batchCode: e.target.value }))}
-            placeholder="e.g. RUM-2026-001"
+            placeholder="e.g. B-2026-001"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Product Name</label>
-          <Select
+          <label className="block text-xs font-medium text-[#737373] mb-1">Product</label>
+          <ProductSelect
             value={form.productName}
-            onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
-          >
-            <option value="">— Select product —</option>
-            <option value="Libertalia">Libertalia</option>
-            <option value="Riskey">Riskey</option>
-            <option value="Pitorro">Pitorro</option>
-          </Select>
+            onChange={(name, p) => setForm((f) => ({
+              ...f,
+              productName: name,
+              // Carry the product's classification onto the batch; the user can still change it.
+              spiritType: p?.spiritType || f.spiritType,
+              spiritClass: p?.spiritClass || f.spiritClass,
+            }))}
+          />
         </div>
 
         <FormSection title="Classification" />
@@ -396,11 +355,11 @@ function PlanningForm({ data }: { data: BatchFull }) {
           </Select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Class / Sub-type</label>
-          <Input
+          <label className="block text-xs font-medium text-[#737373] mb-1">Class designation</label>
+          <SpiritClassSelect
+            spiritType={form.spiritType}
             value={form.spiritClass}
-            onChange={(e) => setForm((f) => ({ ...f, spiritClass: e.target.value }))}
-            placeholder="e.g. Dark Rum, White Rum, Aged Rum"
+            onChange={(v) => setForm((f) => ({ ...f, spiritClass: v }))}
           />
         </div>
 
@@ -428,7 +387,7 @@ function PlanningForm({ data }: { data: BatchFull }) {
           <Input
             value={form.expectingOutcome}
             onChange={(e) => setForm((f) => ({ ...f, expectingOutcome: e.target.value }))}
-            placeholder="e.g. 200 cases Libertalia, 80 PG yield"
+            placeholder="e.g. 200 cases, 80 PG yield"
           />
         </div>
         <div>
@@ -459,13 +418,18 @@ function PlanningForm({ data }: { data: BatchFull }) {
 function MashForm({ data }: { data: BatchFull }) {
   const qc = useQueryClient();
   const { batch, productionRecord: pr } = data;
+  const { data: products } = useProducts();
+  const product = findProduct(products, batch.productName);
+  // A new production record starts from the product's recipe (Settings → Reference Data → Products).
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => pr?.ingredients?.length ? pr.ingredients : []);
+  const [seeded, setSeeded] = useState(!!pr?.ingredients?.length);
+  if (!seeded && product?.recipe?.length) {
+    setIngredients(product.recipe.map((r) => ({ ...r })));
+    setSeeded(true);
+  }
   const [form, setForm] = useState({
     mashDate: pr?.mashDate ?? new Date().toISOString().slice(0, 10),
     mashVolumeWineGallons: "",
-    gallonsMolasses: String(pr?.gallonsMolasses ?? ""),
-    lbsSugar: String(pr?.lbsSugar ?? ""),
-    libertaliaYeastPackets: String(pr?.libertaliaYeastPackets ?? "0"),
-    riskeyYeastPackets: String(pr?.riskeyYeastPackets ?? "0"),
     yeastDate: pr?.yeastDate ?? "",
     fermentationStart: "",
     fermentationEnd: "",
@@ -477,10 +441,7 @@ function MashForm({ data }: { data: BatchFull }) {
     mutationFn: async () => {
       const body: Partial<InsertDistillingProductionRecord> & Record<string, unknown> = {
         mashDate: form.mashDate,
-        gallonsMolasses: parseFloat(form.gallonsMolasses) || 0,
-        lbsSugar: parseFloat(form.lbsSugar) || 0,
-        libertaliaYeastPackets: parseInt(form.libertaliaYeastPackets) || 0,
-        riskeyYeastPackets: parseInt(form.riskeyYeastPackets) || 0,
+        ingredients: ingredients.filter((i) => i.name.trim()),
         yeastDate: form.yeastDate || null,
         notes: form.notes || null,
         batchRecordId: batch.id,
@@ -529,14 +490,6 @@ function MashForm({ data }: { data: BatchFull }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Show Libertalia yeast field if product is Libertalia (or unrecognised/unset → show both).
-  // Show Riskey yeast field if product is Riskey (or unrecognised/unset → show both).
-  const productLower = (batch.productName ?? "").toLowerCase();
-  const isLibertalia = productLower.includes("libertalia");
-  const isRiskey = productLower.includes("riskey");
-  const showLibertalia = isLibertalia || (!isLibertalia && !isRiskey);
-  const showRiskey = isRiskey || (!isLibertalia && !isRiskey);
-
   return (
     <div className="space-y-4">
       <TtbInfoBox>
@@ -565,46 +518,12 @@ function MashForm({ data }: { data: BatchFull }) {
         </div>
 
         <FormSection title="Ingredients & Fermentation" />
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Molasses (gallons)</label>
-          <Input
-            type="number"
-            step="0.01"
-            value={form.gallonsMolasses}
-            onChange={(e) => setForm((f) => ({ ...f, gallonsMolasses: e.target.value }))}
-          />
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-[#737373] mb-1">
+            Ingredients {product?.recipe?.length ? <span className="font-normal text-[#a3a3a3]">— pre-filled from {product.name}'s recipe</span> : null}
+          </label>
+          <IngredientRows rows={ingredients} onChange={setIngredients} />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-[#737373] mb-1">Cane Sugar (lbs)</label>
-          <Input
-            type="number"
-            step="0.01"
-            value={form.lbsSugar}
-            onChange={(e) => setForm((f) => ({ ...f, lbsSugar: e.target.value }))}
-          />
-        </div>
-        {showLibertalia && (
-          <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Libertalia Yeast Packets</label>
-            <Input
-              type="number"
-              min="0"
-              value={form.libertaliaYeastPackets}
-              onChange={(e) => setForm((f) => ({ ...f, libertaliaYeastPackets: e.target.value }))}
-            />
-          </div>
-        )}
-        {showRiskey && (
-          <div>
-            <label className="block text-xs font-medium text-[#737373] mb-1">Riskey Yeast Packets</label>
-            <Input
-              type="number"
-              min="0"
-              value={form.riskeyYeastPackets}
-              onChange={(e) => setForm((f) => ({ ...f, riskeyYeastPackets: e.target.value }))}
-            />
-          </div>
-        )}
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Yeast Pitch Date</label>
           <Input
@@ -984,7 +903,7 @@ function BarrelingForm({ data }: { data: BatchFull }) {
             value={form.fillProof}
             onChange={(e) => setForm((f) => ({ ...f, fillProof: e.target.value }))}
           />
-          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Enter ABV% — rum enters barrel at ≤ 95% ABV (27 CFR § 5.22)</p>
+          <p className="text-[10px] text-[#a3a3a3] mt-0.5">Enter ABV% at fill — straight whiskeys enter at no more than 62.5% ABV (125 proof)</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-[#737373] mb-1">Wine Gallons Filled *</label>
@@ -1063,7 +982,10 @@ function AgingForm({ data }: { data: BatchFull }) {
   const { batch, barrel } = data;
   const barrelId = batch.barrelId as string | null;
   const [activeTab, setActiveTab] = useState<AgingTab>("gauge");
-  const isPitorro = (batch.productName ?? "").toLowerCase() === "pitorro";
+  const { data: products } = useProducts();
+  const product = findProduct(products, batch.productName);
+  // Products set to "Barreled and aged in one step" record their fill details here.
+  const combinedStep = !!product?.combineBarrelAging;
 
   const today = new Date().toISOString().slice(0, 10);
   const [targetDumpDate, setTargetDumpDate] = useState((batch as any).targetDumpDate ?? "");
@@ -1072,9 +994,9 @@ function AgingForm({ data }: { data: BatchFull }) {
   const [tempLog, setTempLog] = useState({ tempDate: today, outdoorTemp: "", notes: "" });
   const [dump, setDump] = useState({ dumpDate: today, amountReceived: "", proofAtDump: "", notes: "" });
 
-  // Pitorro-specific barreling fields (embedded in Aging for Pitorro batches)
-  const [pitorroFruit, setPitorroFruit] = useState((batch as any).pitorroFruit ?? "");
-  const [pitorroBarrel, setPitorroBarrel] = useState({
+  // Fill details for one-step barrel + aging products, and the variant chosen at fill.
+  const [variantChoice, setVariantChoice] = useState(batch.variant ?? "");
+  const [fillForm, setFillForm] = useState({
     fillNumber: batch.fillNumber ?? "",
     fillDate: barrel?.fillDate ?? today,
     fillProof: String(batch.fillProof ?? barrel?.fillProof ?? ""),
@@ -1083,9 +1005,9 @@ function AgingForm({ data }: { data: BatchFull }) {
     warehouseZone: barrel?.warehouseZone ?? "",
     notes: barrel?.notes ?? "",
   });
-  const pitorroWg = parseFloat(pitorroBarrel.fillWineGallons);
-  const pitorroFp = parseFloat(pitorroBarrel.fillProof);
-  const pitorroFpg = pitorroWg && pitorroFp ? ((pitorroWg * pitorroFp * 2) / 100).toFixed(2) : null;
+  const fillFormWg = parseFloat(fillForm.fillWineGallons);
+  const fillFormProof = parseFloat(fillForm.fillProof);
+  const fillFormPg = fillFormWg && fillFormProof ? ((fillFormWg * fillFormProof * 2) / 100).toFixed(2) : null;
 
   const { data: events = [] } = useQuery<BarrelEvent[]>({
     queryKey: [`/api/barrels/${barrelId}/events`],
@@ -1135,31 +1057,31 @@ function AgingForm({ data }: { data: BatchFull }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const savePitorroData = useMutation({
+  const saveFillData = useMutation({
     mutationFn: async () => {
-      const fpg = pitorroFpg ? parseFloat(pitorroFpg) : null;
+      const fpg = fillFormPg ? parseFloat(fillFormPg) : null;
       await apiRequest(`/api/distilling/batch-records/${batch.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          pitorroFruit: pitorroFruit || null,
-          fillNumber: pitorroBarrel.fillNumber || null,
-          batchCode: pitorroBarrel.fillNumber || undefined,
-          fillProof: pitorroFp || null,
-          fillWineGallons: pitorroWg || null,
+          variant: variantChoice || null,
+          fillNumber: fillForm.fillNumber || null,
+          batchCode: fillForm.fillNumber || undefined,
+          fillProof: fillFormProof || null,
+          fillWineGallons: fillFormWg || null,
           fillProofGallons: fpg,
           containerType: "tote",
-          fillDate: pitorroBarrel.fillDate || null,
+          fillDate: fillForm.fillDate || null,
         }),
       });
       const barrelBody = {
         serialNumber: serialNumber || null,
-        fillDate: pitorroBarrel.fillDate || null,
-        fillProof: pitorroFp || null,
-        fillVolume: pitorroWg || null,
+        fillDate: fillForm.fillDate || null,
+        fillProof: fillFormProof || null,
+        fillVolume: fillFormWg || null,
         fillProofGallons: fpg,
-        warehouseZone: pitorroBarrel.warehouseZone || null,
-        charLevel: pitorroBarrel.charLevel || null,
-        notes: pitorroBarrel.notes || null,
+        warehouseZone: fillForm.warehouseZone || null,
+        charLevel: fillForm.charLevel || null,
+        notes: fillForm.notes || null,
         status: "Aging",
         originBatchId: batch.id,
         productName: batch.productName || null,
@@ -1173,7 +1095,7 @@ function AgingForm({ data }: { data: BatchFull }) {
         await apiRequest(`/api/distilling/batch-records/${batch.id}`, { method: "PATCH", body: JSON.stringify({ barrelId: bId }) });
       }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Pitorro data saved"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [`/api/distilling/batch-records/${batch.id}/full`] }); toast.success("Barreling / aging data saved"); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -1245,24 +1167,18 @@ function AgingForm({ data }: { data: BatchFull }) {
         ℹ️ Gauge records support TTB bonded storage balance calculations (Form 5110.40, Part III)
       </TtbInfoBox>
 
-      {/* Pitorro Barreling/Aging Fields */}
-      {isPitorro && (
+      {/* One-step barreling + aging fields */}
+      {combinedStep && (
         <div className="bg-white border border-[#e5e5e5] rounded-xl p-4 space-y-4">
           <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Barreling / Aging Details</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-[#737373] mb-1">Pitorro Fruit</label>
-              <Select value={pitorroFruit} onChange={(e) => setPitorroFruit(e.target.value)}>
-                <option value="">— Select fruit —</option>
-                <option value="Original">Original</option>
-                <option value="Coconut">Coconut</option>
-                <option value="Citrus">Citrus</option>
-                <option value="Coffee">Coffee</option>
-              </Select>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Variant</label>
+              <VariantSelect product={product} value={variantChoice} onChange={setVariantChoice} />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">Fill Number *</label>
-              <Input value={pitorroBarrel.fillNumber} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillNumber: e.target.value }))} placeholder="TTB fill number / container ID" />
+              <Input value={fillForm.fillNumber} onChange={(e) => setFillForm(f => ({ ...f, fillNumber: e.target.value }))} placeholder="TTB fill number / container ID" />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">Container Type</label>
@@ -1270,22 +1186,22 @@ function AgingForm({ data }: { data: BatchFull }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">Date of Fill *</label>
-              <Input type="date" value={pitorroBarrel.fillDate} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillDate: e.target.value }))} />
+              <Input type="date" value={fillForm.fillDate} onChange={(e) => setFillForm(f => ({ ...f, fillDate: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">ABV% at Fill *</label>
-              <Input type="number" step="0.1" max="100" value={pitorroBarrel.fillProof} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillProof: e.target.value }))} />
+              <Input type="number" step="0.1" max="100" value={fillForm.fillProof} onChange={(e) => setFillForm(f => ({ ...f, fillProof: e.target.value }))} />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">Wine Gallons Filled *</label>
-              <Input type="number" step="0.01" value={pitorroBarrel.fillWineGallons} onChange={(e) => setPitorroBarrel(f => ({ ...f, fillWineGallons: e.target.value }))} />
+              <Input type="number" step="0.01" value={fillForm.fillWineGallons} onChange={(e) => setFillForm(f => ({ ...f, fillWineGallons: e.target.value }))} />
             </div>
             <div>
-              <CalcField label="Proof Gallons Deposited to Bond" value={pitorroFpg} subNote="= wine gallons × ABV% × 2 / 100" />
+              <CalcField label="Proof Gallons Deposited to Bond" value={fillFormPg} subNote="= wine gallons × ABV% × 2 / 100" />
             </div>
             <div>
               <label className="block text-xs font-medium text-[#737373] mb-1">Char Level</label>
-              <Select value={pitorroBarrel.charLevel} onChange={(e) => setPitorroBarrel(f => ({ ...f, charLevel: e.target.value }))}>
+              <Select value={fillForm.charLevel} onChange={(e) => setFillForm(f => ({ ...f, charLevel: e.target.value }))}>
                 <option value="#1">#1</option>
                 <option value="#2">#2</option>
                 <option value="#3">#3</option>
@@ -1301,16 +1217,16 @@ function AgingForm({ data }: { data: BatchFull }) {
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-[#737373] mb-1">Location</label>
-              <LocationPicker value={pitorroBarrel.warehouseZone} onChange={(v) => setPitorroBarrel(f => ({ ...f, warehouseZone: v }))} />
+              <LocationPicker value={fillForm.warehouseZone} onChange={(v) => setFillForm(f => ({ ...f, warehouseZone: v }))} />
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
-              <Input value={pitorroBarrel.notes} onChange={(e) => setPitorroBarrel(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" />
+              <Input value={fillForm.notes} onChange={(e) => setFillForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" />
             </div>
           </div>
           <div className="flex justify-end">
-            <Button size="sm" variant="outline" onClick={() => savePitorroData.mutate()} disabled={savePitorroData.isPending}>
-              {savePitorroData.isPending ? "Saving…" : "Save Barreling/Aging Data"}
+            <Button size="sm" variant="outline" onClick={() => saveFillData.mutate()} disabled={saveFillData.isPending}>
+              {saveFillData.isPending ? "Saving…" : "Save Barreling/Aging Data"}
             </Button>
           </div>
         </div>
@@ -1318,7 +1234,7 @@ function AgingForm({ data }: { data: BatchFull }) {
 
       {/* Aging Summary */}
       <div className="bg-[#f7f7f7] rounded-xl border border-[#e5e5e5] p-4">
-        <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-3">{isPitorro ? "Barreling/Aging Summary" : "Aging Summary"}</p>
+        <p className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-3">{combinedStep ? "Barreling/Aging Summary" : "Aging Summary"}</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-[#737373]">Product</p>
@@ -1617,26 +1533,15 @@ function toIsoWeek(dateStr: string): string {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-const BOTTLING_VARIANTS: Record<string, string[]> = {
-  riskey: ["Barrel Strength", "Alejandro", "Hybrid Oak"],
-  libertalia: ["Libertalia", "Oak Aged Libertalia"],
-};
-
 function BottlingForm({ data }: { data: BatchFull }) {
   const qc = useQueryClient();
   const { batch, inventoryRecord: inv } = data;
 
-  const baseProd = (batch.productName ?? "").toLowerCase();
-  const variantOptions = BOTTLING_VARIANTS[baseProd] ?? null;
-
-  // Seed the variant if productName was already saved as a variant value
-  const seedVariant = (() => {
-    if (!variantOptions) return "";
-    const allVariants = Object.values(BOTTLING_VARIANTS).flat();
-    return allVariants.includes(batch.productName ?? "") ? (batch.productName ?? "") : "";
-  })();
-
-  const [bottlingVariant, setBottlingVariant] = useState(seedVariant);
+  // Variant (flavor, finish, strength) comes from the product's catalog entry.
+  const { data: products } = useProducts();
+  const product = findProduct(products, batch.productName);
+  const variantOptions = product?.variants?.length ? product.variants : null;
+  const [bottlingVariant, setBottlingVariant] = useState(batch.variant ?? "");
 
   const [form, setForm] = useState({
     bottlingDate: batch.bottlingDate ?? new Date().toISOString().slice(0, 10),
@@ -1732,7 +1637,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
   const save = useMutation({
     mutationFn: async () => {
       const pgProcessed = bottlingProof ? totals.wgBottled * bottlingProof / 100 : null;
-      const resolvedProductName = bottlingVariant || batch.productName || null;
+      const resolvedProductName = batch.productName || null;
       await apiRequest(`/api/distilling/batch-records/${batch.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -1748,6 +1653,7 @@ function BottlingForm({ data }: { data: BatchFull }) {
           exciseTaxDue: taxOwed || null,
           taxClass: form.taxClass || null,
           productName: resolvedProductName,
+          variant: bottlingVariant || null,
         }),
       });
 
@@ -1875,13 +1781,8 @@ function BottlingForm({ data }: { data: BatchFull }) {
         <div className="grid grid-cols-2 gap-4">
           {variantOptions && (
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-[#737373] mb-1">Product Name</label>
-              <Select value={bottlingVariant} onChange={(e) => setBottlingVariant(e.target.value)}>
-                <option value="">— Select product variant —</option>
-                {variantOptions.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </Select>
+              <label className="block text-xs font-medium text-[#737373] mb-1">Variant</label>
+              <VariantSelect product={product} value={bottlingVariant} onChange={setBottlingVariant} />
             </div>
           )}
           <div>
@@ -2287,8 +2188,10 @@ function ClosedSummary({ data }: { data: BatchFull }) {
           <InfoRow label="Bottling Date" value={fmt(batch.bottlingDate)} />
           <InfoRow label="ABV" value={abv ? `${abv}%` : null} />
           <InfoRow label="Proof at Bottling" value={proof ? `${proof}°` : null} />
-          {pr && <InfoRow label="Gallons Molasses" value={pr.gallonsMolasses ? `${pr.gallonsMolasses} gal` : null} />}
-          {pr && <InfoRow label="Cane Sugar" value={pr.lbsSugar ? `${pr.lbsSugar} lbs` : null} />}
+          {batch.variant && <InfoRow label="Variant" value={batch.variant} />}
+          {pr && pr.ingredients?.length > 0 && (
+            <InfoRow label="Ingredients" value={pr.ingredients.map((i) => `${i.name}${i.quantity != null ? ` ${i.quantity}${i.unit ? " " + i.unit : ""}` : ""}`).join(" · ")} />
+          )}
           <InfoRow label="Notes" value={batch.notes} />
           {(batch as any).expectingOutcome && <InfoRow label="Expected Outcome" value={(batch as any).expectingOutcome} />}
           {(batch as any).expectingDate && <InfoRow label="Expected Date" value={fmt((batch as any).expectingDate)} />}
@@ -2315,10 +2218,6 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     notes:        batch.notes ?? "",
     // Mash / Fermentation (production record)
     mashDate:               pr?.mashDate ?? "",
-    gallonsMolasses:        String(pr?.gallonsMolasses ?? ""),
-    lbsSugar:               String(pr?.lbsSugar ?? ""),
-    libertaliaYeastPackets: String(pr?.libertaliaYeastPackets ?? "0"),
-    riskeyYeastPackets:     String(pr?.riskeyYeastPackets ?? "0"),
     yeastDate:              pr?.yeastDate ?? "",
     // Distillation
     distillDate:          (batch as any).distillDate ?? pr?.distillDate ?? "",
@@ -2352,8 +2251,12 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
     exciseTaxDue:           String((batch as any).exciseTaxDue ?? ""),
     expectingOutcome:       (batch as any).expectingOutcome ?? "",
     expectingDate:          (batch as any).expectingDate ?? "",
-    pitorroFruit:           (batch as any).pitorroFruit ?? "",
+    variant:                batch.variant ?? "",
   });
+  const [ingredients, setIngredients] = useState<Ingredient[]>(pr?.ingredients ?? []);
+  const { data: products } = useProducts();
+  const product = findProduct(products, form.productName);
+  const combinedStep = !!product?.combineBarrelAging;
 
   const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(s => ({ ...s, [k]: e.target.value }));
@@ -2405,7 +2308,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
           exciseTaxDue:         form.exciseTaxDue ? +form.exciseTaxDue : null,
           expectingOutcome:     form.expectingOutcome || null,
           expectingDate:        form.expectingDate || null,
-          pitorroFruit:         form.pitorroFruit || null,
+          variant:              form.variant || null,
         }),
       });
       // 2. PATCH barrel location if barrel exists
@@ -2421,10 +2324,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
           method: "PATCH",
           body: JSON.stringify({
             mashDate:               form.mashDate || undefined,
-            gallonsMolasses:        form.gallonsMolasses ? +form.gallonsMolasses : 0,
-            lbsSugar:               form.lbsSugar ? +form.lbsSugar : 0,
-            libertaliaYeastPackets: form.libertaliaYeastPackets ? +form.libertaliaYeastPackets : 0,
-            riskeyYeastPackets:     form.riskeyYeastPackets ? +form.riskeyYeastPackets : 0,
+            ingredients:            ingredients.filter((i) => i.name.trim()),
             yeastDate:              form.yeastDate || null,
             distillDate:            form.distillDate || null,
             gallonsDistilled:       form.gallonsDistilled ? +form.gallonsDistilled : 0,
@@ -2474,7 +2374,10 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
         <div className="grid grid-cols-2 gap-4">
           {inp("Batch Code *", "batchCode")}
           {inp("Batch Date *", "batchDate", { type: "date" })}
-          {inp("Product Name", "productName", { placeholder: "e.g. Libertalia Rum" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Product</label>
+            <ProductSelect value={form.productName} onChange={(name) => setForm(s => ({ ...s, productName: name }))} />
+          </div>
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Spirit Type</label>
             <Select value={form.spiritType} onChange={f("spiritType")}>
@@ -2482,7 +2385,14 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               {SPIRIT_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </Select>
           </div>
-          {inp("Spirit Class", "spiritClass", { placeholder: "e.g. Dark Rum" })}
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Class designation</label>
+            <SpiritClassSelect spiritType={form.spiritType} value={form.spiritClass} onChange={(v) => setForm(s => ({ ...s, spiritClass: v }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#737373] mb-1">Variant</label>
+            <VariantSelect product={product} value={form.variant} onChange={(v) => setForm(s => ({ ...s, variant: v }))} />
+          </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-[#737373] mb-1">Notes</label>
             <textarea
@@ -2492,7 +2402,7 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
               className="w-full rounded-md border border-[#e5e5e5] bg-white px-3 py-2 text-sm text-[#0a0a0a] placeholder-[#b0b0b0] focus:outline-none focus:ring-1 focus:ring-[#0a0a0a] resize-none"
             />
           </div>
-          {inp("Expected Outcome", "expectingOutcome", { placeholder: "e.g. 200 cases Libertalia, 80 PG yield" })}
+          {inp("Expected Outcome", "expectingOutcome", { placeholder: "e.g. 200 cases, 80 PG yield" })}
           {inp("Expected Date", "expectingDate", { type: "date" })}
         </div>
       </div>
@@ -2503,10 +2413,10 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
         <div className="grid grid-cols-2 gap-4">
           {inp("Mash Date", "mashDate", { type: "date" })}
           {inp("Yeast Pitch Date", "yeastDate", { type: "date" })}
-          {inp("Molasses (gal)", "gallonsMolasses", { type: "number", step: "0.01" })}
-          {inp("Cane Sugar (lbs)", "lbsSugar", { type: "number", step: "0.01" })}
-          {inp("Libertalia Yeast Packets", "libertaliaYeastPackets", { type: "number" })}
-          {inp("Riskey Yeast Packets", "riskeyYeastPackets", { type: "number" })}
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-[#737373] mb-1">Ingredients</label>
+            <IngredientRows rows={ingredients} onChange={setIngredients} />
+          </div>
         </div>
       </div>
 
@@ -2538,20 +2448,8 @@ function ClosedEditForm({ data }: { data: BatchFull }) {
 
       {/* Barreling */}
       <div>
-        <SectionTitle title={form.productName.toLowerCase() === "pitorro" ? "Barreling / Aging" : "Barreling"} />
+        <SectionTitle title={combinedStep ? "Barreling / Aging" : "Barreling"} />
         <div className="grid grid-cols-2 gap-4">
-          {form.productName.toLowerCase() === "pitorro" && (
-            <div>
-              <label className="block text-xs font-medium text-[#737373] mb-1">Pitorro Fruit</label>
-              <Select value={form.pitorroFruit} onChange={f("pitorroFruit")}>
-                <option value="">— Select fruit —</option>
-                <option value="Original">Original</option>
-                <option value="Coconut">Coconut</option>
-                <option value="Citrus">Citrus</option>
-                <option value="Coffee">Coffee</option>
-              </Select>
-            </div>
-          )}
           {inp("Fill Number", "fillNumber", { placeholder: "TTB fill number" })}
           <div>
             <label className="block text-xs font-medium text-[#737373] mb-1">Container Type</label>
@@ -2660,18 +2558,21 @@ const STAGE_LABELS_MAP: Record<string, string> = {
 
 const FIELD_LABELS: Record<string, string> = {
   // Planning
-  productName: "Product Name",
+  productName: "Product",
+  variant: "Variant",
   spiritType: "Spirit Type",
-  spiritClass: "Spirit Class",
+  spiritClass: "Class Designation",
   batchDate: "Batch Date",
   notes: "Notes",
   // Mash & Fermentation
   mashDate: "Mash Date",
-  gallonsMolasses: "Gallons of Molasses",
-  lbsSugar: "lbs Sugar",
+  ingredients: "Ingredients",
   yeastDate: "Yeast Pitch Date",
-  libertaliaYeastPackets: "Libertalia Yeast Packets",
-  riskeyYeastPackets: "Riskey Yeast Packets",
+  // Older history entries recorded fixed ingredient fields
+  gallonsMolasses: "Molasses (gal)",
+  lbsSugar: "Sugar (lb)",
+  libertaliaYeastPackets: "Yeast Packets",
+  riskeyYeastPackets: "Yeast Packets",
   // Distillation
   distillDate: "Distillation Date",
   stillType: "Still Type",
@@ -2852,6 +2753,8 @@ export default function BatchDetail() {
     queryFn: () => apiRequest(`/api/distilling/batch-records/${id}/full`),
     enabled: !!id,
   });
+  const { data: products } = useProducts();
+  const combinedStep = !!findProduct(products, data?.batch.productName)?.combineBarrelAging;
 
   if (isLoading) {
     return (
@@ -2907,7 +2810,7 @@ export default function BatchDetail() {
       {/* Stage Progress Bar */}
       <StageProgressBar
         current={currentStage}
-        labelOverrides={(batch.productName ?? "").toLowerCase() === "pitorro" ? { aging: "Barreling/Aging" } : undefined}
+        labelOverrides={combinedStep ? { aging: "Barreling/Aging" } : undefined}
       />
 
       {/* Main Tabs */}
@@ -2933,7 +2836,7 @@ export default function BatchDetail() {
             {currentStage !== "closed" && (
               <div className="bg-white border border-[#e5e5e5] rounded-lg p-5">
                 <h2 className="text-sm font-semibold text-[#0a0a0a] mb-4">
-                  {currentStage === "aging" && (batch.productName ?? "").toLowerCase() === "pitorro"
+                  {currentStage === "aging" && combinedStep
                     ? "Barreling / Aging"
                     : STAGE_LABELS[currentStage]}
                 </h2>

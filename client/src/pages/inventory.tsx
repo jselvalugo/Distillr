@@ -10,11 +10,12 @@ import { Dialog } from "../components/ui/dialog";
 import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
 import { fmt, fmtNum } from "../lib/utils";
 import type { InventoryItem, InventoryLot } from "@shared/schema";
+import { useProducts } from "../lib/reference";
 
 // ---------------------------------------------------------------------------
 // Category config
 // ---------------------------------------------------------------------------
-type CategoryKey = "bottles" | "labels" | "caps" | "barrels" | "wax" | "molasses" | "sugar";
+type CategoryKey = "bottles" | "labels" | "caps" | "barrels" | "wax" | "fermentables" | "botanicals";
 
 const CATEGORY_CONFIG: Record<CategoryKey, {
   label: string;
@@ -37,7 +38,7 @@ const CATEGORY_CONFIG: Record<CategoryKey, {
     dbCategory: "Labels",
     defaultUnit: "units",
     unitOptions: ["units", "sheets", "rolls"],
-    namePlaceholder: "e.g. Pitorro Label — Front",
+    namePlaceholder: "e.g. Front Label — 750 mL",
     Icon: Tag,
   },
   caps: {
@@ -64,21 +65,21 @@ const CATEGORY_CONFIG: Record<CategoryKey, {
     namePlaceholder: "e.g. Black Bottle Wax",
     Icon: Droplets,
   },
-  molasses: {
-    label: "Molasses",
-    dbCategory: "Molasses",
-    defaultUnit: "gallons",
-    unitOptions: ["gallons", "drums", "totes"],
-    namePlaceholder: "e.g. Blackstrap Molasses — 55-gal Drum",
-    Icon: FlaskConical,
-  },
-  sugar: {
-    label: "Cane Sugar",
-    dbCategory: "Cane Sugar",
+  fermentables: {
+    label: "Grain & Fermentables",
+    dbCategory: "Fermentables",
     defaultUnit: "lbs",
-    unitOptions: ["lbs", "kg", "bags"],
-    namePlaceholder: "e.g. Raw Cane Sugar — 50-lb Bag",
+    unitOptions: ["lbs", "kg", "bushels", "gallons", "bags", "totes"],
+    namePlaceholder: "e.g. Yellow Dent Corn — 50-lb Bag",
     Icon: Wheat,
+  },
+  botanicals: {
+    label: "Botanicals & Flavorings",
+    dbCategory: "Botanicals & Flavorings",
+    defaultUnit: "lbs",
+    unitOptions: ["lbs", "kg", "oz", "g"],
+    namePlaceholder: "e.g. Juniper Berries",
+    Icon: FlaskConical,
   },
 };
 
@@ -153,8 +154,9 @@ export default function Inventory() {
   });
 
   const lossRates: Record<string, number> = platformConfig?.inventoryLossRates ?? {
-    "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Molasses": 4, "Cane Sugar": 3, "Unused Barrels": 0,
+    "Labels": 5, "Caps": 2, "Empty Bottles": 0.5, "Wax": 5, "Fermentables": 4, "Botanicals & Flavorings": 3, "Unused Barrels": 0,
   };
+  const { data: catalog = [] } = useProducts();
 
   // ---------------------------------------------------------------------------
   // Derived data for current tab
@@ -543,10 +545,13 @@ export default function Inventory() {
 
       {/* ── Label Demand by Product (Labels tab only) ── */}
       {tab === "labels" && (() => {
-        const labelCounts: Record<string, number> = platformConfig?.productLabelCounts ?? { "Pitorro": 4, "Riskey": 2 };
+        // Labels per bottle comes from each product (Settings → Reference Data → Products).
+        const labelCounts: Record<string, number> = Object.fromEntries(
+          catalog.filter(p => (p.labelsPerBottle ?? 0) > 0).map(p => [p.name, p.labelsPerBottle as number]),
+        );
         const lossRatePct = lossRates["Labels"] ?? 5;
         const totalOnHand = tabItems.reduce((sum, item) => {
-          const q = lots.filter(l => l.inventoryItemId === item.id).reduce((s, l) => s + l.quantity, 0);
+          const q = lots.filter(l => l.itemId === item.id).reduce((s, l) => s + l.quantity, 0);
           return sum + q;
         }, 0);
         const netUsable = Math.floor(totalOnHand - Math.ceil(totalOnHand * lossRatePct / 100));
@@ -571,6 +576,9 @@ export default function Inventory() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f0f0f0]">
+                      {Object.keys(labelCounts).length === 0 && (
+                        <tr><td colSpan={3} className="px-4 py-6 text-center text-[#a3a3a3]">Set “Labels per bottle” on your products to see how many bottles your stock covers.</td></tr>
+                      )}
                       {Object.entries(labelCounts).map(([product, count]) => (
                         <tr key={product} className="hover:bg-[#fafafa]">
                           <td className="px-4 py-3 font-medium text-[#0a0a0a]">{product}</td>
@@ -583,7 +591,7 @@ export default function Inventory() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-[#a3a3a3] mt-2">Label counts are configured in Settings → Inventory &amp; Loss Rates.</p>
+                <p className="text-[10px] text-[#a3a3a3] mt-2">Labels per bottle is set on each product in Settings → Reference Data → Products.</p>
               </div>
             </div>
           </div>

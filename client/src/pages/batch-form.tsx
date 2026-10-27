@@ -5,21 +5,9 @@ import { toast } from "sonner";
 import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
+import { ProductSelect, VariantSelect } from "../components/reference/pickers";
+import type { Product } from "@shared/reference";
 
-const PRODUCTS = [
-  "Original Pitorro",
-  "Coconut Pitorro",
-  "Citrus Pitorro",
-  "Café Pitorro",
-  "Libertalia",
-  "Oak Aged Libertalia",
-  "Riskey",
-  "Riskey Barrel Strength",
-  "Coquito",
-  "Libations",
-  "Yo-Ho",
-] as const;
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -30,8 +18,10 @@ export default function BatchForm() {
     batchCode: "",
     batchDate: today,
     productName: "",
+    variant: "",
     notes: "",
   });
+  const [product, setProduct] = useState<Product | undefined>();
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -44,6 +34,12 @@ export default function BatchForm() {
           batchCode: form.batchCode.trim(),
           batchDate: form.batchDate,
           productName: form.productName.trim() || null,
+          variant: form.variant.trim() || null,
+          // Carry the catalog defaults onto the batch so reports classify it correctly.
+          spiritType: product?.spiritType ?? null,
+          spiritClass: product?.spiritClass ?? null,
+          taxClass: product?.taxClass ?? null,
+          bottlingProof: product?.bottlingProof ?? null,
           notes: form.notes.trim() || null,
           stage: "planning",
           status: "Draft",
@@ -74,17 +70,20 @@ export default function BatchForm() {
     >
       <FormSection title="Batch Identity" subtitle="Core identification for this production run">
         <FormGrid>
-          <Field label="Batch Code" required hint="e.g. RUM-2026-001">
-            <Input value={form.batchCode} onChange={set("batchCode")} placeholder="RUM-2026-001" />
+          <Field label="Batch Code" required hint="Your own run number, e.g. B-2026-001">
+            <Input value={form.batchCode} onChange={set("batchCode")} placeholder="B-2026-001" />
           </Field>
           <Field label="Batch Date" required>
             <Input type="date" value={form.batchDate} onChange={set("batchDate")} />
           </Field>
-          <Field label="Product Name" span="full">
-            <Select value={form.productName} onChange={set("productName")}>
-              <option value="">— Select product —</option>
-              {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-            </Select>
+          <Field label="Product" hint="From your catalog — Settings → Reference Data → Products">
+            <ProductSelect
+              value={form.productName}
+              onChange={(name, p) => { setForm(f => ({ ...f, productName: name, variant: "" })); setProduct(p); }}
+            />
+          </Field>
+          <Field label="Variant" hint={product?.variants.length ? "Style of this product made in this batch" : "Optional"}>
+            <VariantSelect product={product} value={form.variant} onChange={(v) => setForm(f => ({ ...f, variant: v }))} />
           </Field>
           <Field label="Notes" span="full">
             <textarea

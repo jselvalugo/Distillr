@@ -543,11 +543,8 @@ export async function initDatabase(): Promise<void> {
       id TEXT PRIMARY KEY,
       batch_record_id TEXT,
       mash_date TEXT NOT NULL,
-      gallons_molasses DOUBLE PRECISION NOT NULL,
-      lbs_sugar DOUBLE PRECISION NOT NULL,
+      ingredients JSONB NOT NULL DEFAULT '[]'::jsonb,
       yeast_date TEXT,
-      libertalia_yeast_packets INTEGER NOT NULL,
-      riskey_yeast_packets INTEGER NOT NULL,
       distill_date TEXT NOT NULL,
       gallons_distilled DOUBLE PRECISION NOT NULL,
       percentage_distilled DOUBLE PRECISION NOT NULL,
@@ -757,7 +754,6 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS production_month TEXT;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS expecting_outcome TEXT;
     ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS expecting_date TEXT;
-    ALTER TABLE distilling_batch_records ADD COLUMN IF NOT EXISTS pitorro_fruit TEXT;
 
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS inventory_loss_rates TEXT;
     ALTER TABLE platform_config ADD COLUMN IF NOT EXISTS product_label_counts TEXT;
@@ -842,6 +838,10 @@ export async function initDatabase(): Promise<void> {
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // Products, storage locations, and the switch to generic batch/mash fields.
+  const { migrateReferenceData } = await import("./reference-data");
+  await migrateReferenceData();
 
   // Repair: ensure every tenant_id in users has a matching tenants row
   await query(`
