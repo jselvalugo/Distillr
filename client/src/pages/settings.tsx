@@ -178,11 +178,11 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
         <FormRow label="Organization Name" required hint="Exact legal name as registered with TTB and state regulators.">
           <div className="flex items-center gap-2">
             <FieldStatus value={form.organizationName} />
-            <Input value={form.organizationName} onChange={set("organizationName")} placeholder="e.g. Lugo's Craft Distillery LLC" className="flex-1" />
+            <Input value={form.organizationName} onChange={set("organizationName")} placeholder="Legal company name, e.g. Riverbend Spirits LLC" className="flex-1" />
           </div>
         </FormRow>
         <FormRow label="DBA / Trade Name" hint="Doing-business-as name if different from legal name. Appears on labels and marketing.">
-          <Input value={form.organizationNameOverride} onChange={set("organizationNameOverride")} placeholder="e.g. Lugo's Craft Spirits" />
+          <Input value={form.organizationNameOverride} onChange={set("organizationNameOverride")} placeholder="Display name, e.g. Riverbend Spirits" />
         </FormRow>
         <FormRow label="Tagline" hint="Short descriptor shown in the app header and exported documents.">
           <Input value={form.platformTagline} onChange={set("platformTagline")} placeholder="e.g. Distillery operations and compliance" />
