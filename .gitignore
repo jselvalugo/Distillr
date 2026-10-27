@@ -30,3 +30,7 @@ npm-debug.log*
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Local file storage (Netlify uses Blobs instead)
+uploads/
+exports/
