@@ -21,3 +21,24 @@ body {
 }
 .launchpad-pop { animation: launchpad-pop 140ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .launchpad-pop { animation: none; } }
+
+/* Reports */
+@keyframes report-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reports-reveal, .report-kpi, .report-section { animation: report-rise 320ms ease-out both; }
+.report-title { font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif; letter-spacing: -0.01em; }
+@media (prefers-reduced-motion: reduce) {
+  .reports-reveal, .report-kpi, .report-section { animation: none; }
+}
+@media print {
+  header, nav, .report-toolbar, .report-paper footer button { display: none !important; }
+  main { overflow: visible !important; }
+  body { background: #fff; }
+  .report-paper { border: 0 !important; box-shadow: none !important; border-radius: 0 !important; max-width: none !important; }
+  .report-section { break-inside: auto; }
+  .report-section header, thead { break-after: avoid; }
+  tr { break-inside: avoid; }
+  @page { size: letter landscape; margin: 12mm; }
+}
