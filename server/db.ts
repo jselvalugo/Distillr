@@ -1,9 +1,24 @@
 import { Pool } from "pg";
 import { parse as parsePgConnectionString } from "pg-connection-string";
 
-const connectionString = process.env.DATABASE_URL;
 const localOnlyMode = process.env.LOCAL_ONLY_MODE !== "false";
 const allowRemote = process.env.ALLOW_REMOTE === "true";
+
+/**
+ * Resolve the Postgres connection string.
+ * On Netlify, Netlify Database injects NETLIFY_DB_URL (the right branch for
+ * production or a deploy preview). DATABASE_URL is only a fallback for local
+ * development or self-hosting.
+ */
+function resolveConnectionString(): string | undefined {
+  const netlifyEnv = (globalThis as { Netlify?: { env?: { get?: (k: string) => string | undefined } } }).Netlify?.env;
+  return (
+    netlifyEnv?.get?.("NETLIFY_DB_URL") ||
+    process.env.NETLIFY_DB_URL ||
+    process.env.DATABASE_URL ||
+    undefined
+  );
+}
 
 function isLocalDatabaseHost(host: string | null | undefined): boolean {
   if (!host) return true;
@@ -16,7 +31,7 @@ function isLocalDatabaseHost(host: string | null | undefined): boolean {
   return false;
 }
 
-function assertLocalDatabaseConfig(): void {
+function assertLocalDatabaseConfig(connectionString: string | undefined): void {
   if (!localOnlyMode || allowRemote) return;
 
   if (connectionString) {
@@ -37,19 +52,50 @@ function assertLocalDatabaseConfig(): void {
   }
 }
 
-assertLocalDatabaseConfig();
+let realPool: Pool | null = null;
 
-export const pool = new Pool(
-  connectionString
-    ? { connectionString, ssl: { rejectUnauthorized: false } }
-    : {
-        host: process.env.PGHOST || "127.0.0.1",
-        port: Number.parseInt(process.env.PGPORT || "5432", 10),
-        user: process.env.PGUSER,
-        password: process.env.PGPASSWORD,
-        database: process.env.PGDATABASE || "postgres",
-      },
-);
+function getPool(): Pool {
+  if (realPool) return realPool;
+  const connectionString = resolveConnectionString();
+  assertLocalDatabaseConfig(connectionString);
+  if (connectionString) {
+    const parsed = parsePgConnectionString(connectionString);
+    const source = process.env.NETLIFY_DB_URL || (globalThis as any).Netlify?.env?.get?.("NETLIFY_DB_URL")
+      ? "Netlify Database"
+      : "DATABASE_URL";
+    console.log(`[db] connecting to ${source} (host ${String(parsed.host)})`);
+  }
+  realPool = new Pool(
+    connectionString
+      ? {
+          connectionString,
+          ssl: isLocalDatabaseHost(parsePgConnectionString(connectionString).host)
+            ? false
+            : { rejectUnauthorized: false },
+        }
+      : {
+          host: process.env.PGHOST || "127.0.0.1",
+          port: Number.parseInt(process.env.PGPORT || "5432", 10),
+          user: process.env.PGUSER,
+          password: process.env.PGPASSWORD,
+          database: process.env.PGDATABASE || "postgres",
+        },
+  );
+  return realPool;
+}
+
+/**
+ * Lazily-created pool. The real pg.Pool is created on first use so the
+ * connection string is read at request time (when Netlify has injected it),
+ * not at module load.
+ */
+export const pool: Pool = new Proxy({} as Pool, {
+  get(_target, prop) {
+    const p = getPool();
+    const value = Reflect.get(p, prop, p);
+    return typeof value === "function" ? value.bind(p) : value;
+  },
+});
 
 export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
   const result = await pool.query(text, params);
@@ -57,6 +103,16 @@ export async function query<T = Record<string, unknown>>(text: string, params?: 
 }
 
 export async function initDatabase(): Promise<void> {
+  // Session store table used by connect-pg-simple (express-session).
+  await query(`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" VARCHAR NOT NULL COLLATE "default" PRIMARY KEY,
+      "sess" JSON NOT NULL,
+      "expire" TIMESTAMP(6) NOT NULL
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
@@ -85,20 +141,6 @@ export async function initDatabase(): Promise<void> {
   await query(`
     INSERT INTO tenants (id, name, slug, plan, status)
     VALUES ('default', 'Default', 'default', 'standard', 'active')
-    ON CONFLICT (id) DO NOTHING
-  `);
-
-  // Repair: ensure every tenant_id in users has a matching tenants row
-  await query(`
-    INSERT INTO tenants (id, name, slug, plan, status)
-    SELECT DISTINCT ON (tenant_id)
-      tenant_id,
-      tenant_id,
-      tenant_id,
-      'standard',
-      'active'
-    FROM users
-    WHERE tenant_id NOT IN (SELECT id FROM tenants)
     ON CONFLICT (id) DO NOTHING
   `);
 
@@ -797,5 +839,19 @@ export async function initDatabase(): Promise<void> {
       message TEXT,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // Repair: ensure every tenant_id in users has a matching tenants row
+  await query(`
+    INSERT INTO tenants (id, name, slug, plan, status)
+    SELECT DISTINCT ON (tenant_id)
+      tenant_id,
+      tenant_id,
+      tenant_id,
+      'standard',
+      'active'
+    FROM users
+    WHERE tenant_id NOT IN (SELECT id FROM tenants)
+    ON CONFLICT (id) DO NOTHING
   `);
 }
