@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2, Info, Loader2, TriangleAlert } from "lucide-
  * (the --brand CSS variable set from Settings → Branding). Falls back to the
  * default navy on pages rendered before the brand color loads (e.g. login).
  */
-const BRAND = "var(--brand, #0F1B42)";
+const BRAND = "var(--brand, #4F46E5)";
 
 function StatusIcon({ children, tint }: { children: React.ReactNode; tint: string }) {
   return (
@@ -63,7 +63,7 @@ export function BrandToaster() {
           title: "text-[13px] font-medium leading-snug text-white",
           description: "text-xs leading-snug text-white/70",
           actionButton:
-            "ml-auto shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-[var(--brand,#0F1B42)] hover:bg-white/90",
+            "ml-auto shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-medium text-[var(--brand,#4F46E5)] hover:bg-white/90",
           cancelButton:
             "shrink-0 rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-white hover:bg-white/20",
           closeButton: "text-white/70 hover:text-white",

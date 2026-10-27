@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64.000 64.000" width="64.000" height="64.000" role="img" aria-label="Distillr">
+  <title>Distillr</title>
+  <rect width="64" height="64" rx="14.08" fill="#4F46E5"/>
+  <rect x="11.100" y="14.425" width="41.800" height="8.550" rx="4.275" fill="#FFFFFF"/>
+  <rect x="17.750" y="27.725" width="28.500" height="8.550" rx="4.275" fill="#FFFFFF" fill-opacity="0.75"/>
+  <rect x="25.350" y="41.025" width="13.300" height="8.550" rx="4.275" fill="#FFFFFF" fill-opacity="0.5"/>
+</svg>

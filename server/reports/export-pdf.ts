@@ -1,6 +1,7 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
 import type { ReportColumn, ReportDocument, ReportRow, ReportSection } from "../../shared/report-types";
 import { formatCell, formatDate, isNumericFormat } from "./format";
+import { DISTILLR_MARK_PNG_BASE64 } from "./brand-mark";
 
 // ── Page geometry (US Letter, landscape) ───────────────────────────────────
 const PAGE_W = 792;
@@ -52,6 +53,7 @@ class Layout {
   page!: PDFPage;
   y = PAGE_H - MARGIN_TOP;
   logo: PDFImage | null = null;
+  distillrMark: PDFImage | null = null;
 
   constructor(pdf: PDFDocument, fonts: Fonts, brand: RGB) {
     this.pdf = pdf;
@@ -426,7 +428,13 @@ function drawFooters(L: Layout, doc: ReportDocument) {
     L.page = page;
     L.rule(MARGIN_X, MARGIN_X + CONTENT_W, MARGIN_BOTTOM - 14, RULE);
     L.text(left, MARGIN_X, MARGIN_BOTTOM - 26, { size: 7, color: INK_MUTED, maxWidth: 420 });
-    L.text("Prepared with Distillr", PAGE_W / 2, MARGIN_BOTTOM - 26, { size: 7, color: INK_MUTED, align: "center" });
+    const label = "Prepared with distillr";
+    const labelW = L.width(label, L.fonts.regular, 7);
+    const markH = 7.2;
+    const markW = L.distillrMark ? (L.distillrMark.width / L.distillrMark.height) * markH : 0;
+    const startX = PAGE_W / 2 - (labelW + (markW ? markW + 4 : 0)) / 2;
+    if (L.distillrMark) L.page.drawImage(L.distillrMark, { x: startX, y: MARGIN_BOTTOM - 27, width: markW, height: markH });
+    L.text(label, startX + (markW ? markW + 4 : 0), MARGIN_BOTTOM - 26, { size: 7, color: INK_MUTED });
     L.text(`Page ${i + 1} of ${total}`, PAGE_W - MARGIN_X, MARGIN_BOTTOM - 26, { size: 7, color: INK_MUTED, align: "right" });
   });
 }
@@ -458,6 +466,11 @@ export async function renderReportPdf(doc: ReportDocument, options: { brandColor
   };
   const L = new Layout(pdf, fonts, hexToRgb(options.brandColor, rgb(0.06, 0.11, 0.26)));
   L.logo = await embedLogo(pdf, doc.organization.logoDataUrl);
+  try {
+    L.distillrMark = await pdf.embedPng(Buffer.from(DISTILLR_MARK_PNG_BASE64, "base64"));
+  } catch {
+    L.distillrMark = null;
+  }
   L.newPage();
 
   drawHeader(L, doc);

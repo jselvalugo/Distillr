@@ -27,6 +27,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
 import { apiRequest } from "../lib/queryClient";
+import { DistillrMark, DistillrWordmark, PoweredBy } from "./brand/logo";
+import { DEFAULT_DASHBOARD_COLOR } from "../brand";
 
 type PlatformConfig = {
   organizationName: string;
@@ -114,7 +116,7 @@ function findActive(location: string): { group: AppGroup; item: AppItem } | null
   return null;
 }
 
-const tint = (pct: number) => `color-mix(in srgb, var(--brand, #0F1B42) ${pct}%, white)`;
+const tint = (pct: number) => `color-mix(in srgb, var(--brand, #4F46E5) ${pct}%, white)`;
 
 function AppLauncher() {
   const [open, setOpen] = useState(false);
@@ -150,9 +152,10 @@ function AppLauncher() {
           <div
             className="absolute left-0 top-full mt-2 z-50 w-[min(480px,calc(100vw-24px))] rounded-2xl bg-white p-2 shadow-[0_24px_60px_-20px_rgba(15,27,66,0.45)] ring-1 ring-black/5 origin-top-left launchpad-pop"
           >
-            <p className="px-3 pt-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a3a3a3]">
-              Launchpad
-            </p>
+            <div className="flex items-center justify-between px-3 pt-2 pb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a3a3a3]">Launchpad</p>
+              <DistillrMark size={16} />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {APP_GROUPS.map((group) => {
                 const Icon = group.icon;
@@ -165,14 +168,14 @@ function AppLauncher() {
                       else navigate(group.items[0].href);
                     }}
                     className={`group relative flex flex-col items-start gap-3 rounded-xl p-3.5 text-left transition-all duration-150 ${
-                      isActive ? "ring-1 ring-[var(--brand,#0F1B42)]/25" : "hover:bg-[#f6f6f7]"
+                      isActive ? "ring-1 ring-[var(--brand,#4F46E5)]/25" : "hover:bg-[#f6f6f7]"
                     }`}
                     style={isActive ? { background: tint(7) } : undefined}
                   >
                     <div className="flex w-full items-center justify-between">
                       <span
                         className="flex h-9 w-9 items-center justify-center rounded-lg text-white shadow-sm transition-transform duration-150 group-hover:scale-105"
-                        style={{ background: "var(--brand, #0F1B42)" }}
+                        style={{ background: "var(--brand, #4F46E5)" }}
                       >
                         <Icon size={17} strokeWidth={2} />
                       </span>
@@ -246,7 +249,7 @@ function CategoryNav() {
     >
       <div className="flex h-full items-stretch px-2 sm:px-4">
         <div className="hidden sm:flex items-center gap-1.5 pr-3 mr-1 border-r border-[#efefef]">
-          <GroupIcon size={13} className="text-[var(--brand,#0F1B42)]" strokeWidth={2.25} />
+          <GroupIcon size={13} className="text-[var(--brand,#4F46E5)]" strokeWidth={2.25} />
           <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9a9a9a] whitespace-nowrap">
             {active.group.label}
           </span>
@@ -271,7 +274,7 @@ function CategoryNav() {
                 <Icon
                   size={13}
                   strokeWidth={2.25}
-                  className={isActive ? "text-[var(--brand,#0F1B42)]" : "text-[#a8a8a8]"}
+                  className={isActive ? "text-[var(--brand,#4F46E5)]" : "text-[#a8a8a8]"}
                 />
                 {item.label}
               </button>
@@ -280,7 +283,7 @@ function CategoryNav() {
           {indicator && (
             <span
               aria-hidden
-              className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-[var(--brand,#0F1B42)] transition-all duration-300 ease-out"
+              className="pointer-events-none absolute bottom-0 h-[2px] rounded-full bg-[var(--brand,#4F46E5)] transition-all duration-300 ease-out"
               style={{ left: indicator.left + 8, width: Math.max(indicator.width - 16, 12) }}
             />
           )}
@@ -376,7 +379,7 @@ function MobileDrawer({ open, onClose, navColor }: { open: boolean; onClose: () 
       <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={onClose} />
       <div className="fixed inset-y-0 left-0 z-50 w-72 flex flex-col md:hidden overflow-y-auto" style={{ background: drawerBg }}>
         <div className="flex items-center justify-between px-4 h-12 border-b border-white/10 shrink-0">
-          <span className="text-white text-sm font-bold tracking-tight">Menu</span>
+          <DistillrWordmark variant="mono-white" height={16} />
           <button onClick={onClose} className="text-white/60 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors">
             <X size={18} />
           </button>
@@ -421,7 +424,7 @@ function MobileDrawer({ open, onClose, navColor }: { open: boolean; onClose: () 
   );
 }
 
-const NAVY = "#0F1B42";
+const NAVY = DEFAULT_DASHBOARD_COLOR;
 
 function TopNav() {
   const [location] = useLocation();
@@ -472,14 +475,16 @@ function TopNav() {
           {config?.logoDataUrl && (
             <img src={config.logoDataUrl} alt="Logo" className="h-6 object-contain shrink-0" />
           )}
-          <div className="flex flex-col leading-none min-w-0">
+          <div className="flex flex-col leading-none min-w-0 gap-[3px]">
             {orgName ? (
               <>
                 <span className="text-white text-sm font-bold tracking-tight truncate">{orgName}</span>
-                <span className="text-white/35 text-[9px] tracking-widest uppercase hidden sm:block">Powered by Distillr — A Loogo Labs Software</span>
+                <span className="hidden sm:block">
+                  <PoweredBy tone="light" />
+                </span>
               </>
             ) : (
-              <span className="text-white text-sm font-bold tracking-tight">Distillr</span>
+              <DistillrWordmark variant="mono-white" height={16} />
             )}
           </div>
         </div>

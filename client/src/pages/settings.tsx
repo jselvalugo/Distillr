@@ -10,7 +10,7 @@ import { apiRequest, getCsrfToken } from "../lib/queryClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-const NAVY = "#0F1B42";
+const NAVY = "#4F46E5";
 
 type PlatformConfig = {
   organizationName: string;
@@ -224,6 +224,7 @@ function OrganizationTab({ config }: { config: PlatformConfig | undefined }) {
 // ─── Branding Tab ─────────────────────────────────────────────────────────────
 
 const PRESET_COLORS = [
+  { label: "Distillr",  hex: "#4F46E5" },
   { label: "Navy",      hex: "#0F1B42" },
   { label: "Midnight",  hex: "#0a0a0a" },
   { label: "Slate",     hex: "#1e293b" },
@@ -243,7 +244,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
   const [pendingDataUrl, setPendingDataUrl] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const currentColor = config?.dashboardColor ?? "#0F1B42";
+  const currentColor = config?.dashboardColor ?? "#4F46E5";
   const [colorInput, setColorInput] = useState(currentColor);
   const [colorSaved, setColorSaved] = useState(false);
 
@@ -315,7 +316,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
             <div className="relative flex items-center">
               <input
                 type="color"
-                value={isValidHex(colorInput) ? colorInput : "#0F1B42"}
+                value={isValidHex(colorInput) ? colorInput : "#4F46E5"}
                 onChange={(e) => setColorInput(e.target.value)}
                 className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 title="Pick a color"
@@ -325,7 +326,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
             <Input
               value={colorInput}
               onChange={(e) => setColorInput(e.target.value.startsWith("#") ? e.target.value : "#" + e.target.value)}
-              placeholder="#0F1B42"
+              placeholder="#4F46E5"
               className="font-mono w-32"
               maxLength={7}
             />
@@ -351,7 +352,7 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
                   onClick={() => setColorInput(p.hex)}
                   title={p.label}
                   className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                    colorInput === p.hex ? "border-[#0F1B42] bg-[#0F1B42]/5 text-[#0F1B42]" : "border-[#e5e5e5] text-[#525252] hover:border-[#d0d0d0]"
+                    colorInput === p.hex ? "border-[#4F46E5] bg-[#4F46E5]/5 text-[#4F46E5]" : "border-[#e5e5e5] text-[#525252] hover:border-[#d0d0d0]"
                   }`}
                 >
                   <span className="w-3.5 h-3.5 rounded-sm" style={{ background: p.hex }} />
@@ -398,9 +399,9 @@ function BrandingTab({ config }: { config: PlatformConfig | undefined }) {
             </p>
             <div
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-                dragOver ? "border-[#0F1B42] bg-[#0F1B42]/5"
+                dragOver ? "border-[#4F46E5] bg-[#4F46E5]/5"
                 : preview ? "border-[#22c55e]/40 bg-green-50/30"
-                : "border-[#e5e5e5] hover:border-[#0F1B42]/30"
+                : "border-[#e5e5e5] hover:border-[#4F46E5]/30"
               }`}
               onClick={() => fileRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}

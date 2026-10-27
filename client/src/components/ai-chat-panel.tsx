@@ -5,9 +5,9 @@ import { apiRequest } from "../lib/queryClient";
 type Role = "user" | "assistant";
 type Message = { role: Role; content: string; error?: boolean };
 
-const NAVY = "#0F1B42";
-const NAVY2 = "#162050";
-const BLUE_GRAD = "linear-gradient(135deg, #4f8ef7 0%, #1a3fa8 60%, #0F1B42 100%)";
+const NAVY = "#4F46E5";
+const NAVY2 = "#3730A3";
+const BLUE_GRAD = "linear-gradient(135deg, #818CF8 0%, #4F46E5 60%, #3730A3 100%)";
 const BLUE_GLOW = "0 4px 20px rgba(79,142,247,0.35)";
 
 const WELCOME = `Hi! I'm **Distillr AI**, your distillery operations assistant.

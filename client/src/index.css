@@ -2,7 +2,18 @@
 
 :root {
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Distillr brand (see client/src/brand.ts) */
+  --distillr-indigo: #4F46E5;
+  --distillr-indigo-light: #818CF8;
+  --distillr-ink: #0F172A;
+  --distillr-paper: #F8FAFC;
+  --distillr-night: #0B0D12;
+  /* Organization dashboard color; overridden at runtime from Settings → Branding */
+  --brand: #4F46E5;
 }
+
+h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 
 * { box-sizing: border-box; }
 
