@@ -26,6 +26,34 @@ export async function getCsrfToken(): Promise<string | null> {
   return _csrfToken;
 }
 
+/**
+ * multipart/form-data upload with CSRF handling: always refreshes the token
+ * first (uploads are rare and the cached token may be stale), and retries
+ * once if the server still rejects it.
+ */
+export async function apiUpload<T = unknown>(path: string, formData: FormData): Promise<T> {
+  await fetchCsrfToken();
+  const doFetch = () =>
+    fetch(path, {
+      method: "POST",
+      credentials: "include",
+      headers: _csrfToken ? { "x-csrf-token": _csrfToken } : {},
+      body: formData,
+    });
+  let res = await doFetch();
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => ({}));
+    if ((body as any).error === "Invalid CSRF token") {
+      _csrfToken = null;
+      await fetchCsrfToken();
+      res = await doFetch();
+    }
+  }
+  if (res.status === 401) throw new Error("Your session has expired — please sign in again.");
+  await throwIfNotOk(res);
+  return res.json() as Promise<T>;
+}
+
 export async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
 

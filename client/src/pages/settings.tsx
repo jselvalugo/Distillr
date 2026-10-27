@@ -6,7 +6,7 @@ import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../hooks/use-auth";
-import { apiRequest, getCsrfToken } from "../lib/queryClient";
+import { apiRequest, apiUpload } from "../lib/queryClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -720,14 +720,10 @@ function ExciseImportCard() {
     if (!excisePreview) return;
     setExciseImporting(true);
     try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch("/api/admin/import-excise-product-data", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json", ...(csrfToken ? { "x-csrf-token": csrfToken } : {}) },
+      const json = await apiRequest<any>("/api/admin/import-excise-product-data", {
+        method: "POST",
         body: JSON.stringify({ records: excisePreview }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Import failed");
       setExciseResult(json);
       toast.success(`Excise import complete — ${json.inserted} inserted, ${json.updated} updated`);
     } catch (e: any) { toast.error(e.message || "Import failed"); }
@@ -828,16 +824,9 @@ function ImportTab() {
     if (!file) return;
     setImporting(true);
     try {
-      const csrfToken = await getCsrfToken();
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/import", {
-        method: "POST", credentials: "include",
-        headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
-        body: formData,
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Import failed");
+      const json = await apiUpload<{ results: ImportRowResult[] }>("/api/import", formData);
       setResults(json.results);
       const total = json.results.reduce((s: number, r: ImportRowResult) => s + r.inserted, 0);
       toast.success(`Import complete — ${total} records inserted`);

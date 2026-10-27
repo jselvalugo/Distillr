@@ -3936,7 +3936,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ok = !!user && user.role === "admin";
       }
       if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+      // Rotate the session id but keep the app login + CSRF token that live in it,
+      // so signing in to the admin panel doesn't sign the user out of the app.
+      const keepUser = req.session.user;
+      const keepCsrf = req.session.csrfToken;
       await regenerateSession(req);
+      if (keepUser) req.session.user = keepUser;
+      if (keepCsrf) req.session.csrfToken = keepCsrf;
       req.session.isSuperAdmin = true;
       return res.json({ ok: true });
     } catch (err: any) {
