@@ -6,6 +6,8 @@ import serverless from "serverless-http";
 import { registerRoutes } from "../../server/routes";
 import { initDatabase, pool } from "../../server/db";
 import { seedAdminUser } from "../../server/seed-admin";
+import { setDeployContext } from "../../server/file-storage";
+import { runWithTenant } from "../../server/tenant-context";
 import { resolveSessionSecret } from "../../server/security-config";
 
 const PgSession = connectPgSimple(session);
@@ -59,6 +61,17 @@ app.use(
   })
 );
 
+// Tenant context — same as server/index.ts. Wraps the rest of the request in the
+// signed-in user's tenant so tenant-scoped queries work.
+app.use((req, _res, next) => {
+  const tenantId = (req.session as any)?.user?.tenantId as string | undefined;
+  if (tenantId) {
+    runWithTenant(tenantId, () => next());
+  } else {
+    next();
+  }
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const originalJson = res.json.bind(res);
@@ -110,7 +123,11 @@ type LambdaResult = {
  * We translate the Web Request into the event shape serverless-http expects,
  * then translate its result back into a Web Response.
  */
-export default async (req: globalThis.Request, context: { ip?: string }) => {
+export default async (
+  req: globalThis.Request,
+  context: { ip?: string; deploy?: { context?: string } },
+) => {
+  setDeployContext(context?.deploy?.context);
   await ensureInit();
 
   const url = new URL(req.url);
@@ -166,5 +183,6 @@ export default async (req: globalThis.Request, context: { ip?: string }) => {
 };
 
 export const config = {
-  path: "/api/*",
+  // /uploads and /exports are served by the API (from Netlify Blobs), behind login.
+  path: ["/api/*", "/uploads/*", "/exports/*"],
 };

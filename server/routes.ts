@@ -1,8 +1,7 @@
-import fs from "node:fs";
 import path from "node:path";
 import multer from "multer";
 import { createHash } from "node:crypto";
-import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import { type Express, type NextFunction, type Request, type Response } from "express";
 import type { Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
@@ -35,6 +34,7 @@ import {
 } from "./tenant-storage";
 import { runWithTenant, getCurrentTenantId } from "./tenant-context";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
+import { readFile, saveFile } from "./file-storage";
 import { createCsrfToken, CSRF_HEADER_NAME, isCsrfTokenValid, shouldEnforceCsrf } from "./csrf-protection";
 import { handleAiChat } from "./ai-agent";
 import {
@@ -347,12 +347,6 @@ async function writeAuditLog(
     });
   } catch {
     // Audit logging must not break primary operations.
-  }
-}
-
-function ensureDirectory(dirPath: string): void {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
   }
 }
 
@@ -2426,9 +2420,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const payload = uploadClientAttachmentSchema.parse(req.body);
 
-      const uploadsDir = path.join(process.cwd(), "uploads", "attachments", "clients", req.params.id);
-      ensureDirectory(uploadsDir);
-
       const parsedDataUrl = parseBase64DataUrl(payload.dataUrl);
       if (!parsedDataUrl) return res.status(400).json({ error: "Invalid dataUrl format" });
       const { mimeType, buffer: fileBuffer } = parsedDataUrl;
@@ -2449,14 +2440,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const safeStoredName = `${originalStem.slice(0, 120)}${extension}`;
       const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
       const uniqueFilename = `${Date.now()}-${sha256.slice(0, 12)}-${safeStoredName}`;
-      const absolutePath = path.join(uploadsDir, uniqueFilename);
-      fs.writeFileSync(absolutePath, fileBuffer, { flag: "wx" });
+      const attachmentKey = await saveFile(
+        `uploads/attachments/clients/${req.params.id}/${uniqueFilename}`,
+        fileBuffer,
+        mimeType,
+      );
 
       const uploadedBy = req.session.user?.name || req.session.user?.email || "Unknown";
 
       const attachment = await storage.createAttachment({
         originalFilename: payload.originalFilename,
-        filePath: `/uploads/attachments/clients/${req.params.id}/${uniqueFilename}`,
+        filePath: `/${attachmentKey}`,
         mimeType,
         byteSize: fileBuffer.byteLength,
         sha256,
@@ -3521,25 +3515,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "Report must be approved before export" });
       }
 
-      const exportDir = path.join(process.cwd(), "exports", "ttb");
-      ensureDirectory(exportDir);
-      const baseName = `${report.id}-${Date.now()}`;
-      const jsonPath = path.join(exportDir, `${baseName}.json`);
-      const csvPath = path.join(exportDir, `${baseName}.csv`);
-      const pdfPath = path.join(exportDir, `${baseName}.pdf`);
-
-      fs.writeFileSync(jsonPath, JSON.stringify(report.payload, null, 2), "utf8");
-      fs.writeFileSync(csvPath, toCsv(report.payload), "utf8");
-
+      const baseName = `${String(report.id).replace(/[^A-Za-z0-9._-]/g, "_")}-${Date.now()}`;
       const pdfLines = buildTtbPacketPdfLines(report, report.payload);
-      fs.writeFileSync(pdfPath, toTextPdf(pdfLines));
+      const jsonPath = await saveFile(
+        `exports/ttb/${baseName}.json`,
+        JSON.stringify(report.payload, null, 2),
+        "application/json",
+      );
+      const csvPath = await saveFile(`exports/ttb/${baseName}.csv`, toCsv(report.payload), "text/csv");
+      const pdfPath = await saveFile(`exports/ttb/${baseName}.pdf`, toTextPdf(pdfLines), "application/pdf");
 
       const updated = await storage.updateTtbReport(report.id, {
         status: "Exported",
         exportedAt: new Date().toISOString(),
-        jsonPath: path.relative(process.cwd(), jsonPath),
-        csvPath: path.relative(process.cwd(), csvPath),
-        pdfPath: path.relative(process.cwd(), pdfPath),
+        jsonPath,
+        csvPath,
+        pdfPath,
       });
       await writeAuditLog(req, "ttb_report", updated.id, "export", {
         jsonPath: updated.jsonPath,
@@ -3679,9 +3670,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const job = await storage.getJob(req.params.id);
       if (!job) return res.status(404).json({ error: "Batch not found" });
 
-      const uploadsDir = path.join(process.cwd(), "uploads", "job-photos");
-      ensureDirectory(uploadsDir);
-
       const parsedDataUrl = parseBase64DataUrl(String(dataUrl));
       if (!parsedDataUrl) return res.status(400).json({ error: "Invalid dataUrl format" });
 
@@ -3701,14 +3689,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         extensionForMimeType(parsedDataUrl.mimeType) || path.extname(safeOriginal).toLowerCase() || ".bin";
       const storedFilename = `${originalStem.slice(0, 120)}${extension}`;
       const uniqueFilename = `${req.params.id}-${Date.now()}-${storedFilename}`;
-      const filePath = path.join(uploadsDir, uniqueFilename);
-      fs.writeFileSync(filePath, parsedDataUrl.buffer, { flag: "wx" });
+      const photoKey = await saveFile(
+        `uploads/job-photos/${uniqueFilename}`,
+        parsedDataUrl.buffer,
+        parsedDataUrl.mimeType,
+      );
 
       const uploadedBy = req.session.user?.name || "Unknown";
       const photo = await storage.addJobPhoto({
         jobId: req.params.id,
         filename: safeOriginal,
-        filePath: `/uploads/job-photos/${uniqueFilename}`,
+        filePath: `/${photoKey}`,
         uploadedBy,
       });
       res.status(201).json(photo);
@@ -4381,20 +4372,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(410).json({ error: "Automation APIs are decommissioned in this release." });
   });
 
-  const authenticatedStaticOptions = {
-    dotfiles: "deny" as const,
-    index: false,
-    setHeaders: (res: Response, filePath: string) => {
-      const safeName = path.basename(filePath).replace(/"/g, "");
+  // Uploaded and generated files (Netlify Blobs on Netlify, disk elsewhere),
+  // served only to signed-in users.
+  app.get(/^\/(uploads|exports)\/.+/, requireAuth, async (req, res) => {
+    try {
+      const key = decodeURIComponent(req.path);
+      const file = await readFile(key);
+      if (!file) return res.status(404).json({ error: "File not found" });
+      const safeName = path.basename(key).replace(/["\r\n]/g, "");
+      res.setHeader("Content-Type", file.contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "private, no-store");
       res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
-    },
-  };
-
-  // Protect generated and uploaded artifacts behind authentication.
-  app.use("/uploads", express.static("uploads", authenticatedStaticOptions));
-  app.use("/exports", express.static("exports", authenticatedStaticOptions));
+      res.send(file.data);
+    } catch {
+      res.status(500).json({ error: "Failed to read file" });
+    }
+  });
 
   // ─── Platform: Tenant Management (super-admin only) ──────────────────────
   // Requires SUPER_ADMIN_KEY env var to be set and sent as X-Super-Admin-Key header.
