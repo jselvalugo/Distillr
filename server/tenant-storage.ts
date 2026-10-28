@@ -113,13 +113,15 @@ export async function updateTenant(
  * plus any signed-in sessions for that tenant. Leaving users behind used to let the
  * startup "repair" step resurrect deleted tenants.
  */
-export async function deleteTenant(id: string): Promise<{ deletedRows: number }> {
+export async function deleteTenant(id: string, deletedBy?: string): Promise<{ deletedRows: number }> {
   if (!id || id === "default") throw new Error("The default tenant can't be deleted");
   const client = await pool.connect();
   try {
     await client.query("BEGIN; SET LOCAL search_path TO public");
-    const exists = await client.query("SELECT 1 FROM tenants WHERE id = $1", [id]);
+    const exists = await client.query("SELECT id, name, slug, schema_name FROM tenants WHERE id = $1", [id]);
     if (!exists.rowCount) throw new Error("Tenant not found");
+    const doomed = exists.rows[0];
+    const userCount = Number((await client.query("SELECT count(*)::int AS n FROM users WHERE tenant_id = $1", [id])).rows[0].n);
 
     // 1. The tenant's private schema: all of its data, gone in one statement.
     await dropTenantSchema(client, id);
@@ -142,6 +144,11 @@ export async function deleteTenant(id: string): Promise<{ deletedRows: number }>
     // 3. Sign out anyone currently signed in to this tenant.
     await client.query(`DELETE FROM "session" WHERE (sess::jsonb -> 'user' ->> 'tenantId') = $1`, [id]);
     await client.query("DELETE FROM tenants WHERE id = $1", [id]);
+    await client.query(
+      `INSERT INTO tenant_deletions (tenant_id, tenant_name, tenant_slug, schema_name, deleted_by, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, doomed.name, doomed.slug, doomed.schema_name, deletedBy ?? null, JSON.stringify({ users: userCount, platformRows: deletedRows })],
+    );
     await client.query("COMMIT");
     // 4. Its stored files (uploads, TTB exports). After the commit, so a failed delete
     //    never leaves data without its files; a failure here is logged, not fatal.

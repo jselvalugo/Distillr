@@ -152,3 +152,24 @@ export async function deleteTenantFiles(tenantId: string): Promise<number> {
   }
   return removed;
 }
+
+/** Tenant folder names that currently hold stored files (uploads/t/* and exports/t/*). */
+export async function listTenantFileScopes(): Promise<string[]> {
+  const scopes = new Set<string>();
+  if (useBlobs()) {
+    const store = blobStore();
+    for (const root of ["uploads/t/", "exports/t/"]) {
+      const { blobs } = await store.list({ prefix: root });
+      for (const b of blobs) {
+        const scope = b.key.slice(root.length).split("/")[0];
+        if (scope) scopes.add(scope);
+      }
+    }
+  } else {
+    for (const root of ["uploads/t", "exports/t"]) {
+      const dir = diskPath(root);
+      if (fs.existsSync(dir)) for (const name of fs.readdirSync(dir)) scopes.add(name);
+    }
+  }
+  return Array.from(scopes).sort();
+}

@@ -6,6 +6,7 @@ import type { Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
 import { platformQuery, query, withClient } from "./db";
+import { buildIntegrityReport } from "./integrity";
 import {
   getPermits,
   createPermit,
@@ -4118,7 +4119,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/platform/tenants/:id", requireSuperAdmin, async (req, res) => {
     try {
-      await deleteTenant(req.params.id);
+      await deleteTenant(req.params.id, "platform API");
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -4247,7 +4248,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/admin/tenants/:id", requireAdminSession, async (req, res) => {
     try {
-      await deleteTenant(req.params.id);
+      await deleteTenant(req.params.id, "admin panel");
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -4322,6 +4323,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return null;
     return { tenant, user };
   }
+
+  // Read-only backend integrity report: proves what exists and that deleted tenants
+  // left nothing behind (schemas, users, sessions, tokens, legacy rows, stored files).
+  app.get("/api/admin/integrity", requireAdminSession, async (_req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await buildIntegrityReport());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Report from the one-time move into per-tenant schemas (row counts, orphans, columns not carried over).
   app.get("/api/admin/migration-status", requireAdminSession, async (_req, res) => {
