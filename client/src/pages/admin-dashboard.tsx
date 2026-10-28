@@ -335,6 +335,83 @@ function EditLicenseModal({ tenant, onClose }: { tenant: Tenant; onClose: () => 
 
 // ─── Tenant Users Panel ───────────────────────────────────────────────────────
 
+// ─── Welcome email (preview + manual send) ───────────────────────────────────
+
+type WelcomeTarget = Pick<TenantUser, "id" | "name" | "email"> & { welcomeEmailSentAt?: string | null };
+
+function WelcomeEmailModal({ tenantId, user, onClose, onSent }: { tenantId: string; user: WelcomeTarget; onClose: () => void; onSent?: (sentAt: string) => void }) {
+  const qc = useQueryClient();
+  const { data: emailStatus } = useQuery<{ configured: boolean; from: string }>({
+    queryKey: ["/api/admin/email/status"],
+    queryFn: () => apiRequest<{ configured: boolean; from: string }>("/api/admin/email/status"),
+    staleTime: 60_000,
+  });
+
+  const { data: preview, isLoading: previewLoading } = useQuery<{ to: string; subject: string; html: string }>({
+    queryKey: [`/api/admin/tenants/${tenantId}/users/${user.id}/welcome-email/preview`],
+    queryFn: () => apiRequest(`/api/admin/tenants/${tenantId}/users/${user.id}/welcome-email/preview`),
+  });
+
+  const welcomeMut = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest<{ ok: boolean; to: string; sentAt: string }>(`/api/admin/tenants/${tenantId}/users/${userId}/welcome-email`, { method: "POST" }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/users`] });
+      qc.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenantId}/activity`] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      onSent?.(r.sentAt);
+      onClose();
+      toast.success(`Welcome email sent to ${r.to}`);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to send"),
+  });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}
+      onClick={(e) => { if (e.target === e.currentTarget && !welcomeMut.isPending) onClose(); }}>
+      <div style={{ width: 680, maxWidth: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", background: "#111", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ padding: "22px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 10px" }}>
+            {user.welcomeEmailSentAt ? "Resend login email" : "Send login email"}
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "70px 1fr", rowGap: 4, fontSize: 12 }}>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>To</span>
+            <span style={{ color: "#fff", fontWeight: 600 }}>{user.name} &lt;{user.email}&gt;</span>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>From</span>
+            <span style={{ color: "rgba(255,255,255,0.7)" }}>{emailStatus?.from ?? "…"}</span>
+            <span style={{ color: "rgba(255,255,255,0.35)" }}>Subject</span>
+            <span style={{ color: "rgba(255,255,255,0.7)" }}>{preview?.subject ?? "…"}</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, background: "#F8FAFC" }}>
+          {previewLoading || !preview ? (
+            <p style={{ fontSize: 12, color: "#64748b", padding: 24, margin: 0 }}>Loading preview…</p>
+          ) : (
+            <iframe title="Email preview" srcDoc={preview.html} sandbox="" style={{ width: "100%", height: "52vh", border: 0, display: "block" }} />
+          )}
+        </div>
+        <div style={{ padding: "16px 24px 20px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <p style={{ fontSize: 11.5, lineHeight: 1.55, color: "#fbbf24", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "8px 10px", margin: "0 0 12px" }}>
+            Sending generates a new temporary password for this user and replaces their current one. The set-password link expires in 72 hours{user.welcomeEmailSentAt ? " and any earlier link stops working" : ""}.
+          </p>
+          {emailStatus && !emailStatus.configured && (
+            <p style={{ fontSize: 11.5, color: "#f87171", margin: "0 0 12px" }}>
+              Email isn't configured yet — add RESEND_API_KEY and EMAIL_FROM to the site's environment variables.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => onClose()} disabled={welcomeMut.isPending} style={{ flex: 1, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 600, background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => welcomeMut.mutate(user.id)} disabled={welcomeMut.isPending || emailStatus?.configured === false}
+              style={{ flex: 1, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 700, background: "#4F46E5", color: "#fff", border: "none", cursor: "pointer", opacity: (welcomeMut.isPending || emailStatus?.configured === false) ? 0.5 : 1 }}>
+              {welcomeMut.isPending ? "Sending…" : "Send email"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
   const qc = useQueryClient();
   const [panelTab, setPanelTab] = useState<"users" | "activity">("users");
@@ -374,30 +451,6 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
       apiRequest(`/api/admin/tenants/${tenant.id}/users/${userId}/reset-password`, { method: "POST", body: JSON.stringify({ password }) }),
     onSuccess: () => { setResetUser(null); setNewPassword(""); toast.success("Password reset"); },
     onError: (e: any) => toast.error(e.message ?? "Failed"),
-  });
-
-  const { data: emailStatus } = useQuery<{ configured: boolean; from: string }>({
-    queryKey: ["/api/admin/email/status"],
-    queryFn: () => apiRequest<{ configured: boolean; from: string }>("/api/admin/email/status"),
-    staleTime: 60_000,
-  });
-
-  const { data: preview, isLoading: previewLoading } = useQuery<{ to: string; subject: string; html: string }>({
-    queryKey: [`/api/admin/tenants/${tenant.id}/users/${welcomeUser?.id}/welcome-email/preview`],
-    queryFn: () => apiRequest(`/api/admin/tenants/${tenant.id}/users/${welcomeUser!.id}/welcome-email/preview`),
-    enabled: !!welcomeUser,
-  });
-
-  const welcomeMut = useMutation({
-    mutationFn: (userId: string) =>
-      apiRequest<{ ok: boolean; to: string; sentAt: string }>(`/api/admin/tenants/${tenant.id}/users/${userId}/welcome-email`, { method: "POST" }),
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenant.id}/users`] });
-      qc.invalidateQueries({ queryKey: [`/api/admin/tenants/${tenant.id}/activity`] });
-      setWelcomeUser(null);
-      toast.success(`Welcome email sent to ${r.to}`);
-    },
-    onError: (e: any) => toast.error(e.message ?? "Failed to send"),
   });
 
   function openEdit(u: TenantUser) { setEditUser(u); setEditForm({ name: u.name, email: u.email, role: u.role }); }
@@ -483,7 +536,7 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
                           title={u.welcomeEmailSentAt ? `Last sent ${new Date(u.welcomeEmailSentAt).toLocaleString()}` : "Not sent yet"}
                           onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(96,165,250,0.18)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(96,165,250,0.1)"; }}>
-                          {u.welcomeEmailSentAt ? "Resend Welcome" : "Send Welcome"}
+                          {u.welcomeEmailSentAt ? "Resend Login Email" : "Send Login Email"}
                         </button>
                       </div>
                     </td>
@@ -572,50 +625,7 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
           </div>
         )}
 
-        {welcomeUser && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}
-            onClick={(e) => { if (e.target === e.currentTarget && !welcomeMut.isPending) setWelcomeUser(null); }}>
-            <div style={{ width: 680, maxWidth: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", background: "#111", border: "1px solid rgba(96,165,250,0.25)", borderRadius: 16, overflow: "hidden" }}>
-              <div style={{ padding: "22px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 10px" }}>
-                  {welcomeUser.welcomeEmailSentAt ? "Resend welcome email" : "Send welcome email"}
-                </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr", rowGap: 4, fontSize: 12 }}>
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>To</span>
-                  <span style={{ color: "#fff", fontWeight: 600 }}>{welcomeUser.name} &lt;{welcomeUser.email}&gt;</span>
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>From</span>
-                  <span style={{ color: "rgba(255,255,255,0.7)" }}>{emailStatus?.from ?? "…"}</span>
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>Subject</span>
-                  <span style={{ color: "rgba(255,255,255,0.7)" }}>{preview?.subject ?? "…"}</span>
-                </div>
-              </div>
-              <div style={{ flex: 1, minHeight: 0, background: "#F8FAFC" }}>
-                {previewLoading || !preview ? (
-                  <p style={{ fontSize: 12, color: "#64748b", padding: 24, margin: 0 }}>Loading preview…</p>
-                ) : (
-                  <iframe title="Email preview" srcDoc={preview.html} sandbox="" style={{ width: "100%", height: "52vh", border: 0, display: "block" }} />
-                )}
-              </div>
-              <div style={{ padding: "16px 24px 20px", borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-                <p style={{ fontSize: 11.5, lineHeight: 1.55, color: "#fbbf24", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "8px 10px", margin: "0 0 12px" }}>
-                  Sending generates a new temporary password for this user and replaces their current one. The set-password link expires in 72 hours{welcomeUser.welcomeEmailSentAt ? " and any earlier link stops working" : ""}.
-                </p>
-                {emailStatus && !emailStatus.configured && (
-                  <p style={{ fontSize: 11.5, color: "#f87171", margin: "0 0 12px" }}>
-                    Email isn't configured yet — add RESEND_API_KEY and EMAIL_FROM to the site's environment variables.
-                  </p>
-                )}
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setWelcomeUser(null)} disabled={welcomeMut.isPending} style={{ flex: 1, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 600, background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}>Cancel</button>
-                  <button onClick={() => welcomeMut.mutate(welcomeUser.id)} disabled={welcomeMut.isPending || emailStatus?.configured === false}
-                    style={{ flex: 1, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 700, background: "#4F46E5", color: "#fff", border: "none", cursor: "pointer", opacity: (welcomeMut.isPending || emailStatus?.configured === false) ? 0.5 : 1 }}>
-                    {welcomeMut.isPending ? "Sending…" : "Send email"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {welcomeUser && <WelcomeEmailModal tenantId={tenant.id} user={welcomeUser} onClose={() => setWelcomeUser(null)} />}
 
         {resetUser && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}
@@ -1067,6 +1077,9 @@ export default function AdminDashboard() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
   const [editLicense, setEditLicense] = useState<Tenant | null>(null);
+  // After "Create Tenant": show a confirmation step with the manual "Send login email" button.
+  const [justCreated, setJustCreated] = useState<{ tenantId: string; tenantName: string; adminUser: WelcomeTarget; sentAt: string | null } | null>(null);
+  const [sendLoginFor, setSendLoginFor] = useState<{ tenantId: string; user: WelcomeTarget } | null>(null);
 
   const { data: tenants = [], isLoading } = useQuery<Tenant[]>({
     queryKey: ["/api/admin/tenants"],
@@ -1088,7 +1101,11 @@ export default function AdminDashboard() {
       setShowCreate(false);
       setForm(EMPTY_FORM);
       if (created?.id) setExpandedTenant(created.id);
-      toast.success("Tenant created — use “Send Welcome” on the admin user to email their sign-in details");
+      if (created?.adminUser) {
+        setJustCreated({ tenantId: created.id, tenantName: created.name, adminUser: created.adminUser, sentAt: null });
+      } else {
+        toast.success("Tenant created");
+      }
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to create tenant"),
   });
@@ -1379,8 +1396,8 @@ export default function AdminDashboard() {
                     onFocus={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.3)")} onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")} />
                 </div>
               </div>
-              <div><label style={s.label}>Temp Password</label>
-                <input style={s.inp} type="password" required minLength={8} value={form.adminPassword} onChange={(e) => setForm(f => ({ ...f, adminPassword: e.target.value }))} placeholder="min 8 characters"
+              <div><label style={s.label}>Temp Password <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, color: "rgba(255,255,255,0.28)" }}>· optional</span></label>
+                <input style={s.inp} type="password" minLength={8} value={form.adminPassword} onChange={(e) => setForm(f => ({ ...f, adminPassword: e.target.value }))} placeholder="Leave blank — the login email generates one"
                   onFocus={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.3)")} onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")} />
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -1392,6 +1409,51 @@ export default function AdminDashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Tenant created → manual "Send login email" step (nothing is sent automatically) */}
+      {justCreated && !sendLoginFor && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setJustCreated(null); }}>
+          <div style={{ width: 460, maxWidth: "100%", background: "#111", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 18, padding: "30px 28px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.3)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 4.5" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+            <h2 style={{ fontSize: 17, fontWeight: 800, margin: "0 0 6px", letterSpacing: "-0.02em" }}>{justCreated.tenantName} is set up</h2>
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.45)", margin: "0 0 20px" }}>
+              Admin user <span style={{ color: "#fff", fontWeight: 600 }}>{justCreated.adminUser.name}</span> &lt;{justCreated.adminUser.email}&gt;
+            </p>
+            {justCreated.sentAt ? (
+              <p style={{ fontSize: 12.5, color: "#4ade80", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 9, padding: "10px 12px", margin: "0 0 18px" }}>
+                Login email sent to {justCreated.adminUser.email}.
+              </p>
+            ) : (
+              <p style={{ fontSize: 12.5, lineHeight: 1.6, color: "rgba(255,255,255,0.45)", margin: "0 0 18px" }}>
+                Nothing has been emailed yet. Send their branded login email now, or later from the tenant's Users list.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setJustCreated(null)} style={{ flex: 1, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 600, background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)", cursor: "pointer" }}>
+                {justCreated.sentAt ? "Done" : "Not now"}
+              </button>
+              {!justCreated.sentAt && (
+                <button onClick={() => setSendLoginFor({ tenantId: justCreated.tenantId, user: justCreated.adminUser })}
+                  style={{ flex: 1.4, padding: "10px", borderRadius: 9, fontSize: 13, fontWeight: 700, background: "#4F46E5", color: "#fff", border: "none", cursor: "pointer" }}>
+                  Send login email…
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sendLoginFor && (
+        <WelcomeEmailModal
+          tenantId={sendLoginFor.tenantId}
+          user={sendLoginFor.user}
+          onClose={() => setSendLoginFor(null)}
+          onSent={(sentAt) => setJustCreated((j) => (j ? { ...j, sentAt } : j))}
+        />
       )}
 
       {/* Confirm delete */}

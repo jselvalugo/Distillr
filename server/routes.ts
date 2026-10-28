@@ -4004,7 +4004,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     slug: z.string().trim().min(1).regex(/^[a-z0-9-]+$/i, "Slug may only contain letters, numbers, and hyphens"),
     plan: z.enum(["standard", "pro", "enterprise"]).optional(),
     adminEmail: z.string().email(),
-    adminPassword: z.string().min(8),
+    // Optional: if blank, a random one is set (the welcome email issues its own temporary password).
+    adminPassword: z.string().min(8).optional().or(z.literal("").transform(() => undefined)),
     adminName: z.string().trim().min(1).optional(),
   });
 
@@ -4017,7 +4018,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await runWithTenant(tenant.id, async () => {
         await authStorage.createUser({
           email: data.adminEmail,
-          password: data.adminPassword,
+          password: data.adminPassword || generateTemporaryPassword(),
           name: data.adminName || data.adminEmail.split("@")[0],
           role: "admin",
           status: "active",
@@ -4135,16 +4136,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const data = createTenantSchema.parse(req.body);
       const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan, userLimit: (data as any).userLimit });
-      await runWithTenant(tenant.id, async () => {
-        await authStorage.createUser({
+      const adminUser = await runWithTenant(tenant.id, () =>
+        authStorage.createUser({
           email: data.adminEmail,
-          password: data.adminPassword,
+          password: data.adminPassword || generateTemporaryPassword(),
           name: data.adminName || data.adminEmail.split("@")[0],
           role: "admin",
           status: "active",
-        });
-      });
-      res.status(201).json(tenant);
+        }),
+      );
+      // Nothing is emailed here — the admin panel offers a "Send login email" button next.
+      res.status(201).json({ ...tenant, adminUser: { id: adminUser.id, name: adminUser.name, email: adminUser.email } });
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? err.message });
       res.status(500).json({ error: err.message });
