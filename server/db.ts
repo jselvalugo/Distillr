@@ -792,6 +792,19 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE distillery_equipment ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_email_sent_at TIMESTAMPTZ;
+
+    -- One-time "set your password" links sent in the tenant welcome email (hash only).
+    CREATE TABLE IF NOT EXISTS password_setup_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS password_setup_tokens_user_idx ON password_setup_tokens (tenant_id, user_id);
 
     -- Data backfill for existing records
     UPDATE compliance

@@ -12,6 +12,7 @@ const PrivacyPage = lazy(() => import("./pages/privacy"));
 const TermsPage = lazy(() => import("./pages/terms"));
 const AcceptableUsePage = lazy(() => import("./pages/acceptable-use"));
 const AdminLogin = lazy(() => import("./pages/admin-login"));
+const SetPassword = lazy(() => import("./pages/set-password"));
 const AdminDashboard = lazy(() => import("./pages/admin-dashboard"));
 const loadDashboard = () => import("./pages/dashboard");
 const Dashboard = lazy(loadDashboard);
@@ -98,6 +99,7 @@ export default function App() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/set-password" component={SetPassword} />
       <Route path="/features" component={FeaturesPage} />
       <Route path="/pricing" component={PricingPage} />
       <Route path="/faq" component={FaqPage} />
