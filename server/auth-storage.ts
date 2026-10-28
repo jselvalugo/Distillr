@@ -168,6 +168,10 @@ export class AuthStorage {
       if (await verifyPassword(password, candidate.passwordHash)) matches.push(candidate);
     }
     if (matches.length === 0) return null;
+    if (matches.length > 1 && matches.some((m) => m.tenantId === "default")) {
+      // Legacy duplicate of the platform owner's own account: the owner's account wins.
+      matches.splice(0, matches.length, matches.find((m) => m.tenantId === "default")!);
+    }
     if (matches.length > 1) {
       // Same email AND same password in several tenants: ambiguous. Refuse rather than guess.
       console.warn(`[auth] ambiguous login for ${email}: password matches ${matches.length} tenants (${matches.map((m) => m.tenantId).join(", ")})`);

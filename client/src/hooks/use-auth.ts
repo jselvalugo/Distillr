@@ -28,8 +28,10 @@ export function useAuth() {
         body: JSON.stringify(creds),
       }),
     onSuccess: (r) => {
-      void prefetchPlatformConfig();
+      // Drop anything cached from a previous account before showing this one.
+      qc.clear();
       qc.setQueryData(["/api/auth/me"], r.user);
+      void prefetchPlatformConfig();
     },
   });
 
@@ -48,8 +50,10 @@ export function useAuth() {
         body: JSON.stringify(data),
       }),
     onSuccess: (r) => {
-      void prefetchPlatformConfig();
+      // Drop anything cached from a previous account before showing this one.
+      qc.clear();
       qc.setQueryData(["/api/auth/me"], r.user);
+      void prefetchPlatformConfig();
     },
   });
 

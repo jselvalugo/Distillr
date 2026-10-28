@@ -838,6 +838,16 @@ function buildInventorySnapshot(params: {
 
 // ── Operations Ledger auto-write helpers ─────────────────────────────────────
 
+/** False if the batch (when given) isn't this tenant's, or the lot id already belongs to another tenant. */
+async function ledgerTargetsOwnedByTenant(tenantId: string, batchId: string | null, lotId: string): Promise<boolean> {
+  if (batchId) {
+    const own = await query(`SELECT 1 FROM distilling_batch_records WHERE id = $1 AND tenant_id = $2 LIMIT 1`, [batchId, tenantId]);
+    if (!own[0]) return false;
+  }
+  const foreignLot = await query(`SELECT 1 FROM inventory_lots WHERE id = $1 AND tenant_id <> $2 LIMIT 1`, [lotId, tenantId]);
+  return !foreignLot[0];
+}
+
 async function writeProductionLedgerEntry(record: {
   id: string;
   batchRecordId: string | null | undefined;
@@ -854,12 +864,15 @@ async function writeProductionLedgerEntry(record: {
   const moveId = `MOVE-PROD-${record.id}`;
   const performedAt = record.distillDate || new Date().toISOString();
   const tenantId = getCurrentTenantId();
+  // Never write against a batch or lot that belongs to another tenant.
+  if (!(await ledgerTargetsOwnedByTenant(tenantId, record.batchRecordId ?? null, lotId))) return;
 
   // Upsert lot: abv=100 so estimatedProofGallons = quantity in the TTB report
   await query(
     `INSERT INTO inventory_lots (id, tenant_id, item_id, lot_code, quantity, unit_of_measure, abv, proof_gallons, received_at, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, 'proof_gallons', 100, $5, $6, $6, $6)
-     ON CONFLICT (id) DO UPDATE SET quantity = EXCLUDED.quantity, proof_gallons = EXCLUDED.proof_gallons, updated_at = EXCLUDED.updated_at`,
+     ON CONFLICT (id) DO UPDATE SET quantity = EXCLUDED.quantity, proof_gallons = EXCLUDED.proof_gallons, updated_at = EXCLUDED.updated_at
+     WHERE inventory_lots.tenant_id = EXCLUDED.tenant_id`,
     [lotId, tenantId, batchId, `PROD-${batchId}`, pg, performedAt],
   );
 
@@ -891,6 +904,7 @@ async function writeBottlingLedgerEntry(
   const moveId = `MOVE-BOTTLE-${batchId}`;
   const performedAt = bottlingDate || new Date().toISOString();
   const tenantId = getCurrentTenantId();
+  if (!(await ledgerTargetsOwnedByTenant(tenantId, batchId, lotId))) return;
 
   // Ensure lot exists
   await query(
@@ -1513,6 +1527,33 @@ async function buildComplianceOverview() {
   };
 }
 
+
+// ─── Tenant-scoped file keys ─────────────────────────────────────────────────
+// New files are stored under uploads/t/{tenantId}/… and exports/t/{tenantId}/….
+function tenantFileScope(req: Request): string {
+  const tenantId = req.session.user?.tenantId;
+  if (!tenantId) throw new Error("No tenant for file upload");
+  return tenantId.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+/** True only if `rawKey` is a file owned by `tenantId` (prefixed key, or a legacy key referenced by that tenant's rows). */
+export async function fileBelongsToTenant(rawKey: string, tenantId: string): Promise<boolean> {
+  const key = rawKey.replace(/\\/g, "/").replace(/^\/+/, "");
+  const parts = key.split("/");
+  if (parts.some((p) => p === "" || p === "." || p === "..")) return false;
+  if (parts[1] === "t") return parts[2] === tenantId.replace(/[^A-Za-z0-9._-]/g, "_");
+  // Legacy keys (before tenant prefixes): allow only if this tenant's own records point at the file.
+  const withSlash = `/${key}`;
+  const rows = await query(
+    `SELECT 1 FROM attachments WHERE tenant_id = $1 AND file_path IN ($2, $3)
+     UNION ALL SELECT 1 FROM job_photos WHERE tenant_id = $1 AND file_path IN ($2, $3)
+     UNION ALL SELECT 1 FROM ttb_reports WHERE tenant_id = $1 AND (json_path IN ($2, $3) OR csv_path IN ($2, $3) OR pdf_path IN ($2, $3))
+     LIMIT 1`,
+    [tenantId, key, withSlash],
+  );
+  return rows.length > 0;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   app.use((req, res, next) => {
     if (!req.path.startsWith("/api")) return next();
@@ -1521,6 +1562,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader("X-CSRF-Token", csrfToken);
     }
     next();
+  });
+
+  // Re-validate the signed-in user on every API request: the user must still exist,
+  // be active, belong to the same tenant, and that tenant must exist and be active.
+  // (Previously these were checked only at login, so deleted/suspended accounts kept access.)
+  app.use(async (req, res, next) => {
+    const sessionUser = req.session?.user;
+    if (!sessionUser || !req.path.startsWith("/api")) return next();
+    if (req.path === "/api/auth/logout") return next();
+    try {
+      const rows = await query(
+        `SELECT u.status AS user_status, u.role, t.status AS tenant_status
+         FROM users u JOIN tenants t ON t.id = u.tenant_id
+         WHERE u.id = $1 AND u.tenant_id = $2 LIMIT 1`,
+        [sessionUser.id, sessionUser.tenantId],
+      );
+      const row = rows[0];
+      if (!row || row.user_status !== "active" || row.tenant_status !== "active") {
+        delete (req.session as any).user;
+        return res.status(401).json({ error: "Your session has ended. Please sign in again." });
+      }
+      if (row.role !== sessionUser.role) (req.session.user as any).role = row.role;
+      next();
+    } catch (err) {
+      next(err);
+    }
   });
 
   app.use((req, res, next) => {
@@ -1553,7 +1620,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(401).json({ error: "Invalid email or password" });
       }
       const tenant = await getTenantById(user.tenantId);
-      if (tenant && tenant.status !== "active") {
+      if (!tenant || tenant.status !== "active") {
         return res.status(403).json({ error: "Your account has been suspended. Please contact support." });
       }
       await regenerateSession(req);
@@ -1653,6 +1720,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .slice(0, 40);
       const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
 
+      if (await authStorage.emailInUseGlobally(data.email)) return res.status(409).json({ error: "A Distillr account with this email already exists. Use a different email." });
       const tenant = await createTenant({ name: data.distilleryName, slug });
 
       const user = await runWithTenant(tenant.id, async () => {
@@ -1865,34 +1933,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Admin: hard reset all operational data (keeps platform_config and users)
-  app.post("/api/admin/reset-all-data", requireAdmin, async (_req, res) => {
+  app.post("/api/admin/reset-all-data", requireAdmin, async (req, res) => {
+    // Tenant-scoped: deletes ONLY the signed-in tenant's operational data, in one transaction.
+    const tenantId = req.session.user!.tenantId;
+    const TABLES = [
+      "barrel_events", "barrels", "distilling_batch_records", "distilling_production_records",
+      "distilling_inventory_records", "inventory_movements", "inventory_lots", "inventory_items",
+      "sales_orders", "clients", "compliance", "permits", "cola_registrations", "label_records",
+      "state_excise_returns", "ttb_reports", "staff", "properties", "distillery_equipment",
+      "calculator_presets", "audit_logs",
+    ];
+    const client = await pool.connect();
     try {
-      await query(`
-        DELETE FROM barrel_events;
-        DELETE FROM barrels;
-        DELETE FROM distilling_batch_records;
-        DELETE FROM distilling_production_records;
-        DELETE FROM distilling_inventory_records;
-        DELETE FROM inventory_movements;
-        DELETE FROM inventory_lots;
-        DELETE FROM inventory_items;
-        DELETE FROM sales_orders;
-        DELETE FROM clients;
-        DELETE FROM compliance_records;
-        DELETE FROM permits;
-        DELETE FROM cola_records;
-        DELETE FROM labels;
-        DELETE FROM excise_tax_records;
-        DELETE FROM ttb_reports;
-        DELETE FROM staff;
-        DELETE FROM properties;
-        DELETE FROM distillery_equipment;
-        DELETE FROM calculator_presets;
-        DELETE FROM audit_logs;
-      `);
+      await client.query("BEGIN");
+      for (const table of TABLES) {
+        await client.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+      }
+      await client.query("COMMIT");
       res.json({ ok: true });
     } catch (e: any) {
+      await client.query("ROLLBACK").catch(() => undefined);
       res.status(500).json({ error: e.message ?? "Reset failed" });
+    } finally {
+      client.release();
     }
   });
 
@@ -2002,7 +2065,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         : null;
 
       const inventoryRecord = batch.inventoryRecordId
-        ? await query("SELECT * FROM distilling_inventory_records WHERE id = $1 LIMIT 1", [batch.inventoryRecordId])
+        ? await query("SELECT * FROM distilling_inventory_records WHERE id = $1 AND tenant_id = $2 LIMIT 1", [batch.inventoryRecordId, getCurrentTenantId()])
             .then((rows: any[]) => rows[0] ? {
               id: String(rows[0].id),
               productName: rows[0].product_name ?? null,
@@ -2522,7 +2585,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
       const uniqueFilename = `${Date.now()}-${sha256.slice(0, 12)}-${safeStoredName}`;
       const attachmentKey = await saveFile(
-        `uploads/attachments/clients/${req.params.id}/${uniqueFilename}`,
+        `uploads/t/${tenantFileScope(req)}/attachments/clients/${req.params.id}/${uniqueFilename}`,
         fileBuffer,
         mimeType,
       );
@@ -2818,7 +2881,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const extension = extensionForMimeType(mimeType) || path.extname(safeOriginal).toLowerCase() || ".bin";
       const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
       const uniqueFilename = `${Date.now()}-${sha256.slice(0, 12)}-${originalStem.slice(0, 120)}${extension}`;
-      const key = await saveFile(`uploads/attachments/compliance/${req.params.id}/${uniqueFilename}`, fileBuffer, mimeType);
+      const key = await saveFile(`uploads/t/${tenantFileScope(req)}/attachments/compliance/${req.params.id}/${uniqueFilename}`, fileBuffer, mimeType);
 
       const uploadedBy = req.session.user?.name || req.session.user?.email || "Unknown";
       const attachment = await storage.createAttachment({
@@ -3329,12 +3392,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const baseName = `${String(report.id).replace(/[^A-Za-z0-9._-]/g, "_")}-${Date.now()}`;
       const pdfLines = buildTtbPacketPdfLines(report, report.payload);
       const jsonPath = await saveFile(
-        `exports/ttb/${baseName}.json`,
+        `exports/t/${tenantFileScope(req)}/ttb/${baseName}.json`,
         JSON.stringify(report.payload, null, 2),
         "application/json",
       );
-      const csvPath = await saveFile(`exports/ttb/${baseName}.csv`, toCsv(report.payload), "text/csv");
-      const pdfPath = await saveFile(`exports/ttb/${baseName}.pdf`, toTextPdf(pdfLines), "application/pdf");
+      const csvPath = await saveFile(`exports/t/${tenantFileScope(req)}/ttb/${baseName}.csv`, toCsv(report.payload), "text/csv");
+      const pdfPath = await saveFile(`exports/t/${tenantFileScope(req)}/ttb/${baseName}.pdf`, toTextPdf(pdfLines), "application/pdf");
 
       const updated = await storage.updateTtbReport(report.id, {
         status: "Exported",
@@ -3501,7 +3564,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const storedFilename = `${originalStem.slice(0, 120)}${extension}`;
       const uniqueFilename = `${req.params.id}-${Date.now()}-${storedFilename}`;
       const photoKey = await saveFile(
-        `uploads/job-photos/${uniqueFilename}`,
+        `uploads/t/${tenantFileScope(req)}/job-photos/${uniqueFilename}`,
         parsedDataUrl.buffer,
         parsedDataUrl.mimeType,
       );
@@ -3958,6 +4021,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get(/^\/(uploads|exports)\/.+/, requireAuth, async (req, res) => {
     try {
       const key = decodeURIComponent(req.path);
+      // Tenant isolation: only serve files that belong to the signed-in user's tenant.
+      if (!(await fileBelongsToTenant(key, req.session.user!.tenantId))) {
+        return res.status(404).json({ error: "File not found" });
+      }
       const file = await readFile(key);
       if (!file) return res.status(404).json({ error: "File not found" });
       const safeName = path.basename(key).replace(/["\r\n]/g, "");
@@ -4015,6 +4082,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/platform/tenants", requireSuperAdmin, async (req, res) => {
     try {
       const data = createTenantSchema.parse(req.body);
+      if (await authStorage.emailInUseGlobally(data.adminEmail)) return res.status(409).json({ error: "A Distillr account with this email already exists. Use a different email." });
       const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan });
 
       // Create the initial admin user for the new tenant
@@ -4139,6 +4207,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/tenants", requireAdminSession, async (req, res) => {
     try {
       const data = createTenantSchema.parse(req.body);
+      if (await authStorage.emailInUseGlobally(data.adminEmail)) return res.status(409).json({ error: "A Distillr account with this email already exists. Use a different email." });
       const tenant = await createTenant({ name: data.name, slug: data.slug, plan: data.plan, userLimit: (data as any).userLimit });
       const adminUser = await runWithTenant(tenant.id, () =>
         authStorage.createUser({

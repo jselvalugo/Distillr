@@ -212,7 +212,7 @@ async function executeTool(name: string, input: Record<string, unknown>, tenantI
         if (input.from_date) { conditions.push(`so.order_date >= $${params.length + 1}`); params.push(input.from_date); }
         if (input.to_date) { conditions.push(`so.order_date <= $${params.length + 1}`); params.push(input.to_date); }
         params.push(lim);
-        const rows = await query(`SELECT so.id, so.order_number, so.status, so.order_date, so.total_amount, so.currency, c.name as client_name FROM sales_orders so LEFT JOIN clients c ON so.client_id = c.id WHERE ${conditions.join(" AND ")} ORDER BY so.order_date DESC LIMIT $${params.length}`, params);
+        const rows = await query(`SELECT so.id, so.order_number, so.status, so.order_date, so.total_amount, so.currency, c.name as client_name FROM sales_orders so LEFT JOIN clients c ON so.client_id = c.id AND c.tenant_id = so.tenant_id WHERE ${conditions.join(" AND ")} ORDER BY so.order_date DESC LIMIT $${params.length}`, params);
         return JSON.stringify(rows);
       }
 
