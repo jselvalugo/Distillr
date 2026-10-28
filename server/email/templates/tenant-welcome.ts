@@ -41,6 +41,15 @@ function esc(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Footer contact: EMAIL_REPLY_TO, else the address in EMAIL_FROM, else david@loogolabs.com. */
+function defaultSupportEmail(): string {
+  const replyTo = process.env.EMAIL_REPLY_TO?.trim();
+  if (replyTo) return replyTo;
+  const from = process.env.EMAIL_FROM?.trim() ?? "";
+  const match = from.match(/<([^>]+)>/) ?? from.match(/^([^\s<>]+@[^\s<>]+)$/);
+  return match ? match[1] : "david@loogolabs.com";
+}
+
 function firstName(name: string): string {
   const trimmed = name.trim();
   return trimmed ? trimmed.split(/\s+/)[0] : "there";
@@ -52,7 +61,7 @@ export function tenantWelcomeSubject(input: Pick<TenantWelcomeEmailInput, "organ
 
 export function renderTenantWelcomeEmail(input: TenantWelcomeEmailInput): { subject: string; html: string; text: string } {
   const subject = tenantWelcomeSubject(input);
-  const support = input.supportEmail ?? "support@distillrsoftware.com";
+  const support = input.supportEmail ?? defaultSupportEmail();
   const logoUrl = `${input.assetBaseUrl.replace(/\/$/, "")}/brand/logo-primary-1000w.png`;
   const loginHost = input.loginUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const hello = firstName(input.recipientName);

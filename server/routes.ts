@@ -36,7 +36,7 @@ import { runWithTenant, getCurrentTenantId } from "./tenant-context";
 import { registerReferenceRoutes, syncCatalog } from "./reference-data";
 import { EXPORTABLE_TABLES, buildWorkbook, countTableRows, csvForTable, exportTableColumns, fetchTableRows, importWorkbook } from "./data-exchange";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
-import { EmailNotConfiguredError, isEmailConfigured, sendEmail } from "./email/resend";
+import { DEFAULT_FROM, EmailNotConfiguredError, isEmailConfigured, sendEmail } from "./email/resend";
 import { renderTenantWelcomeEmail } from "./email/templates/tenant-welcome";
 import {
   SETUP_TOKEN_TTL_HOURS,
@@ -4252,7 +4252,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   app.get("/api/admin/email/status", requireAdminSession, (_req, res) => {
-    res.json({ configured: isEmailConfigured(), from: process.env.EMAIL_FROM?.trim() || "Distillr <hello@distillrsoftware.com>" });
+    res.json({ configured: isEmailConfigured(), from: process.env.EMAIL_FROM?.trim() || DEFAULT_FROM });
   });
 
   // Preview the exact email (with a placeholder password) before sending.

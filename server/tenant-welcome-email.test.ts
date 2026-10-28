@@ -38,3 +38,17 @@ test("welcome email: set-password endpoint is token-authorized, not CSRF", () =>
   assert.equal(shouldEnforceCsrf("POST", "/api/auth/password-setup"), false);
   assert.equal(shouldEnforceCsrf("POST", "/api/admin/tenants/x/users/y/welcome-email"), true);
 });
+
+test("welcome email: footer contact follows EMAIL_REPLY_TO, then EMAIL_FROM", () => {
+  const saved = { from: process.env.EMAIL_FROM, reply: process.env.EMAIL_REPLY_TO };
+  try {
+    delete process.env.EMAIL_REPLY_TO;
+    process.env.EMAIL_FROM = "Distillr <david@loogolabs.com>";
+    assert.ok(renderTenantWelcomeEmail(base).html.includes("mailto:david@loogolabs.com"));
+    process.env.EMAIL_REPLY_TO = "help@example.com";
+    assert.ok(renderTenantWelcomeEmail(base).text.includes("help@example.com"));
+  } finally {
+    if (saved.from === undefined) delete process.env.EMAIL_FROM; else process.env.EMAIL_FROM = saved.from;
+    if (saved.reply === undefined) delete process.env.EMAIL_REPLY_TO; else process.env.EMAIL_REPLY_TO = saved.reply;
+  }
+});

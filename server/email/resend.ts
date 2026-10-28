@@ -2,12 +2,12 @@
  * Minimal Resend client (https://resend.com/docs/api-reference/emails/send-email).
  * No SDK dependency — one fetch call. Configure with:
  *   RESEND_API_KEY   required
- *   EMAIL_FROM       e.g. "Distillr <hello@distillrsoftware.com>" (domain must be verified in Resend)
+ *   EMAIL_FROM       e.g. "Distillr <david@loogolabs.com>" (domain must be verified in Resend)
  *   EMAIL_REPLY_TO   optional
  */
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Distillr <hello@distillrsoftware.com>";
+export const DEFAULT_FROM = "Distillr <david@loogolabs.com>";
 
 export interface OutgoingEmail {
   to: string | string[];
