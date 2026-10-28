@@ -36,6 +36,15 @@ import { runWithTenant, getCurrentTenantId } from "./tenant-context";
 import { registerReferenceRoutes, syncCatalog } from "./reference-data";
 import { EXPORTABLE_TABLES, buildWorkbook, countTableRows, csvForTable, exportTableColumns, fetchTableRows, importWorkbook } from "./data-exchange";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
+import { EmailNotConfiguredError, isEmailConfigured, sendEmail } from "./email/resend";
+import { renderTenantWelcomeEmail } from "./email/templates/tenant-welcome";
+import {
+  SETUP_TOKEN_TTL_HOURS,
+  completePasswordSetup,
+  generateTemporaryPassword,
+  issuePasswordSetupToken,
+  lookupPasswordSetupToken,
+} from "./password-setup";
 import { readFile, saveFile } from "./file-storage";
 import { registerReportRoutes } from "./reports/routes";
 import { createCsrfToken, CSRF_HEADER_NAME, isCsrfTokenValid, shouldEnforceCsrf } from "./csrf-protection";
@@ -1564,6 +1573,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "Invalid login data" });
       }
       res.status(500).json({ error: "Failed to establish authenticated session" });
+    }
+  });
+
+  // Public: one-time "set your password" link from the tenant welcome email.
+  const passwordSetupLimiter = new LoginRateLimiter({ maxAttempts: 20 });
+
+  app.get("/api/auth/password-setup/:token", async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      const found = await lookupPasswordSetupToken(req.params.token);
+      if (!found.valid) return res.status(410).json({ valid: false, reason: found.reason });
+      res.json({ valid: true, email: found.email, name: found.name, organizationName: found.organizationName });
+    } catch {
+      res.status(500).json({ error: "Could not check this link" });
+    }
+  });
+
+  app.post("/api/auth/password-setup", async (req, res) => {
+    const clientKey = `setup:${getLoginClientKey(req)}`;
+    const retryAfterSeconds = passwordSetupLimiter.getRetryAfterSeconds(clientKey);
+    if (retryAfterSeconds > 0) {
+      return res.status(429).json({ error: "Too many attempts. Please wait and try again.", retryAfterSeconds });
+    }
+    try {
+      const { token, password } = z.object({
+        token: z.string().min(10).max(200),
+        password: z.string().min(8, "Password must be at least 8 characters").max(200),
+      }).parse(req.body);
+      const result = await completePasswordSetup(token, password);
+      if (!result.valid) {
+        passwordSetupLimiter.registerFailure(clientKey);
+        const msg = result.reason === "expired"
+          ? "This link has expired. Ask your administrator to send a new one."
+          : result.reason === "used"
+            ? "This link has already been used. Sign in with the password you chose."
+            : "This link isn't valid.";
+        return res.status(410).json({ error: msg, reason: result.reason });
+      }
+      passwordSetupLimiter.registerSuccess(clientKey);
+      query(
+        `INSERT INTO tenant_activity_logs (id, tenant_id, event_type, user_id, user_email, user_name, ip_address, occurred_at, details)
+         VALUES ($1, $2, 'password_set', $3, $4, $5, $6, NOW(), '{}'::jsonb)`,
+        [`ACT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, result.tenantId, result.userId, result.email, result.name, req.ip ?? null],
+      ).catch(() => {});
+      res.json({ ok: true, email: result.email });
+    } catch (err: any) {
+      if (err?.name === "ZodError") return res.status(400).json({ error: err.errors?.[0]?.message ?? "Invalid request" });
+      res.status(500).json({ error: "Could not set your password" });
     }
   });
 
@@ -4128,8 +4185,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/tenants/:id/users", requireAdminSession, async (req, res) => {
     try {
       const users = await runWithTenant(req.params.id, () => authStorage.getUsers());
+      const sentRows = await query(
+        `SELECT id, welcome_email_sent_at FROM users WHERE tenant_id = $1 AND welcome_email_sent_at IS NOT NULL`,
+        [req.params.id],
+      );
+      const sentAt = new Map(sentRows.map((r) => [String(r.id), new Date(String(r.welcome_email_sent_at)).toISOString()]));
       const safe = users.map(({ id, email, name, role, status, createdAt, tenantId }) => ({
         id, email, name, role, status, createdAt, tenantId,
+        welcomeEmailSentAt: sentAt.get(id) ?? null,
       }));
       res.json(safe);
     } catch (err: any) {
@@ -4169,6 +4232,113 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(rows);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Tenant welcome email (manual send only — never triggered automatically) ──
+  // Links are built from a configured origin, never from the request Host header,
+  // so a spoofed Host can't redirect a password link.
+  function appBaseUrl(): string {
+    const raw = process.env.APP_BASE_URL || process.env.URL || "https://distillrsoftware.com";
+    return raw.replace(/\/+$/, "");
+  }
+
+  async function loadWelcomeContext(tenantId: string, userId: string) {
+    const tenant = await getTenantById(tenantId);
+    if (!tenant) return null;
+    const user = await runWithTenant(tenantId, () => authStorage.getUserById(userId));
+    if (!user) return null;
+    return { tenant, user };
+  }
+
+  app.get("/api/admin/email/status", requireAdminSession, (_req, res) => {
+    res.json({ configured: isEmailConfigured(), from: process.env.EMAIL_FROM?.trim() || "Distillr <hello@distillrsoftware.com>" });
+  });
+
+  // Preview the exact email (with a placeholder password) before sending.
+  app.get("/api/admin/tenants/:id/users/:userId/welcome-email/preview", requireAdminSession, async (req, res) => {
+    try {
+      const ctx = await loadWelcomeContext(req.params.id, req.params.userId);
+      if (!ctx) return res.status(404).json({ error: "User not found" });
+      const base = appBaseUrl();
+      const email = renderTenantWelcomeEmail({
+        recipientName: ctx.user.name,
+        recipientEmail: ctx.user.email,
+        organizationName: ctx.tenant.name,
+        temporaryPassword: "Generated when you send",
+        setPasswordUrl: `${base}/set-password?token=preview`,
+        loginUrl: `${base}/login`,
+        assetBaseUrl: base,
+        expiresInHours: SETUP_TOKEN_TTL_HOURS,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ to: ctx.user.email, subject: email.subject, html: email.html });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/tenants/:id/users/:userId/welcome-email", requireAdminSession, async (req, res) => {
+    try {
+      if (!isEmailConfigured()) throw new EmailNotConfiguredError();
+      const ctx = await loadWelcomeContext(req.params.id, req.params.userId);
+      if (!ctx) return res.status(404).json({ error: "User not found" });
+      if (ctx.user.status !== "active") {
+        return res.status(400).json({ error: "This user is inactive. Activate them before sending sign-in details." });
+      }
+
+      // A fresh temporary password: we only store hashes, so the original can't be re-sent.
+      const temporaryPassword = generateTemporaryPassword();
+      const { token } = await issuePasswordSetupToken(ctx.user.id, ctx.tenant.id);
+      const base = appBaseUrl();
+      const email = renderTenantWelcomeEmail({
+        recipientName: ctx.user.name,
+        recipientEmail: ctx.user.email,
+        organizationName: ctx.tenant.name,
+        temporaryPassword,
+        setPasswordUrl: `${base}/set-password?token=${encodeURIComponent(token)}`,
+        loginUrl: `${base}/login`,
+        assetBaseUrl: base,
+        expiresInHours: SETUP_TOKEN_TTL_HOURS,
+      });
+
+      // Only rotate the password once we know the email can go out.
+      const previousHash = (await query(
+        `SELECT password_hash FROM users WHERE id = $1 AND tenant_id = $2`,
+        [ctx.user.id, ctx.tenant.id],
+      ))[0]?.password_hash;
+      await runWithTenant(ctx.tenant.id, () => authStorage.resetPassword(ctx.user.id, temporaryPassword));
+      let sent: { id: string };
+      try {
+        sent = await sendEmail({
+          to: ctx.user.email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+          tags: [{ name: "type", value: "tenant_welcome" }],
+        });
+      } catch (sendErr) {
+        if (previousHash) {
+          await query(`UPDATE users SET password_hash = $3 WHERE id = $1 AND tenant_id = $2`, [ctx.user.id, ctx.tenant.id, previousHash]);
+        }
+        await query(`UPDATE password_setup_tokens SET used_at = NOW() WHERE user_id = $1 AND tenant_id = $2 AND used_at IS NULL`, [ctx.user.id, ctx.tenant.id]);
+        throw sendErr;
+      }
+
+      const rows = await query(
+        `UPDATE users SET welcome_email_sent_at = NOW() WHERE id = $1 AND tenant_id = $2 RETURNING welcome_email_sent_at`,
+        [ctx.user.id, ctx.tenant.id],
+      );
+      query(
+        `INSERT INTO tenant_activity_logs (id, tenant_id, event_type, user_id, user_email, user_name, ip_address, occurred_at, details)
+         VALUES ($1, $2, 'welcome_email_sent', $3, $4, $5, $6, NOW(), $7::jsonb)`,
+        [`ACT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ctx.tenant.id, ctx.user.id, ctx.user.email, ctx.user.name, req.ip ?? null, JSON.stringify({ resendId: sent.id })],
+      ).catch(() => {});
+
+      res.json({ ok: true, to: ctx.user.email, emailId: sent.id, sentAt: new Date(String(rows[0]?.welcome_email_sent_at ?? Date.now())).toISOString() });
+    } catch (err: any) {
+      if (err instanceof EmailNotConfiguredError) return res.status(503).json({ error: err.message });
+      res.status(502).json({ error: err.message || "Failed to send email" });
     }
   });
 
