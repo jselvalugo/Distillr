@@ -172,6 +172,26 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Promo video ── */}
+      <section id="video" className="pub-section">
+        <div className="pub-wrap">
+          <div className="pub-center" style={{ marginBottom: 36 }}>
+            <p className="pub-eyebrow">See it in action</p>
+            <h2 className="pub-h2">Distillr in 42 seconds.</h2>
+          </div>
+          <div className="pub-frame pub-video">
+            <video
+              src="/video/distillr-promo.mp4"
+              poster="/video/distillr-promo-poster.jpg"
+              controls
+              playsInline
+              preload="none"
+              aria-label="Distillr product overview video"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ── What is Distillr ── */}
       <section className="pub-section">
         <div className="pub-wrap pub-split">

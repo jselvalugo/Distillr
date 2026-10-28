@@ -124,6 +124,10 @@
 .pub-frame__dots span { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--paper-edge); margin-right: 5px; }
 .pub-frame__url { flex: 1; max-width: 300px; margin: 0 auto; font-size: 11px; color: var(--ink-muted); background: #fff; border: 1px solid var(--paper-edge); border-radius: 6px; padding: 4px 10px; text-align: center; }
 .pub-frame img { display: block; width: 100%; }
+
+/* Promo video */
+.pub-video { max-width: 980px; margin: 0 auto; background: #0b0d1a; }
+.pub-video video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0b0d1a; }
 .pub-chip {
   position: absolute; z-index: 3; background: #fff; border: 1px solid var(--paper-edge); border-radius: 14px; padding: 10px 14px;
   box-shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.45); animation: pub-float 5s ease-in-out infinite;
