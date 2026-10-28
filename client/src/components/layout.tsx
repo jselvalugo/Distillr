@@ -1,3 +1,4 @@
+import { fetchPlatformConfig, readCachedAppearance } from "../lib/appearance";
 import { type ReactNode, useState, useRef, useEffect, useLayoutEffect } from "react";
 import { AiChatPanel } from "./ai-chat-panel";
 import { Link, useLocation } from "wouter";
@@ -444,14 +445,15 @@ function TopNav() {
   const isDashboard = location === "/";
   const { data: config } = useQuery<PlatformConfig>({
     queryKey: ["/api/platform-config"],
-    queryFn: () => apiRequest<PlatformConfig>("/api/platform-config"),
+    queryFn: fetchPlatformConfig,
     staleTime: 60_000,
   });
 
   const orgName = config?.organizationNameOverride || config?.organizationName;
-  const dashColor = config?.dashboardColor ?? NAVY;
+  const [cached] = useState(readCachedAppearance);
+  const dashColor = (config ? config.dashboardColor : cached?.dashboardColor) ?? NAVY;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty("--brand", dashColor);
   }, [dashColor]);
 
@@ -484,22 +486,29 @@ function TopNav() {
 
         <div className="w-px h-4 bg-white/10" />
 
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {config?.logoDataUrl && (
-            <img src={config.logoDataUrl} alt="Logo" className="h-6 object-contain shrink-0" />
+            <>
+              <img src={config.logoDataUrl} alt="" className="h-7 max-w-[132px] object-contain shrink-0" />
+              {orgName && <span className="hidden sm:block h-7 w-px shrink-0 bg-white/15" aria-hidden />}
+            </>
           )}
-          <div className="flex flex-col leading-none min-w-0 gap-[3px]">
-            {orgName ? (
-              <>
-                <span className="text-white text-sm font-bold tracking-tight truncate">{orgName}</span>
-                <span className="hidden sm:block">
-                  <PoweredBy tone="light" />
-                </span>
-              </>
-            ) : (
-              <DistillrWordmark variant="mono-white" height={16} />
-            )}
-          </div>
+          {orgName ? (
+            <div className="flex flex-col justify-center min-w-0 gap-[5px]">
+              <span
+                className="truncate text-[15px] font-semibold leading-[1.1] tracking-[-0.01em] text-white"
+                style={{ fontFamily: "var(--font-display)" }}
+                title={orgName}
+              >
+                {orgName}
+              </span>
+              <span className="hidden sm:flex">
+                <PoweredBy tone="light" compact />
+              </span>
+            </div>
+          ) : (
+            !config?.logoDataUrl && <DistillrWordmark variant="mono-white" height={16} />
+          )}
         </div>
 
         <UserMenu />

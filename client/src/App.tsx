@@ -1,48 +1,49 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { OnboardingTour } from "./components/onboarding/tour";
 import { Route, Switch, useLocation } from "wouter";
 import { useAuth } from "./hooks/use-auth";
 import Landing from "./pages/landing";
 import Login from "./pages/login";
 import Signup from "./pages/signup";
-import FeaturesPage from "./pages/features";
-import PricingPage from "./pages/pricing";
-import FaqPage from "./pages/faq";
-import PrivacyPage from "./pages/privacy";
-import TermsPage from "./pages/terms";
-import AcceptableUsePage from "./pages/acceptable-use";
-import AdminLogin from "./pages/admin-login";
-import AdminDashboard from "./pages/admin-dashboard";
-import Dashboard from "./pages/dashboard";
-import Barrels from "./pages/barrels";
-import BarrelForm from "./pages/barrel-form";
-import Production from "./pages/production";
-import BatchDetail from "./pages/batch-detail";
-import BatchForm from "./pages/batch-form";
-import Inventory from "./pages/inventory";
-import InventoryItemForm from "./pages/inventory-item-form";
-import InventoryLotForm from "./pages/inventory-lot-form";
-import CompliancePage from "./pages/compliance";
-import ComplianceForm from "./pages/compliance-form";
-import ComplianceRegulatory from "./pages/compliance-regulatory";
-import PermitForm from "./pages/permit-form";
-import ColaForm from "./pages/cola-form";
-import LabelForm from "./pages/label-form";
-import ExciseForm from "./pages/excise-form";
-import Clients from "./pages/clients";
-import ClientForm from "./pages/client-form";
-import Properties from "./pages/properties";
-import PropertyForm from "./pages/property-form";
-import SalesOrders from "./pages/sales-orders";
-import SalesOrderForm from "./pages/sales-order-form";
-import StaffPage from "./pages/staff";
-import StaffForm from "./pages/staff-form";
-import Users from "./pages/users";
-import UserForm from "./pages/user-form";
-import Reports from "./pages/reports";
-import Settings from "./pages/settings";
-import FloorPlan from "./pages/floor-plan";
-import NotFound from "./pages/not-found";
+const FeaturesPage = lazy(() => import("./pages/features"));
+const PricingPage = lazy(() => import("./pages/pricing"));
+const FaqPage = lazy(() => import("./pages/faq"));
+const PrivacyPage = lazy(() => import("./pages/privacy"));
+const TermsPage = lazy(() => import("./pages/terms"));
+const AcceptableUsePage = lazy(() => import("./pages/acceptable-use"));
+const AdminLogin = lazy(() => import("./pages/admin-login"));
+const AdminDashboard = lazy(() => import("./pages/admin-dashboard"));
+const loadDashboard = () => import("./pages/dashboard");
+const Dashboard = lazy(loadDashboard);
+const Barrels = lazy(() => import("./pages/barrels"));
+const BarrelForm = lazy(() => import("./pages/barrel-form"));
+const Production = lazy(() => import("./pages/production"));
+const BatchDetail = lazy(() => import("./pages/batch-detail"));
+const BatchForm = lazy(() => import("./pages/batch-form"));
+const Inventory = lazy(() => import("./pages/inventory"));
+const InventoryItemForm = lazy(() => import("./pages/inventory-item-form"));
+const InventoryLotForm = lazy(() => import("./pages/inventory-lot-form"));
+const CompliancePage = lazy(() => import("./pages/compliance"));
+const ComplianceForm = lazy(() => import("./pages/compliance-form"));
+const ComplianceRegulatory = lazy(() => import("./pages/compliance-regulatory"));
+const PermitForm = lazy(() => import("./pages/permit-form"));
+const ColaForm = lazy(() => import("./pages/cola-form"));
+const LabelForm = lazy(() => import("./pages/label-form"));
+const ExciseForm = lazy(() => import("./pages/excise-form"));
+const Clients = lazy(() => import("./pages/clients"));
+const ClientForm = lazy(() => import("./pages/client-form"));
+const Properties = lazy(() => import("./pages/properties"));
+const PropertyForm = lazy(() => import("./pages/property-form"));
+const SalesOrders = lazy(() => import("./pages/sales-orders"));
+const SalesOrderForm = lazy(() => import("./pages/sales-order-form"));
+const StaffPage = lazy(() => import("./pages/staff"));
+const StaffForm = lazy(() => import("./pages/staff-form"));
+const Users = lazy(() => import("./pages/users"));
+const UserForm = lazy(() => import("./pages/user-form"));
+const Reports = lazy(() => import("./pages/reports"));
+const Settings = lazy(() => import("./pages/settings"));
+const FloorPlan = lazy(() => import("./pages/floor-plan"));
+const NotFound = lazy(() => import("./pages/not-found"));
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -77,9 +78,20 @@ function RootRoute() {
   return <Dashboard />;
 }
 
+/** Blank, neutral placeholder while a page's code loads — no dark or "Loading…" flash. */
+function PageFallback() {
+  return <div className="h-screen" aria-busy="true" />;
+}
+
 export default function App() {
+  const { user } = useAuth();
+  // Once signed in, warm the dashboard chunk so the post-login screen is instant.
+  useEffect(() => {
+    if (user) void loadDashboard();
+  }, [user]);
+
   return (
-    <>
+    <Suspense fallback={<PageFallback />}>
     <Switch>
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
@@ -140,6 +152,6 @@ export default function App() {
     </Switch>
     {/* Mounted once, above the routes, so the tour survives page changes. */}
     <OnboardingTour />
-    </>
+    </Suspense>
   );
 }

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import { fetchPlatformConfig, readCachedAppearance } from "../lib/appearance";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -972,14 +973,23 @@ export default function Dashboard() {
   });
   const { data: platformConfig } = useQuery<{ dashboardColor: string | null; theme?: "light" | "dark" | null }>({
     queryKey: ["/api/platform-config"],
-    queryFn: () => apiRequest("/api/platform-config"),
+    queryFn: fetchPlatformConfig,
     staleTime: 60_000,
   });
   // The org's own color paints the dashboard; the Distillr default keeps the
   // canvas on brand Night so indigo stays an accent (header, buttons, highlights).
-  const customColor = platformConfig?.dashboardColor;
-  const theme = platformConfig?.theme === "light" ? "light" : "dark";
-  const heroBg = theme === "light"
+  // Until the server answers, use the appearance last seen on this device so the
+  // first frame matches (no black flash for light-theme orgs).
+  const [cachedAppearance] = useState(readCachedAppearance);
+  const appearance = platformConfig ?? cachedAppearance;
+  const customColor = appearance?.dashboardColor;
+  const theme = appearance?.theme === "light" ? "light" : "dark";
+  // First visit on this device with nothing cached yet: hold a neutral canvas
+  // instead of guessing dark.
+  const appearancePending = !appearance;
+  const heroBg = appearancePending
+    ? "#f7f7f7"
+    : theme === "light"
     ? "#F4F6FB"
     : customColor && customColor.toLowerCase() !== "#4f46e5" ? customColor : "#0B0D12";
   const dashVars: Record<string, string> = theme === "light"
@@ -998,7 +1008,8 @@ export default function Dashboard() {
         "--dash-warn-bg": "rgba(251,191,36,0.1)", "--dash-warn-border": "rgba(251,191,36,0.25)", "--dash-warn-label": "#FBBF24", "--dash-warn-text": "#FDE68A",
         "--dash-warn": "#F59E0B", "--dash-urgent": "#F97316", "--dash-danger": "#EF4444", "--dash-ok": "rgba(52,211,153,0.6)" };
 
-  useEffect(() => {
+  // Layout effect: apply the canvas variables before the browser paints.
+  useLayoutEffect(() => {
     const root = document.documentElement;
     Object.keys(dashVars).forEach((k) => root.style.setProperty(k, dashVars[k]));
     root.setAttribute("data-dash-theme", theme);
@@ -1052,7 +1063,7 @@ export default function Dashboard() {
   return (
     <Layout>
       {createPortal(<SectionNav widgetOrder={widgetOrder} activeId={activeSection} />, document.body)}
-      <div className="min-h-screen relative" data-dash-theme={theme} style={{ background: heroBg }}>
+      <div className="min-h-screen relative" data-dash-theme={theme} style={{ background: heroBg, visibility: appearancePending ? "hidden" : undefined }}>
 
         {/* ── Decorative blobs ── */}
         <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>

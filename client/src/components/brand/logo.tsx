@@ -29,13 +29,32 @@ export function DistillrMarkInline({ size = 22, color = BRAND.indigo, className 
   );
 }
 
-/** "Powered by distillr" tag for tenant-branded surfaces. */
-export function PoweredBy({ tone = "light" }: { tone?: "light" | "dark" }) {
-  const color = tone === "light" ? "rgba(255,255,255,0.55)" : BRAND.inkMuted;
+/** "Powered by distillr" tag for tenant-branded surfaces. `compact` is the quiet app-header version. */
+export function PoweredBy({ tone = "light", compact = false }: { tone?: "light" | "dark"; compact?: boolean }) {
+  const light = tone === "light";
+  const color = light ? (compact ? "rgba(255,255,255,0.42)" : "rgba(255,255,255,0.55)") : BRAND.inkMuted;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color, fontFamily: FONT_DISPLAY, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: compact ? 5 : 6,
+        color,
+        fontFamily: FONT_DISPLAY,
+        fontSize: compact ? 8.5 : 10,
+        fontWeight: compact ? 600 : undefined,
+        letterSpacing: compact ? "0.16em" : "0.08em",
+        textTransform: "uppercase",
+        lineHeight: 1,
+      }}
+    >
       Powered by
-      <img src={tone === "light" ? "/brand/wordmark-mono-white.svg" : "/brand/wordmark-primary.svg"} alt="distillr" style={{ height: 11, width: "auto", opacity: tone === "light" ? 0.8 : 1 }} draggable={false} />
+      <img
+        src={light ? "/brand/wordmark-mono-white.svg" : "/brand/wordmark-primary.svg"}
+        alt="distillr"
+        style={{ height: compact ? 9.5 : 11, width: "auto", opacity: light ? (compact ? 0.62 : 0.8) : 1, transform: compact ? "translateY(0.5px)" : undefined }}
+        draggable={false}
+      />
     </span>
   );
 }
