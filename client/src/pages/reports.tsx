@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { COMPLIANCE_DISCLAIMER } from "@shared/compliance-disclaimer";
 import { Link, useLocation, useRoute, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -72,6 +73,9 @@ function ReportsHome() {
               <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-[#5c5c63]">
                 Every report is built from the batches, barrels, inventory and orders you've already recorded. Open one, choose a period, and
                 download it as a PDF, Excel file or CSV — the download matches what's on screen.
+              </p>
+              <p className="mt-3 max-w-[560px] rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-900">
+                {COMPLIANCE_DISCLAIMER}
               </p>
             </div>
           </div>
@@ -353,6 +357,7 @@ function ReportView({ kind }: { kind: ReportKind }) {
         </div>
 
         <div className="flex-1 px-4 pb-16 pt-6 sm:px-6">
+          <p className="mx-auto mb-4 max-w-[1120px] text-[11px] leading-relaxed text-[#8a8a92] print:hidden">{COMPLIANCE_DISCLAIMER}</p>
           {error ? (
             <div className="mx-auto max-w-[1120px] rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{(error as Error).message}</div>
           ) : isLoading || !doc ? (

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import type { CellFormat, CellValue, ReportDocument, ReportSection } from "../../shared/report-types";
 import { formatCell, isNumericFormat } from "./format";
+import { COMPLIANCE_DISCLAIMER, COMPLIANCE_DISCLAIMER_SHORT } from "../../shared/compliance-disclaimer";
 
 const NUMBER_FORMATS: Partial<Record<CellFormat, string>> = {
   integer: "#,##0",
@@ -246,6 +247,12 @@ export async function renderReportXlsx(doc: ReportDocument, options: { brandColo
     summary.getRow(row).height = Math.max(15, Math.ceil(m.length / 95) * 13);
     row++;
   }
+  row++;
+  summary.mergeCells(row, 1, row, 4);
+  summary.getCell(row, 1).value = COMPLIANCE_DISCLAIMER;
+  summary.getCell(row, 1).font = { name: "Calibri", size: 9, italic: true, color: { argb: SOFT } };
+  summary.getCell(row, 1).alignment = { wrapText: true, vertical: "top" };
+  summary.getRow(row).height = 40;
   autoWidths(summary, null);
   summary.getColumn(4).width = 30;
 
@@ -266,7 +273,7 @@ export async function renderReportXlsx(doc: ReportDocument, options: { brandColo
     }
     autoWidths(ws, section.columns.length ? section : null);
     ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
-    ws.headerFooter.oddFooter = `&L${doc.organization.name} · ${doc.title}&CPrepared with Distillr&RPage &P of &N`;
+    ws.headerFooter.oddFooter = `&L${doc.organization.name} · ${doc.title}&CPrepared with Distillr · ${COMPLIANCE_DISCLAIMER_SHORT}&RPage &P of &N`;
   }
 
   return Buffer.from(await wb.xlsx.writeBuffer());

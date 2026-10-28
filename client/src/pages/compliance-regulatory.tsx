@@ -76,7 +76,7 @@ const STATE_RATES: Record<string, { name: string; rate: number }> = {
   CA: { name: "California", rate: 3.30 },
   NY: { name: "New York", rate: 6.44 },
   TX: { name: "Texas", rate: 2.40 },
-  FL: { name: "Florida", rate: 9.53 },
+  FL: { name: "Florida", rate: 6.50 },
   WA: { name: "Washington", rate: 14.27 },
   IL: { name: "Illinois", rate: 8.55 },
   PA: { name: "Pennsylvania", rate: 7.24 },
@@ -660,13 +660,13 @@ export default function ComplianceRegulatory() {
                 <>
                   <h3 className="text-sm font-semibold text-[#0a0a0a]">Florida Excise Tax — Distilled Spirits</h3>
                   <p className="text-xs text-[#737373] mt-1">
-                    Rate: <span className="font-semibold text-[#0a0a0a]">$9.53 per proof gallon</span> &nbsp;·&nbsp;
+                    Rate: <span className="font-semibold text-[#0a0a0a]">$6.50/gal (17.259%–55.780% ABV) · $9.53/gal (above 55.780%)</span> &nbsp;·&nbsp;
                     Filing: <span className="font-semibold text-[#0a0a0a]">Monthly</span> &nbsp;·&nbsp;
                     Due: <span className="font-semibold text-[#0a0a0a]">15th of the following month</span> &nbsp;·&nbsp;
                     Authority: <span className="font-semibold text-[#0a0a0a]">FL Dept. of Business &amp; Professional Regulation (DBPR)</span>
                   </p>
                   <p className="text-[10px] text-[#a3a3a3] mt-1">
-                    Florida Statutes § 565.12 — Excise tax on distilled spirits sold to licensed vendors. Craft distillers producing under 75,000 gallons/year may qualify for a 7% excise tax credit under § 565.108.
+                    Florida Statutes § 565.12 — taxed per gallon of product (not per proof gallon), tiered by alcohol content. Rates and filing details can change; confirm with the Division of Alcoholic Beverages and Tobacco before filing. This is not tax advice.
                   </p>
                 </>
               ) : homeState && STATE_RATES[homeState] ? (
@@ -1336,11 +1336,9 @@ export default function ComplianceRegulatory() {
             <p className="text-lg font-semibold text-[#0a0a0a] mt-0.5">
               ${liveExciseTax.toFixed(2)}
             </p>
-            {exciseForm.state === "FL" && (
-              <p className="text-[10px] text-[#a3a3a3] mt-1">
-                FL craft credit (§ 565.108): eligible distillers (&lt;75,000 gal/yr) may deduct 7% — ${(liveExciseTax * 0.07).toFixed(2)} credit &rarr; net ${(liveExciseTax * 0.93).toFixed(2)}
-              </p>
-            )}
+            <p className="text-[10px] text-[#a3a3a3] mt-1">
+              Estimate only — verify the rate and tax basis (proof gallons vs. gallons of product) before filing.
+            </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#0a0a0a] mb-1">Notes</label>

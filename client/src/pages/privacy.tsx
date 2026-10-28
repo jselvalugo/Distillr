@@ -1,6 +1,6 @@
 import { LegalPage } from "../components/public/legal-page";
 
-const LAST_UPDATED = "July 31, 2026";
+const LAST_UPDATED = "October 28, 2026";
 
 const SECTIONS = [
   {
@@ -28,19 +28,21 @@ We do not sell your personal information or your distillery's operational data t
   },
   {
     title: "3. Data Storage and Security",
-    body: `Your data is stored on secure cloud infrastructure (Railway / PostgreSQL). We implement industry-standard security measures including:
+    body: `Your data is stored on secure cloud infrastructure (currently Netlify, using a PostgreSQL database). We implement industry-standard security measures including:
 
 • Encrypted connections (TLS/HTTPS) for all data in transit.
 • Database-level access controls and tenant isolation — each distillery's data is logically separated.
 • Regular backups.
 
-No method of transmission over the internet is 100% secure. While we strive to use commercially acceptable means to protect your information, we cannot guarantee absolute security.`,
+No method of transmission over the internet is 100% secure. While we strive to use commercially acceptable means to protect your information, we cannot guarantee absolute security.
+
+If we discover a security breach involving your personal information, we will notify affected users without unreasonable delay and within the time required by applicable law, including the Florida Information Protection Act (Fla. Stat. § 501.171).`,
   },
   {
     title: "4. Data Sharing",
     body: `We do not sell, trade, or rent your personal information to third parties. We may share information in the following limited circumstances:
 
-• **Service providers** — trusted third-party vendors who assist in operating the platform (e.g., hosting, analytics), bound by confidentiality obligations.
+• **Service providers** — trusted third-party vendors who assist in operating the platform, bound by confidentiality obligations. These currently include Netlify (hosting and database), Resend (transactional email), and Anthropic (the AI model provider behind the optional AI assistant, which processes the portions of your data needed to answer your questions and does not use it to train its models).
 • **Legal requirements** — if required by law, regulation, court order, or government request.
 • **Business transfers** — if Distillr is involved in a merger, acquisition, or sale, your information may be transferred as part of that transaction. We will notify you before your information is subject to a different privacy policy.`,
   },
@@ -50,7 +52,7 @@ No method of transmission over the internet is 100% secure. While we strive to u
   },
   {
     title: "6. Data Retention",
-    body: `We retain your account and operational data for as long as your account is active or as needed to provide the service. Per 27 CFR § 19.618, TTB regulations require DSPs to retain certain records for a minimum of three years — our platform stores records to support this requirement. You may request deletion of your account and data by contacting us; note that certain records may need to be retained for legal or compliance reasons.`,
+    body: `We retain your account and operational data for as long as your account is active or as needed to provide the service. Under 27 CFR § 19.575, TTB regulations require DSPs to retain required records for at least three years — our platform stores records to support this requirement. You may request deletion of your account and data by contacting us; note that certain records may need to be retained for legal or compliance reasons.`,
   },
   {
     title: "7. Your Rights",

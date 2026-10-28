@@ -3704,7 +3704,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // State Excise Returns
   const STATE_EXCISE_RATES: Record<string, number> = {
-    CA: 3.30, NY: 6.44, TX: 2.40, FL: 9.53, WA: 14.27, IL: 8.55, PA: 7.24, OH: 9.34,
+    CA: 3.30, NY: 6.44, TX: 2.40, FL: 6.50, WA: 14.27, IL: 8.55, PA: 7.24, OH: 9.34,
     GA: 3.79, NC: 12.06, MI: 11.98, NJ: 5.50, VA: 19.88, CO: 2.28, AZ: 3.00, MA: 4.05,
     TN: 4.40, OR: 22.73, MN: 5.03, WI: 3.25, MO: 2.00, AL: 9.16, SC: 5.42, KY: 1.92,
     IN: 2.68, CT: 5.40, MD: 1.50, NV: 3.60, NM: 6.06,
