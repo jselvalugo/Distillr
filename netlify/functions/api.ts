@@ -102,11 +102,20 @@ async function ensureInit(origin: string): Promise<boolean> {
   if (state === "pending") {
     // Hand the one-time move to the background function (15-minute limit) instead of
     // running it inside a web request. Idempotent and locked, so repeat kicks are harmless.
-    if (Date.now() - lastMigrationKick > 60_000) {
+    if (Date.now() - lastMigrationKick > 20_000) {
       lastMigrationKick = Date.now();
-      fetch(`${origin}/.netlify/functions/migrate-tenants`, { method: "POST" }).catch((err) =>
-        console.error("[init] could not start tenant migration:", err),
-      );
+      // Awaited (a background function answers 202 immediately): an un-awaited fetch is
+      // cut off when this function returns its response.
+      try {
+        const kick = await fetch(`${origin}/.netlify/functions/migrate-tenants`, {
+          method: "POST",
+          signal: AbortSignal.timeout(5_000),
+        });
+        console.log(`[init] tenant migration started (${kick.status})`);
+      } catch (err) {
+        lastMigrationKick = 0; // try again on the next request
+        console.error("[init] could not start tenant migration:", err);
+      }
     }
     return false;
   }
