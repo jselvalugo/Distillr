@@ -1,3 +1,4 @@
+import { fetchPlatformConfig } from "./appearance";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Product, ProductInput, StorageLocation, StorageLocationInput } from "@shared/reference";
 import { apiRequest } from "./queryClient";
@@ -78,7 +79,7 @@ export function useDeleteLocation() {
 export function useHomeState(): string | null {
   const { data } = useQuery<{ homeState?: string | null }>({
     queryKey: ["/api/platform-config"],
-    queryFn: () => apiRequest("/api/platform-config"),
+    queryFn: fetchPlatformConfig,
     staleTime: 60_000,
   });
   return data?.homeState || null;

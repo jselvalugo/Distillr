@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
+import { prefetchPlatformConfig } from "../lib/appearance";
 import type { SafeUser } from "@shared/schema";
 
 type AuthResponse = { user: SafeUser; csrfToken: string };
@@ -11,7 +12,11 @@ export function useAuth() {
     queryKey: ["/api/auth/me"],
     queryFn: () =>
       apiRequest<AuthResponse>("/api/auth/me")
-        .then((r) => r.user)
+        .then((r) => {
+          // Session restored: start loading the dashboard appearance right away.
+          if (r.user) void prefetchPlatformConfig();
+          return r.user;
+        })
         .catch(() => null),
     staleTime: Infinity,
   });
@@ -22,7 +27,10 @@ export function useAuth() {
         method: "POST",
         body: JSON.stringify(creds),
       }),
-    onSuccess: (r) => qc.setQueryData(["/api/auth/me"], r.user),
+    onSuccess: (r) => {
+      void prefetchPlatformConfig();
+      qc.setQueryData(["/api/auth/me"], r.user);
+    },
   });
 
   const logoutMut = useMutation({
@@ -39,7 +47,10 @@ export function useAuth() {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    onSuccess: (r) => qc.setQueryData(["/api/auth/me"], r.user),
+    onSuccess: (r) => {
+      void prefetchPlatformConfig();
+      qc.setQueryData(["/api/auth/me"], r.user);
+    },
   });
 
   return {

@@ -1,3 +1,4 @@
+import { fetchPlatformConfig, readCachedAppearance } from "../lib/appearance";
 import { type ReactNode, useState, useRef, useEffect, useLayoutEffect } from "react";
 import { AiChatPanel } from "./ai-chat-panel";
 import { Link, useLocation } from "wouter";
@@ -444,14 +445,15 @@ function TopNav() {
   const isDashboard = location === "/";
   const { data: config } = useQuery<PlatformConfig>({
     queryKey: ["/api/platform-config"],
-    queryFn: () => apiRequest<PlatformConfig>("/api/platform-config"),
+    queryFn: fetchPlatformConfig,
     staleTime: 60_000,
   });
 
   const orgName = config?.organizationNameOverride || config?.organizationName;
-  const dashColor = config?.dashboardColor ?? NAVY;
+  const [cached] = useState(readCachedAppearance);
+  const dashColor = (config ? config.dashboardColor : cached?.dashboardColor) ?? NAVY;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty("--brand", dashColor);
   }, [dashColor]);
 

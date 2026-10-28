@@ -1,3 +1,4 @@
+import { fetchPlatformConfig } from "../lib/appearance";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -149,7 +150,7 @@ export default function Inventory() {
 
   const { data: platformConfig } = useQuery<{ inventoryLossRates?: Record<string, number> | null; productLabelCounts?: Record<string, number> | null }>({
     queryKey: ["/api/platform-config"],
-    queryFn: () => apiRequest("/api/platform-config"),
+    queryFn: fetchPlatformConfig,
     staleTime: 60_000,
   });
 
