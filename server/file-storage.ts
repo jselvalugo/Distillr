@@ -121,3 +121,34 @@ function contentTypeForName(name: string): string {
   };
   return types[ext] ?? "application/octet-stream";
 }
+
+/**
+ * Permanently delete every file stored for a tenant (everything under
+ * uploads/t/{tenant}/ and exports/t/{tenant}/). Used when a tenant is deleted.
+ * Returns how many files were removed.
+ */
+export async function deleteTenantFiles(tenantId: string): Promise<number> {
+  const scope = tenantId.replace(/[^A-Za-z0-9._-]/g, "_");
+  const prefixes = [`uploads/t/${scope}/`, `exports/t/${scope}/`];
+  let removed = 0;
+  if (useBlobs()) {
+    const store = blobStore();
+    for (const prefix of prefixes) {
+      const { blobs } = await store.list({ prefix });
+      for (const blob of blobs) {
+        await store.delete(blob.key);
+        removed++;
+      }
+    }
+    return removed;
+  }
+  for (const prefix of prefixes) {
+    const dir = diskPath(prefix.replace(/\/$/, ""));
+    if (fs.existsSync(dir)) {
+      const count = (fs.readdirSync(dir, { recursive: true }) as string[]).filter((f) => fs.statSync(path.join(dir, f)).isFile()).length;
+      fs.rmSync(dir, { recursive: true, force: true });
+      removed += count;
+    }
+  }
+  return removed;
+}

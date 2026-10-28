@@ -1,4 +1,5 @@
-import { pool, query } from "./db";
+import { dropTenantSchema, ensureTenantSchema, platformQuery as query, pool } from "./db";
+import { deleteTenantFiles } from "./file-storage";
 
 export interface Tenant {
   id: string;
@@ -66,6 +67,13 @@ export async function createTenant(data: {
      VALUES ($1, $2, $3, $4, 'active', $5) RETURNING *`,
     [id, data.name, slug, plan, userLimit],
   );
+  // Every tenant gets its own private schema for all of its data.
+  try {
+    await ensureTenantSchema(id);
+  } catch (err) {
+    await query("DELETE FROM tenants WHERE id = $1", [id]).catch(() => undefined);
+    throw err;
+  }
   return mapTenant(rows[0]);
 }
 
@@ -109,30 +117,35 @@ export async function deleteTenant(id: string): Promise<{ deletedRows: number }>
   if (!id || id === "default") throw new Error("The default tenant can't be deleted");
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await client.query("BEGIN; SET LOCAL search_path TO public");
     const exists = await client.query("SELECT 1 FROM tenants WHERE id = $1", [id]);
     if (!exists.rowCount) throw new Error("Tenant not found");
 
+    // 1. The tenant's private schema: all of its data, gone in one statement.
+    await dropTenantSchema(client, id);
+
+    // 2. Its rows in shared platform tables (users, tokens, activity log) and any
+    //    leftover copies in pre-migration legacy_* tables.
     const tables = await client.query<{ table_name: string }>(
       `SELECT DISTINCT c.table_name
        FROM information_schema.columns c
        JOIN information_schema.tables t
          ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
-       WHERE c.table_schema = current_schema() AND c.column_name = 'tenant_id' AND c.table_name <> 'tenants'`,
+       WHERE c.table_schema = 'public' AND c.column_name = 'tenant_id' AND c.table_name <> 'tenants'`,
     );
     let deletedRows = 0;
     for (const { table_name } of tables.rows) {
       const ident = '"' + table_name.replace(/"/g, '""') + '"';
-      const r = await client.query(`DELETE FROM ${ident} WHERE tenant_id = $1`, [id]);
+      const r = await client.query(`DELETE FROM public.${ident} WHERE tenant_id = $1`, [id]);
       deletedRows += r.rowCount ?? 0;
     }
-    // Sign out anyone currently signed in to this tenant.
-    await client.query(
-      `DELETE FROM "session" WHERE (sess::jsonb -> 'user' ->> 'tenantId') = $1`,
-      [id],
-    ).catch(() => undefined);
+    // 3. Sign out anyone currently signed in to this tenant.
+    await client.query(`DELETE FROM "session" WHERE (sess::jsonb -> 'user' ->> 'tenantId') = $1`, [id]);
     await client.query("DELETE FROM tenants WHERE id = $1", [id]);
     await client.query("COMMIT");
+    // 4. Its stored files (uploads, TTB exports). After the commit, so a failed delete
+    //    never leaves data without its files; a failure here is logged, not fatal.
+    await deleteTenantFiles(id).catch((err) => console.error(`[tenant] file cleanup failed for ${id}:`, err));
     return { deletedRows };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

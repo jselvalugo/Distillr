@@ -46,6 +46,7 @@ app.use(
     store: new PgSession({
       pool: pool as any,
       tableName: "session",
+      schemaName: "public",
       createTableIfMissing: false,
     }),
     secret: sessionSecret,
@@ -91,13 +92,40 @@ app.use((_err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 let initialized = false;
+let routesRegistered = false;
+let lastMigrationKick = 0;
 
-async function ensureInit() {
-  if (initialized) return;
-  await initDatabase();
+/** Returns false while the one-time tenant-schema migration is still pending. */
+async function ensureInit(origin: string): Promise<boolean> {
+  if (initialized) return true;
+  const state = await initDatabase();
+  if (state === "pending") {
+    // Hand the one-time move to the background function (15-minute limit) instead of
+    // running it inside a web request. Idempotent and locked, so repeat kicks are harmless.
+    if (Date.now() - lastMigrationKick > 20_000) {
+      lastMigrationKick = Date.now();
+      // Awaited (a background function answers 202 immediately): an un-awaited fetch is
+      // cut off when this function returns its response.
+      try {
+        const kick = await fetch(`${origin}/.netlify/functions/migrate-tenants`, {
+          method: "POST",
+          signal: AbortSignal.timeout(5_000),
+        });
+        console.log(`[init] tenant migration started (${kick.status})`);
+      } catch (err) {
+        lastMigrationKick = 0; // try again on the next request
+        console.error("[init] could not start tenant migration:", err);
+      }
+    }
+    return false;
+  }
   await seedAdminUser();
-  await registerRoutes(httpServer, app);
+  if (!routesRegistered) {
+    await registerRoutes(httpServer, app);
+    routesRegistered = true;
+  }
   initialized = true;
+  return true;
 }
 
 const netlifyHandler = serverless(app, {
@@ -128,7 +156,12 @@ export default async (
   context: { ip?: string; deploy?: { context?: string } },
 ) => {
   setDeployContext(context?.deploy?.context);
-  await ensureInit();
+  if (!(await ensureInit(new URL(req.url).origin))) {
+    return new Response(
+      JSON.stringify({ error: "Distillr is being upgraded. This takes about a minute — please refresh shortly.", upgrading: true }),
+      { status: 503, headers: { "Content-Type": "application/json", "Retry-After": "30", "Cache-Control": "no-store" } },
+    );
+  }
 
   const url = new URL(req.url);
   const headers: Record<string, string> = {};

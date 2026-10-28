@@ -112,7 +112,7 @@ app.use((req, res, next) => {
   if (localOnlyMode) {
     installEgressGuard();
   }
-  await initDatabase();
+  await initDatabase({ runMigration: true });
   if (seedDemoData) {
     await runWithTenant("default", () => seedInitialData());
   } else {

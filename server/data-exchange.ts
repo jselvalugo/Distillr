@@ -16,7 +16,7 @@
  * organization's rows, and imports stamp the organization's tenant_id.
  */
 import ExcelJS from "exceljs";
-import { query, pool } from "./db";
+import { query, queryResult } from "./db";
 import { getCurrentTenantId, runWithTenant } from "./tenant-context";
 import { DISTILLR_MARK_PNG_BASE64 } from "./reports/brand-mark";
 
@@ -155,7 +155,7 @@ type ColumnMeta = { name: string; dataType: string };
 
 async function tableColumns(tableName: string): Promise<ColumnMeta[]> {
   const rows = await query(
-    `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position`,
     [tableName],
   );
   return rows.map((r: any) => ({ name: String(r.column_name), dataType: String(r.data_type) }));
@@ -625,7 +625,7 @@ async function importSheets(wb: ExcelJS.Workbook, tenantId: string): Promise<Imp
           const stampCols = [...(hasCreated ? ["created_at"] : []), ...(hasUpdated ? ["updated_at"] : [])];
           const setClauses = [...cols.map((c, i) => `${c} = $${i + 2}`), ...(hasUpdated ? ["updated_at = NOW()"] : [])].join(", ");
           const guard = hasTenant ? `WHERE ${tableName}.tenant_id = $${allVals.length}` : "";
-          const result = await pool.query(
+          const result = await queryResult(
             `INSERT INTO ${tableName} (${[...allCols, ...stampCols].join(", ")})
              VALUES (${[...placeholders, ...stampCols.map(() => "NOW()")].join(", ")})
              ON CONFLICT (id) DO UPDATE SET ${setClauses} ${guard}
