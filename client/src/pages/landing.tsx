@@ -139,7 +139,7 @@ export default function Landing() {
                 <span className="pub-frame__dots"><span /><span /><span /></span>
                 <span className="pub-frame__url">app.distillrsoftware.com/dashboard</span>
               </div>
-              <img src="/dashboard-screenshot.png" alt="Distillr operations dashboard" />
+              <img src="/dashboard-screenshot-light.png" alt="Distillr operations dashboard" />
             </div>
             <div className="pub-chip" style={{ bottom: -18, left: 18 }}>
               <p className="pub-chip__label">Proof gallons in bond</p>
@@ -176,7 +176,7 @@ export default function Landing() {
       <section className="pub-section">
         <div className="pub-wrap pub-split">
           <div className="pub-frame" style={{ boxShadow: "0 30px 60px -40px rgba(15,23,42,0.45)" }}>
-            <img src="/dashboard-screenshot.png" alt="Distillr dashboard" />
+            <img src="/dashboard-screenshot-light.png" alt="Distillr dashboard" />
           </div>
           <div>
             <p className="pub-eyebrow">What is Distillr</p>
