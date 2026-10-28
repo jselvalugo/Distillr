@@ -998,8 +998,8 @@ export async function dropTenantSchema(client: PoolClient, tenantId: string): Pr
 // ─── Boot ───────────────────────────────────────────────────────────────────
 
 /** Bump when PLATFORM_DDL / the bootstrap statements below change. */
-const PLATFORM_VERSION = "platform_v1";
-const PLATFORM_TABLES = new Set(["users", "tenants", "tenant_activity_logs", "password_setup_tokens", "session", "waitlist", "platform_migrations"]);
+const PLATFORM_VERSION = "platform_v2";
+const PLATFORM_TABLES = new Set(["users", "tenants", "tenant_activity_logs", "password_setup_tokens", "session", "waitlist", "platform_migrations", "tenant_deletions"]);
 
 /** Platform tables. Version-gated, so a normal cold start runs one SELECT and takes no table locks. */
 async function initPlatform(): Promise<void> {
@@ -1053,6 +1053,19 @@ async function initPlatform(): Promise<void> {
   await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 0`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS tenants_schema_name_key ON tenants (schema_name)`);
   await query(PLATFORM_DDL);
+  // Permanent audit trail of tenant deletions (kept after the tenant is gone).
+  await query(`
+    CREATE TABLE IF NOT EXISTS tenant_deletions (
+      id BIGSERIAL PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      tenant_name TEXT,
+      tenant_slug TEXT,
+      schema_name TEXT,
+      deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      deleted_by TEXT,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
   await query(`INSERT INTO platform_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING`, [PLATFORM_VERSION]);
 }
 

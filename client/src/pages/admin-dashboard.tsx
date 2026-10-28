@@ -663,6 +663,126 @@ function TenantUsersPanel({ tenant }: { tenant: Tenant }) {
   );
 }
 
+// ─── Data Check (read-only backend integrity report) ─────────────────────────
+
+interface IntegrityReport {
+  checkedAt: string;
+  ok: boolean;
+  problems: string[];
+  notes: string[];
+  tenants: { id: string; name: string; slug: string; status: string; schema: string | null; schemaExists: boolean; users: number; records: number; recordsByTable: Record<string, number>; foreignRows: number }[];
+  leftovers: {
+    schemasWithoutTenant: string[];
+    usersWithoutTenant: { tenantId: string; users: number }[];
+    sessionsWithoutTenant: { tenantId: string; sessions: number }[];
+    setupTokensWithoutTenant: { tenant_id: string; n: number }[];
+    activityLogWithoutTenant: { tenant_id: string; n: number }[];
+    fileFoldersWithoutTenant: string[] | null;
+    legacyBackupRowsWithoutTenant: Record<string, Record<string, number>>;
+  };
+  duplicateEmails: { email: string; n: number }[];
+  deletions: { tenant_id: string; tenant_name: string | null; tenant_slug: string | null; deleted_at: string; deleted_by: string | null; details: Record<string, unknown> }[];
+}
+
+function CheckRow({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
+  const color = ok === null ? "rgba(255,255,255,0.35)" : ok ? "#4ade80" : "#f87171";
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <span style={{ width: 18, flexShrink: 0, color, fontWeight: 800, fontSize: 13 }}>{ok === null ? "–" : ok ? "✓" : "✕"}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>{label}</div>
+        {detail && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginTop: 2, wordBreak: "break-all" }}>{detail}</div>}
+      </div>
+    </div>
+  );
+}
+
+function IntegrityPanel() {
+  const { data, isLoading, error, refetch, isFetching } = useQuery<IntegrityReport>({
+    queryKey: ["/api/admin/integrity"],
+    queryFn: () => apiRequest<IntegrityReport>("/api/admin/integrity"),
+    staleTime: 0,
+  });
+  const card: React.CSSProperties = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "18px 20px", marginBottom: 16 };
+  const h: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", margin: "0 0 8px" };
+
+  if (isLoading) return <div style={{ padding: 32, fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Inspecting the database…</div>;
+  if (error || !data) return <div style={{ padding: 32, fontSize: 13, color: "#f87171" }}>Couldn't run the check: {(error as any)?.message ?? "unknown error"}</div>;
+
+  const L = data.leftovers;
+  const legacyIds = Object.keys(L.legacyBackupRowsWithoutTenant);
+  const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+
+  return (
+    <div style={{ padding: "24px 32px", maxWidth: 1000 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>Data check</h2>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: 0 }}>
+            Read-only, straight from the database. Checked {new Date(data.checkedAt).toLocaleString()}.
+          </p>
+        </div>
+        <button onClick={() => refetch()} disabled={isFetching} style={s.btn()}>{isFetching ? "Checking…" : "Run again"}</button>
+      </div>
+
+      <div style={{ ...card, borderColor: data.ok ? "rgba(74,222,128,0.3)" : "rgba(248,113,113,0.35)", background: data.ok ? "rgba(74,222,128,0.06)" : "rgba(248,113,113,0.06)" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: data.ok ? "#4ade80" : "#f87171" }}>
+          {data.ok ? "All tenants are separated and nothing is left over from deleted tenants." : "Problems found"}
+        </div>
+        {data.problems.map((p) => <div key={p} style={{ fontSize: 13, color: "#fca5a5", marginTop: 6 }}>• {p}</div>)}
+        {data.notes.map((n) => <div key={n} style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 8 }}>{n}</div>)}
+      </div>
+
+      <div style={card}>
+        <p style={h}>Tenants in the database ({data.tenants.length})</p>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr>{["Tenant", "Status", "Private data section", "Users", "Records", "Other tenants' rows"].map((x) => (
+            <th key={x} style={{ textAlign: "left", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", padding: "6px 8px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{x}</th>))}</tr></thead>
+          <tbody>
+            {data.tenants.map((t) => (
+              <tr key={t.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                <td style={{ padding: "9px 8px", fontSize: 13 }}><div style={{ fontWeight: 700 }}>{t.name}</div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{t.id}</div></td>
+                <td style={{ padding: "9px 8px", fontSize: 12, textTransform: "capitalize", color: t.status === "active" ? "#4ade80" : "#fbbf24" }}>{t.status}</td>
+                <td style={{ padding: "9px 8px", fontSize: 12, color: t.schemaExists ? "#4ade80" : "#f87171" }}>{t.schemaExists ? "✓ exists" : "✕ missing"}<div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.3)" }}>{t.schema}</div></td>
+                <td style={{ padding: "9px 8px", fontSize: 13 }}>{t.users}</td>
+                <td style={{ padding: "9px 8px", fontSize: 13 }} title={Object.entries(t.recordsByTable).map(([k, v]) => `${k}: ${v}`).join("\n")}>{t.records}</td>
+                <td style={{ padding: "9px 8px", fontSize: 13, color: t.foreignRows ? "#f87171" : "#4ade80" }}>{t.foreignRows ? `✕ ${t.foreignRows}` : "✓ 0"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={card}>
+        <p style={h}>Leftovers from deleted tenants</p>
+        <CheckRow ok={L.schemasWithoutTenant.length === 0} label="Private data sections with no tenant" detail={L.schemasWithoutTenant.join(", ") || "none"} />
+        <CheckRow ok={L.usersWithoutTenant.length === 0} label="User accounts with no tenant (could they still log in?)" detail={L.usersWithoutTenant.map((u) => `${u.tenantId}: ${u.users}`).join(", ") || "none"} />
+        <CheckRow ok={L.sessionsWithoutTenant.length === 0} label="Active sign-ins for a deleted tenant" detail={L.sessionsWithoutTenant.map((x) => `${x.tenantId}: ${x.sessions}`).join(", ") || "none"} />
+        <CheckRow ok={L.setupTokensWithoutTenant.length === 0} label="Set-password links for a deleted tenant" detail={L.setupTokensWithoutTenant.map((x) => `${x.tenant_id}: ${x.n}`).join(", ") || "none"} />
+        <CheckRow ok={L.fileFoldersWithoutTenant === null ? null : L.fileFoldersWithoutTenant.length === 0} label="Stored files for a deleted tenant" detail={L.fileFoldersWithoutTenant === null ? "could not list files" : L.fileFoldersWithoutTenant.join(", ") || "none"} />
+        <CheckRow ok={data.duplicateEmails.length === 0} label="Emails shared by more than one account" detail={data.duplicateEmails.map((d) => `${d.email} (${d.n})`).join(", ") || "none"} />
+        <CheckRow ok={null} label="Login activity history kept for deleted tenants (audit only)" detail={L.activityLogWithoutTenant.map((x) => `${x.tenant_id}: ${x.n} events`).join(", ") || "none"} />
+        <CheckRow
+          ok={null}
+          label="Read-only backup (legacy_* tables) — rows from tenants deleted before the separation"
+          detail={legacyIds.length ? legacyIds.map((id) => `${id}: ${sum(L.legacyBackupRowsWithoutTenant[id])} rows`).join(", ") : "none"}
+        />
+      </div>
+
+      <div style={card}>
+        <p style={h}>Deletion log</p>
+        {data.deletions.length === 0 ? (
+          <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)", margin: 0 }}>No deletions recorded yet. Deletions are logged from this release on.</p>
+        ) : data.deletions.map((d) => (
+          <CheckRow key={d.tenant_id + d.deleted_at} ok={!data.tenants.some((t) => t.id === d.tenant_id)}
+            label={`${d.tenant_name ?? d.tenant_id} — deleted ${new Date(d.deleted_at).toLocaleString()}${d.deleted_by ? ` via ${d.deleted_by}` : ""}`}
+            detail={`${d.tenant_id} · ${String((d.details as any)?.users ?? 0)} user(s) removed · ${data.tenants.some((t) => t.id === d.tenant_id) ? "STILL PRESENT" : "confirmed gone"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Operations Hub ───────────────────────────────────────────────────────────
 
 type OpsTab = "filings" | "legal" | "industry" | "compliance";
@@ -1071,7 +1191,7 @@ export default function AdminDashboard() {
   const { isAdmin, isLoading: authLoading, logout } = useAdminAuth();
   const [, navigate] = useLocation();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"tenants" | "operations">("tenants");
+  const [activeTab, setActiveTab] = useState<"tenants" | "integrity" | "operations">("tenants");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -1153,7 +1273,7 @@ export default function AdminDashboard() {
             <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>Super Admin</span>
           </div>
           <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
-            {([["tenants", "Tenants & Waitlist"], ["operations", "Operations Hub"]] as const).map(([tab, label]) => (
+            {([["tenants", "Tenants & Waitlist"], ["integrity", "Data Check"], ["operations", "Operations Hub"]] as const).map(([tab, label]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 style={{ fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 7, cursor: "pointer", border: "none", background: activeTab === tab ? "rgba(255,255,255,0.1)" : "transparent", color: activeTab === tab ? "#fff" : "rgba(255,255,255,0.4)", transition: "all .15s" }}>
                 {label}
@@ -1343,6 +1463,7 @@ export default function AdminDashboard() {
 
       </div>}
 
+      {activeTab === "integrity" && <IntegrityPanel />}
       {activeTab === "operations" && <OperationsHub />}
 
       {/* Edit License Modal */}
