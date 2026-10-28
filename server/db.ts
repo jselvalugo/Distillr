@@ -706,6 +706,7 @@ export async function initDatabase(): Promise<void> {
     ALTER TABLE compliance ADD COLUMN IF NOT EXISTS retention_until TEXT;
     ALTER TABLE compliance ADD COLUMN IF NOT EXISTS created_at TEXT;
     ALTER TABLE compliance ADD COLUMN IF NOT EXISTS updated_at TEXT;
+    ALTER TABLE compliance ADD COLUMN IF NOT EXISTS notes TEXT;
 
     ALTER TABLE ttb_reports ADD COLUMN IF NOT EXISTS filing_type TEXT;
     ALTER TABLE ttb_reports ADD COLUMN IF NOT EXISTS filing_cadence TEXT;

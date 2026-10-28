@@ -392,6 +392,7 @@ function mapCompliance(row: Record<string, unknown>): Compliance {
     lastReviewedOn: toNullableText(row.last_reviewed_on),
     retentionYears: row.retention_years === null ? null : Number(row.retention_years),
     retentionUntil: toNullableText(row.retention_until),
+    notes: toNullableText(row.notes),
     createdAt: toNullableText(row.created_at),
     updatedAt: toNullableText(row.updated_at),
   };
@@ -1257,8 +1258,8 @@ export class PostgresStorage implements IStorage {
     const rows = await query(
       `INSERT INTO compliance (
         id, tenant_id, client_id, type, regulatory_area, jurisdiction, control_reference, status, expires, document_url,
-        owner, severity, required_for, last_reviewed_on, retention_years, retention_until, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        owner, severity, required_for, last_reviewed_on, retention_years, retention_until, created_at, updated_at, notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       RETURNING *`,
       [
         compliance.id || generateId("COMP"),
@@ -1279,6 +1280,7 @@ export class PostgresStorage implements IStorage {
         retentionUntil,
         compliance.createdAt || now,
         compliance.updatedAt || now,
+        compliance.notes || null,
       ],
     );
 
@@ -1315,7 +1317,8 @@ export class PostgresStorage implements IStorage {
         retention_years = $14,
         retention_until = $15,
         created_at = $16,
-        updated_at = $17
+        updated_at = $17,
+        notes = $19
       WHERE id = $1 AND tenant_id = $18
       RETURNING *`,
       [
@@ -1337,6 +1340,7 @@ export class PostgresStorage implements IStorage {
         merged.createdAt || existing.createdAt || now,
         now,
         tenantId,
+        merged.notes || null,
       ],
     );
 

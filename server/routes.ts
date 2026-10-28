@@ -82,6 +82,7 @@ import type {
   Barrel,
   BarrelEvent,
   DistilleryControlTowerSummary,
+  InsertCompliance,
   DistillingInventoryRecord,
   InventoryLot,
   InventoryMovement,
@@ -2674,30 +2675,120 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/compliance/:id", async (req, res) => {
     try {
-      const body = req.body || {};
-      const normalizedPayload: Record<string, unknown> = {
-        ...body,
-        regulatoryArea:
-          typeof body.regulatoryArea === "string" && body.regulatoryArea.trim().length
-            ? body.regulatoryArea
-            : deriveComplianceAreaFromType(body.type),
-        jurisdiction:
-          typeof body.jurisdiction === "string" && body.jurisdiction.trim().length
-            ? body.jurisdiction
-            : "Federal",
-      };
-      if (typeof body.retentionYears === "number") {
-        normalizedPayload.retentionYears = body.retentionYears;
+      const existing = await storage.getComplianceDoc(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Compliance record not found" });
+      const body = insertComplianceSchema.partial().omit({ id: true, createdAt: true, updatedAt: true }).parse(req.body || {});
+      // Only normalize fields the caller actually sent: a status-only update must
+      // not reset the record's jurisdiction or regulatory area.
+      const normalizedPayload: Record<string, unknown> = { ...body };
+      if ("jurisdiction" in body && !(body.jurisdiction || "").trim()) normalizedPayload.jurisdiction = "Federal";
+      if ("regulatoryArea" in body && !(body.regulatoryArea || "").trim()) {
+        normalizedPayload.regulatoryArea = deriveComplianceAreaFromType(body.type ?? existing.type);
+      } else if ("type" in body && !("regulatoryArea" in body) && body.type !== existing.type) {
+        normalizedPayload.regulatoryArea = deriveComplianceAreaFromType(body.type);
       }
-      const doc = await storage.updateCompliance(req.params.id, normalizedPayload);
+      const doc = await storage.updateCompliance(req.params.id, normalizedPayload as Partial<InsertCompliance>);
+
+      // Field-level diff for the record's History tab.
+      const TRACKED = [
+        "type", "status", "severity", "jurisdiction", "regulatoryArea", "controlReference", "expires",
+        "owner", "requiredFor", "lastReviewedOn", "documentUrl", "notes", "clientId",
+      ] as const;
+      const changes: Record<string, unknown> = {};
+      for (const key of TRACKED) {
+        const before = (existing as Record<string, unknown>)[key] ?? null;
+        const after = (doc as Record<string, unknown>)[key] ?? null;
+        if (before !== after) changes[key] = after;
+      }
       await writeAuditLog(req, "compliance", doc.id, "update", {
         status: doc.status,
+        previousStatus: existing.status !== doc.status ? existing.status : undefined,
         expires: doc.expires,
         retentionUntil: doc.retentionUntil,
+        changes,
       });
       res.json(doc);
+    } catch (error: any) {
+      const message = error?.name === "ZodError" ? "Invalid compliance update" : "Failed to update compliance record";
+      res.status(400).json({ error: message });
+    }
+  });
+
+  // Supporting documents for a compliance record (stored like trading-partner attachments).
+  const uploadComplianceDocumentSchema = z
+    .object({
+      originalFilename: z.string().trim().min(1),
+      dataUrl: z.string().min(1),
+      docType: attachmentDocTypeSchema.optional(),
+      expiresOn: z.string().trim().optional().nullable(),
+      notes: z.string().trim().optional().nullable(),
+    })
+    .strict();
+
+  app.get("/api/compliance/:id/documents", async (req, res) => {
+    try {
+      const doc = await storage.getComplianceDoc(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Compliance record not found" });
+      const attachments = await storage.getAttachmentsForEntity("compliance", req.params.id);
+      res.json(attachments);
     } catch {
-      res.status(400).json({ error: "Failed to update compliance record" });
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  app.post("/api/compliance/:id/documents", async (req, res) => {
+    try {
+      const doc = await storage.getComplianceDoc(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Compliance record not found" });
+      const payload = uploadComplianceDocumentSchema.parse(req.body);
+
+      const parsedDataUrl = parseBase64DataUrl(payload.dataUrl);
+      if (!parsedDataUrl) return res.status(400).json({ error: "Invalid file data" });
+      const { mimeType, buffer: fileBuffer } = parsedDataUrl;
+      const uploadValidation = assertAllowedUpload({
+        mimeType,
+        buffer: fileBuffer,
+        maxBytes: MAX_ATTACHMENT_BYTES,
+        allowedMimeTypes: ALLOWED_ATTACHMENT_MIME_TYPES,
+      });
+      if (!uploadValidation.ok) return res.status(400).json({ error: uploadValidation.reason });
+
+      const safeOriginal = sanitizeUploadFilename(payload.originalFilename, "document");
+      const originalStem = path.parse(safeOriginal).name || "document";
+      const extension = extensionForMimeType(mimeType) || path.extname(safeOriginal).toLowerCase() || ".bin";
+      const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
+      const uniqueFilename = `${Date.now()}-${sha256.slice(0, 12)}-${originalStem.slice(0, 120)}${extension}`;
+      const key = await saveFile(`uploads/attachments/compliance/${req.params.id}/${uniqueFilename}`, fileBuffer, mimeType);
+
+      const uploadedBy = req.session.user?.name || req.session.user?.email || "Unknown";
+      const attachment = await storage.createAttachment({
+        originalFilename: payload.originalFilename,
+        filePath: `/${key}`,
+        mimeType,
+        byteSize: fileBuffer.byteLength,
+        sha256,
+        docType: payload.docType || "OTHER",
+        effectiveOn: null,
+        expiresOn: payload.expiresOn || null,
+        status: "active",
+        uploadedBy,
+        notes: payload.notes || null,
+      });
+      await storage.linkAttachment({
+        attachmentId: attachment.id,
+        entityType: "compliance",
+        entityId: req.params.id,
+        relationship: "evidence",
+        linkedBy: uploadedBy,
+      });
+      await writeAuditLog(req, "compliance", req.params.id, "document_upload", {
+        attachmentId: attachment.id,
+        filename: attachment.originalFilename,
+      });
+      res.status(201).json(attachment);
+    } catch (error: any) {
+      const message = error?.name === "ZodError" ? "Invalid document upload" : error?.message || "Failed to upload document";
+      res.status(400).json({ error: message });
     }
   });
 
