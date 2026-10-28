@@ -52,3 +52,20 @@ test("welcome email: footer contact follows EMAIL_REPLY_TO, then EMAIL_FROM", ()
     if (saved.reply === undefined) delete process.env.EMAIL_REPLY_TO; else process.env.EMAIL_REPLY_TO = saved.reply;
   }
 });
+
+test("email config: flags an EMAIL_FROM with no address", async () => {
+  const { emailConfigProblem } = await import("./email/resend");
+  const saved = { key: process.env.RESEND_API_KEY, from: process.env.EMAIL_FROM };
+  try {
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.EMAIL_FROM = "Distillr";
+    assert.match(emailConfigProblem() ?? "", /needs an address/);
+    process.env.EMAIL_FROM = "Distillr <david@distillr.loogolabs.com>";
+    assert.equal(emailConfigProblem(), null);
+    process.env.EMAIL_FROM = "david@distillr.loogolabs.com";
+    assert.equal(emailConfigProblem(), null);
+  } finally {
+    if (saved.key === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = saved.key;
+    if (saved.from === undefined) delete process.env.EMAIL_FROM; else process.env.EMAIL_FROM = saved.from;
+  }
+});

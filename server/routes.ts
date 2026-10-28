@@ -36,7 +36,7 @@ import { runWithTenant, getCurrentTenantId } from "./tenant-context";
 import { registerReferenceRoutes, syncCatalog } from "./reference-data";
 import { EXPORTABLE_TABLES, buildWorkbook, countTableRows, csvForTable, exportTableColumns, fetchTableRows, importWorkbook } from "./data-exchange";
 import { LoginRateLimiter, getLoginClientKey } from "./auth-rate-limit";
-import { DEFAULT_FROM, EmailNotConfiguredError, isEmailConfigured, sendEmail } from "./email/resend";
+import { EmailNotConfiguredError, emailConfigProblem, isEmailConfigured, resolvedFrom, sendEmail } from "./email/resend";
 import { renderTenantWelcomeEmail } from "./email/templates/tenant-welcome";
 import {
   SETUP_TOKEN_TTL_HOURS,
@@ -4254,7 +4254,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   app.get("/api/admin/email/status", requireAdminSession, (_req, res) => {
-    res.json({ configured: isEmailConfigured(), from: process.env.EMAIL_FROM?.trim() || DEFAULT_FROM });
+    res.json({ configured: isEmailConfigured(), problem: emailConfigProblem(), from: resolvedFrom() });
   });
 
   // Preview the exact email (with a placeholder password) before sending.
@@ -4282,7 +4282,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/tenants/:id/users/:userId/welcome-email", requireAdminSession, async (req, res) => {
     try {
-      if (!isEmailConfigured()) throw new EmailNotConfiguredError();
+      if (!isEmailConfigured()) throw new EmailNotConfiguredError(emailConfigProblem() ?? undefined);
       const ctx = await loadWelcomeContext(req.params.id, req.params.userId);
       if (!ctx) return res.status(404).json({ error: "User not found" });
       if (ctx.user.status !== "active") {

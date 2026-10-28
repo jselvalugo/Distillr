@@ -341,9 +341,9 @@ type WelcomeTarget = Pick<TenantUser, "id" | "name" | "email"> & { welcomeEmailS
 
 function WelcomeEmailModal({ tenantId, user, onClose, onSent }: { tenantId: string; user: WelcomeTarget; onClose: () => void; onSent?: (sentAt: string) => void }) {
   const qc = useQueryClient();
-  const { data: emailStatus } = useQuery<{ configured: boolean; from: string }>({
+  const { data: emailStatus } = useQuery<{ configured: boolean; from: string; problem?: string | null }>({
     queryKey: ["/api/admin/email/status"],
-    queryFn: () => apiRequest<{ configured: boolean; from: string }>("/api/admin/email/status"),
+    queryFn: () => apiRequest<{ configured: boolean; from: string; problem?: string | null }>("/api/admin/email/status"),
     staleTime: 60_000,
   });
 
@@ -396,7 +396,7 @@ function WelcomeEmailModal({ tenantId, user, onClose, onSent }: { tenantId: stri
           </p>
           {emailStatus && !emailStatus.configured && (
             <p style={{ fontSize: 11.5, color: "#f87171", margin: "0 0 12px" }}>
-              Email isn't configured yet — add RESEND_API_KEY and EMAIL_FROM to the site's environment variables.
+              {emailStatus.problem ?? "Email isn't configured yet — add RESEND_API_KEY and EMAIL_FROM to the site's environment variables."}
             </p>
           )}
           <div style={{ display: "flex", gap: 10 }}>
