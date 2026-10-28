@@ -5,7 +5,7 @@ import { type Express, type NextFunction, type Request, type Response } from "ex
 import type { Server } from "http";
 import { z } from "zod";
 import { storage } from "./storage";
-import { query, pool } from "./db";
+import { platformQuery, query, withClient } from "./db";
 import {
   getPermits,
   createPermit,
@@ -1572,7 +1572,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!sessionUser || !req.path.startsWith("/api")) return next();
     if (req.path === "/api/auth/logout") return next();
     try {
-      const rows = await query(
+      const rows = await platformQuery(
         `SELECT u.status AS user_status, u.role, t.status AS tenant_status
          FROM users u JOIN tenants t ON t.id = u.tenant_id
          WHERE u.id = $1 AND u.tenant_id = $2 LIMIT 1`,
@@ -1943,19 +1943,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "state_excise_returns", "ttb_reports", "staff", "properties", "distillery_equipment",
       "calculator_presets", "audit_logs",
     ];
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      for (const table of TABLES) {
-        await client.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
-      }
-      await client.query("COMMIT");
+      // Runs inside this tenant's private schema; the tenant_id filter is belt-and-braces.
+      await withClient(async (client) => {
+        for (const table of TABLES) {
+          await client.query(`DELETE FROM ${table} WHERE tenant_id = $1`, [tenantId]);
+        }
+      });
       res.json({ ok: true });
     } catch (e: any) {
-      await client.query("ROLLBACK").catch(() => undefined);
       res.status(500).json({ error: e.message ?? "Reset failed" });
-    } finally {
-      client.release();
     }
   });
 

@@ -46,6 +46,7 @@ app.use(
     store: new PgSession({
       pool: pool as any,
       tableName: "session",
+      schemaName: "public",
       createTableIfMissing: false,
     }),
     secret: sessionSecret,

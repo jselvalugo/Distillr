@@ -27,16 +27,15 @@ import { spiritTypeForClass } from "../shared/spirits";
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
-async function columnExists(table: string, column: string): Promise<boolean> {
-  const rows = await query(
-    `SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
-    [table, column],
-  );
-  return rows.length > 0;
-}
+type MigrationExec = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export async function migrateReferenceData(): Promise<void> {
-  await query(`
+/** Runs against whatever schema the caller's client is pointed at (a tenant schema, or public for legacy data). */
+export async function migrateReferenceData(exec: MigrationExec): Promise<void> {
+  const q = async <T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> => (await exec(text, params)).rows as T[];
+  const columnExists = async (table: string, column: string): Promise<boolean> =>
+    (await q(`SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`, [table, column])).length > 0;
+
+  await q(`
     CREATE TABLE IF NOT EXISTS products (
       tenant_id TEXT NOT NULL DEFAULT 'default',
       id TEXT PRIMARY KEY,
@@ -85,10 +84,10 @@ export async function migrateReferenceData(): Promise<void> {
   `);
 
   // Inventory: rum-only raw-material categories → generic ones.
-  await query(`
+  await q(`
     UPDATE inventory_items SET category = 'Fermentables' WHERE category IN ('Molasses', 'Cane Sugar');
   `);
-  const cfgRows = await query<{ tenant_id: string; inventory_loss_rates: string | null }>(
+  const cfgRows = await q<{ tenant_id: string; inventory_loss_rates: string | null }>(
     `SELECT tenant_id, inventory_loss_rates FROM platform_config WHERE inventory_loss_rates LIKE '%Molasses%' OR inventory_loss_rates LIKE '%Cane Sugar%'`,
   );
   for (const row of cfgRows) {
@@ -99,7 +98,7 @@ export async function migrateReferenceData(): Promise<void> {
       delete rates["Cane Sugar"];
       if (ferm !== undefined) rates["Fermentables"] = ferm;
       if (rates["Botanicals & Flavorings"] === undefined) rates["Botanicals & Flavorings"] = 3;
-      await query(`UPDATE platform_config SET inventory_loss_rates = $1 WHERE tenant_id = $2`, [JSON.stringify(rates), row.tenant_id]);
+      await q(`UPDATE platform_config SET inventory_loss_rates = $1 WHERE tenant_id = $2`, [JSON.stringify(rates), row.tenant_id]);
     } catch {
       /* leave unparseable config alone */
     }
@@ -107,7 +106,7 @@ export async function migrateReferenceData(): Promise<void> {
 
   // Batch: product-specific fruit → generic variant.
   if (await columnExists("distilling_batch_records", "pitorro_fruit")) {
-    await query(`
+    await q(`
       UPDATE distilling_batch_records SET variant = pitorro_fruit
        WHERE variant IS NULL AND pitorro_fruit IS NOT NULL AND pitorro_fruit <> '';
       ALTER TABLE distilling_batch_records DROP COLUMN pitorro_fruit;
@@ -116,7 +115,7 @@ export async function migrateReferenceData(): Promise<void> {
 
   // Production record: fixed ingredient columns → ingredients[].
   if (await columnExists("distilling_production_records", "gallons_molasses")) {
-    await query(`
+    await q(`
       UPDATE distilling_production_records r SET ingredients = COALESCE((
         SELECT jsonb_agg(item) FROM (
           SELECT jsonb_build_object('name', 'Molasses', 'quantity', r.gallons_molasses, 'unit', 'gal') AS item WHERE COALESCE(r.gallons_molasses, 0) > 0
