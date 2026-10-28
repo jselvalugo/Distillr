@@ -35,6 +35,13 @@ function mapRowToUser(row: Record<string, unknown>): User & { tenantId: string }
   };
 }
 
+export class AmbiguousAccountError extends Error {
+  constructor() {
+    super("This email is linked to more than one distillery. Please contact support so we can separate the accounts.");
+    this.name = "AmbiguousAccountError";
+  }
+}
+
 export class AuthStorage {
   private generateId(): string {
     return `USER-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -55,13 +62,32 @@ export class AuthStorage {
     return rows[0] ? mapRowToUser(rows[0]) : undefined;
   }
 
-  // Used during login before tenant context is established
+  // Used during login before tenant context is established.
+  // NOTE: the same email may exist in several tenants (legacy data) — callers that
+  // authenticate must use getUsersByEmailGlobal and verify the password per account.
   async getUserByEmailGlobal(email: string): Promise<(User & { tenantId: string }) | undefined> {
     const rows = await query(
-      "SELECT * FROM users WHERE lower(email) = lower($1) LIMIT 1",
+      "SELECT * FROM users WHERE lower(email) = lower($1) ORDER BY created_at ASC, id ASC LIMIT 1",
       [email],
     );
     return rows[0] ? mapRowToUser(rows[0]) : undefined;
+  }
+
+  async getUsersByEmailGlobal(email: string): Promise<(User & { tenantId: string })[]> {
+    const rows = await query(
+      "SELECT * FROM users WHERE lower(email) = lower($1) ORDER BY created_at ASC, id ASC",
+      [email],
+    );
+    return rows.map((row) => mapRowToUser(row));
+  }
+
+  /** True if this email is already used by any user in any tenant (optionally excluding one user). */
+  async emailInUseGlobally(email: string, exceptUserId?: string): Promise<boolean> {
+    const rows = await query(
+      "SELECT id FROM users WHERE lower(email) = lower($1) AND ($2::text IS NULL OR id <> $2) LIMIT 1",
+      [email.trim(), exceptUserId ?? null],
+    );
+    return !!rows[0];
   }
 
   async getUserById(id: string): Promise<(User & { tenantId: string }) | undefined> {
@@ -76,9 +102,10 @@ export class AuthStorage {
   async createUser(insertUser: InsertUser): Promise<SafeUser> {
     const tenantId = getCurrentTenantId();
     const normalizedEmail = insertUser.email.trim().toLowerCase();
-    const existing = await this.getUserByEmail(normalizedEmail);
-    if (existing) {
-      throw new Error("User with this email already exists");
+    // Emails are the login identifier, so they must be unique across ALL tenants —
+    // otherwise login can't tell which distillery a person belongs to.
+    if (await this.emailInUseGlobally(normalizedEmail)) {
+      throw new Error("A Distillr account with this email already exists. Use a different email for this user.");
     }
 
     const id = this.generateId();
@@ -106,12 +133,8 @@ export class AuthStorage {
   // Used during seed (before tenant context) — accepts tenantId explicitly
   async createUserForTenant(tenantId: string, insertUser: InsertUser): Promise<SafeUser> {
     const normalizedEmail = insertUser.email.trim().toLowerCase();
-    const existing = await query(
-      "SELECT id FROM users WHERE lower(email) = lower($1) AND tenant_id = $2 LIMIT 1",
-      [normalizedEmail, tenantId],
-    );
-    if (existing[0]) {
-      throw new Error("User with this email already exists");
+    if (await this.emailInUseGlobally(normalizedEmail)) {
+      throw new Error("A Distillr account with this email already exists. Use a different email for this user.");
     }
 
     const id = `USER-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -137,12 +160,24 @@ export class AuthStorage {
   }
 
   async validateCredentials(email: string, password: string): Promise<(SafeUser & { tenantId: string }) | null> {
-    const user = await this.getUserByEmailGlobal(email);
-    if (!user) return null;
-    if (user.status !== "active") return null;
-
-    const valid = await verifyPassword(password, user.passwordHash);
-    if (!valid) return null;
+    // Check the password against every active account with this email and only accept
+    // the one it actually belongs to — never "whichever row came back first".
+    const candidates = (await this.getUsersByEmailGlobal(email)).filter((u) => u.status === "active");
+    const matches: (User & { tenantId: string })[] = [];
+    for (const candidate of candidates) {
+      if (await verifyPassword(password, candidate.passwordHash)) matches.push(candidate);
+    }
+    if (matches.length === 0) return null;
+    if (matches.length > 1 && matches.some((m) => m.tenantId === "default")) {
+      // Legacy duplicate of the platform owner's own account: the owner's account wins.
+      matches.splice(0, matches.length, matches.find((m) => m.tenantId === "default")!);
+    }
+    if (matches.length > 1) {
+      // Same email AND same password in several tenants: ambiguous. Refuse rather than guess.
+      console.warn(`[auth] ambiguous login for ${email}: password matches ${matches.length} tenants (${matches.map((m) => m.tenantId).join(", ")})`);
+      throw new AmbiguousAccountError();
+    }
+    const user = matches[0];
 
     return {
       id: user.id,
@@ -180,11 +215,8 @@ export class AuthStorage {
       status: updates.status ?? existing.status,
     };
 
-    if (next.email !== existing.email) {
-      const emailConflict = await this.getUserByEmail(next.email);
-      if (emailConflict && emailConflict.id !== id) {
-        throw new Error("User with this email already exists");
-      }
+    if (next.email !== existing.email && (await this.emailInUseGlobally(next.email, id))) {
+      throw new Error("A Distillr account with this email already exists. Use a different email for this user.");
     }
 
     const tenantId = getCurrentTenantId();
