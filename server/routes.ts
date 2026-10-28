@@ -4323,6 +4323,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return { tenant, user };
   }
 
+  // Report from the one-time move into per-tenant schemas (row counts, orphans, columns not carried over).
+  app.get("/api/admin/migration-status", requireAdminSession, async (_req, res) => {
+    try {
+      const rows = await platformQuery(`SELECT id, done_at, details FROM platform_migrations ORDER BY done_at`);
+      res.setHeader("Cache-Control", "no-store");
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/admin/email/status", requireAdminSession, (_req, res) => {
     res.json({ configured: isEmailConfigured(), problem: emailConfigProblem(), from: resolvedFrom() });
   });

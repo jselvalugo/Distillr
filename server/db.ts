@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Pool, type PoolClient, type QueryResult } from "pg";
 import { tryGetCurrentTenantId } from "./tenant-context";
 import { parse as parsePgConnectionString } from "pg-connection-string";
@@ -114,9 +115,11 @@ export const pool: Pool = new Proxy({} as Pool, {
 // safe with direct connections and with transaction-mode poolers (PgBouncer/Neon),
 // where session-level SETs could otherwise leak to another request.
 
+/** Schema name for a NEW tenant. Existing tenants are always routed by tenants.schema_name. */
 export function schemaForTenant(tenantId: string): string {
-  const slug = tenantId.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 50);
-  return `tenant_${slug}`;
+  const slug = tenantId.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 40);
+  const hash = createHash("sha256").update(tenantId).digest("hex").slice(0, 8);
+  return `tenant_${slug}_${hash}`;
 }
 
 function quoteIdent(name: string): string {
@@ -127,13 +130,33 @@ function quoteLiteral(value: string): string {
   return "'" + value.replace(/'/g, "''") + "'";
 }
 
-const ensuredSchemas = new Set<string>();
+/** tenantId → its (current, fully migrated) schema name. Per-instance cache. */
+const tenantSchemas = new Map<string, string>();
+
+async function schemaOf(tenantId: string): Promise<string> {
+  const cached = tenantSchemas.get(tenantId);
+  if (cached) return cached;
+  let rows = await platformQuery<{ schema_name: string | null; schema_version: number }>(
+    `SELECT schema_name, schema_version FROM tenants WHERE id = $1`, [tenantId],
+  );
+  if (!rows[0]) throw new Error("Unknown tenant");
+  if (!rows[0].schema_name || Number(rows[0].schema_version) < TENANT_SCHEMA_VERSION) {
+    await ensureTenantSchema(tenantId);
+    rows = await platformQuery(`SELECT schema_name, schema_version FROM tenants WHERE id = $1`, [tenantId]);
+  }
+  const schema = rows[0]!.schema_name!;
+  tenantSchemas.set(tenantId, schema);
+  return schema;
+}
+
+export function forgetTenantSchema(tenantId: string): void {
+  tenantSchemas.delete(tenantId);
+}
 
 async function pathForCurrentContext(): Promise<string> {
   const tenantId = tryGetCurrentTenantId();
   if (!tenantId) return "public";
-  if (!ensuredSchemas.has(tenantId)) await ensureTenantSchema(tenantId);
-  return `${quoteIdent(schemaForTenant(tenantId))}, public`;
+  return `${quoteIdent(await schemaOf(tenantId))}, public`;
 }
 
 /**
@@ -907,15 +930,17 @@ type Exec = (text: string, params?: unknown[]) => Promise<{ rows: any[]; rowCoun
 
 /**
  * Create or upgrade one tenant's private schema, using `client`, which MUST already be
- * inside a transaction. Idempotent. Every tenant_id column defaults to, and is
- * CHECK-constrained to, this tenant — a row for anyone else can't be stored here.
+ * inside a transaction. Idempotent. Serialized per tenant by a row lock on its tenants
+ * row (the only lock taken before DDL, so no lock-order deadlocks). Every tenant_id
+ * column defaults to, and is CHECK-constrained to, this tenant.
  */
-async function ensureTenantSchemaWith(client: PoolClient, tenantId: string): Promise<void> {
-  const schema = schemaForTenant(tenantId);
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`tenant-schema:${schema}`]);
-  const current = await client.query(`SELECT schema_version FROM public.tenants WHERE id = $1`, [tenantId]);
-  if (!current.rows[0]) throw new Error(`Unknown tenant ${tenantId}`);
-  if (Number(current.rows[0].schema_version ?? 0) >= TENANT_SCHEMA_VERSION) return;
+async function ensureTenantSchemaWith(client: PoolClient, tenantId: string): Promise<string> {
+  const row = await client.query(
+    `SELECT schema_name, schema_version FROM public.tenants WHERE id = $1 FOR UPDATE`, [tenantId],
+  );
+  if (!row.rows[0]) throw new Error(`Unknown tenant ${tenantId}`);
+  const schema: string = row.rows[0].schema_name || schemaForTenant(tenantId);
+  if (row.rows[0].schema_name && Number(row.rows[0].schema_version ?? 0) >= TENANT_SCHEMA_VERSION) return schema;
 
   await client.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schema)}`);
   await client.query(`SET LOCAL search_path TO ${quoteIdent(schema)}`);
@@ -923,36 +948,35 @@ async function ensureTenantSchemaWith(client: PoolClient, tenantId: string): Pro
   const exec: Exec = (text, params) => client.query(text, params);
   const { migrateReferenceData } = await import("./reference-data");
   await migrateReferenceData(exec);
-  const cols = await client.query(
-    `SELECT c.table_name FROM information_schema.columns c
-     JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
-     WHERE c.table_schema = $1 AND c.column_name = 'tenant_id'`,
+  const locked = await client.query(
+    `SELECT c.relname AS table_name,
+            EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conrelid = c.oid AND k.conname = left(c.relname || '_tenant_lock', 60)) AS has_lock
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
+     WHERE n.nspname = $1 AND c.relkind = 'r'`,
     [schema],
   );
-  for (const { table_name } of cols.rows) {
+  for (const { table_name, has_lock } of locked.rows) {
     const tbl = `${quoteIdent(schema)}.${quoteIdent(table_name)}`;
     await client.query(`ALTER TABLE ${tbl} ALTER COLUMN tenant_id SET DEFAULT ${quoteLiteral(tenantId)}`);
-    const cname = `${table_name}_tenant_lock`.slice(0, 60);
-    const has = await client.query(
-      `SELECT 1 FROM pg_constraint WHERE conname = $1 AND conrelid = $2::regclass`,
-      [cname, `${quoteIdent(schema)}.${quoteIdent(table_name)}`],
-    );
-    if (!has.rows[0]) {
+    if (!has_lock) {
+      const cname = `${table_name}_tenant_lock`.slice(0, 60);
       await client.query(`ALTER TABLE ${tbl} ADD CONSTRAINT ${quoteIdent(cname)} CHECK (tenant_id = ${quoteLiteral(tenantId)})`);
     }
   }
   await client.query(`SET LOCAL search_path TO public`);
   await client.query(`UPDATE public.tenants SET schema_name = $2, schema_version = $3 WHERE id = $1`, [tenantId, schema, TENANT_SCHEMA_VERSION]);
+  return schema;
 }
 
 /** Create or upgrade one tenant's private schema in its own transaction. */
 export async function ensureTenantSchema(tenantId: string): Promise<void> {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN; SET LOCAL search_path TO public");
+    await client.query("BEGIN; SET LOCAL search_path TO public; SET LOCAL lock_timeout = '30s'");
     await ensureTenantSchemaWith(client, tenantId);
     await client.query("COMMIT");
-    ensuredSchemas.add(tenantId);
+    tenantSchemas.delete(tenantId);
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw err;
@@ -961,140 +985,213 @@ export async function ensureTenantSchema(tenantId: string): Promise<void> {
   }
 }
 
-/** Drop a tenant's private schema and everything in it. */
+/** Drop a tenant's private schema and everything in it (client must be in a transaction). */
 export async function dropTenantSchema(client: PoolClient, tenantId: string): Promise<void> {
-  await client.query(`DROP SCHEMA IF EXISTS ${quoteIdent(schemaForTenant(tenantId))} CASCADE`);
-  ensuredSchemas.delete(tenantId);
+  const row = await client.query(`SELECT schema_name FROM public.tenants WHERE id = $1`, [tenantId]);
+  const schema: string | null = row.rows[0]?.schema_name ?? null;
+  if (schema && schema.startsWith("tenant_")) {
+    await client.query(`DROP SCHEMA IF EXISTS ${quoteIdent(schema)} CASCADE`);
+  }
+  tenantSchemas.delete(tenantId);
+}
+
+// ─── Boot ───────────────────────────────────────────────────────────────────
+
+/** Bump when PLATFORM_DDL / the bootstrap statements below change. */
+const PLATFORM_VERSION = "platform_v1";
+const PLATFORM_TABLES = new Set(["users", "tenants", "tenant_activity_logs", "password_setup_tokens", "session", "waitlist", "platform_migrations"]);
+
+/** Platform tables. Version-gated, so a normal cold start runs one SELECT and takes no table locks. */
+async function initPlatform(): Promise<void> {
+  await platformQuery(`CREATE TABLE IF NOT EXISTS platform_migrations (id TEXT PRIMARY KEY, done_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), details JSONB)`);
+  await platformQuery(`ALTER TABLE platform_migrations ADD COLUMN IF NOT EXISTS details JSONB`);
+  const done = await platformQuery(`SELECT 1 FROM platform_migrations WHERE id = $1`, [PLATFORM_VERSION]);
+  if (done[0]) return;
+  // Autocommit, one statement at a time (as before), so locks are held only briefly.
+  const query = (text: string, params?: unknown[]) => platformQuery(text, params);
+  // Session store table used by connect-pg-simple (express-session).
+  await query(`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" VARCHAR NOT NULL COLLATE "default" PRIMARY KEY,
+      "sess" JSON NOT NULL,
+      "expire" TIMESTAMP(6) NOT NULL
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      plan TEXT NOT NULL DEFAULT 'standard',
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_limit INTEGER NOT NULL DEFAULT 5,
+      license_expires_at TIMESTAMPTZ,
+      billing_email TEXT,
+      billing_amount NUMERIC(10,2),
+      billing_cycle TEXT DEFAULT 'monthly',
+      license_notes TEXT
+    )
+  `);
+
+  // Add licensing columns to existing tenants tables (safe migration)
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 5`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_expires_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_email TEXT`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_amount NUMERIC(10,2)`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_cycle TEXT DEFAULT 'monthly'`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_notes TEXT`);
+
+  await query(`
+    INSERT INTO tenants (id, name, slug, plan, status)
+    VALUES ('default', 'Default', 'default', 'standard', 'active')
+    ON CONFLICT (id) DO NOTHING
+  `);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS schema_name TEXT`);
+  await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 0`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS tenants_schema_name_key ON tenants (schema_name)`);
+  await query(PLATFORM_DDL);
+  await query(`INSERT INTO platform_migrations (id) VALUES ($1) ON CONFLICT DO NOTHING`, [PLATFORM_VERSION]);
+}
+
+async function legacySharedTables(client: { query: (t: string, p?: unknown[]) => Promise<{ rows: any[] }> }): Promise<string[]> {
+  const r = await client.query(
+    `SELECT DISTINCT c.relname AS table_name
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
+     WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname NOT LIKE 'legacy\\_%'`,
+  );
+  return r.rows.map((x) => String(x.table_name)).filter((t) => !PLATFORM_TABLES.has(t)).sort();
+}
+
+export type SchemaMigrationState = "done" | "pending";
+
+export async function schemaMigrationState(): Promise<SchemaMigrationState> {
+  const done = await platformQuery(`SELECT 1 FROM platform_migrations WHERE id = 'schema_per_tenant'`);
+  return done[0] ? "done" : "pending";
 }
 
 /**
  * One-time move from the old shared tables (public.<table> with a tenant_id column)
- * into each tenant's private schema. The old tables are renamed legacy_<table> and
- * kept as a backup; rows belonging to tenants that no longer exist stay there only.
+ * into each tenant's private schema, in ONE transaction:
+ * - writes to the old tables are blocked for the duration (EXCLUSIVE lock; reads OK)
+ * - every copied table is row-count-verified per tenant, or the whole thing rolls back
+ * - old tables are renamed legacy_<table> and kept as a backup
+ * - a report (counts, orphans, columns not carried over) is saved in platform_migrations
+ * Meant to run in the background function (15-minute limit), not in a web request.
  */
-async function migrateSharedTablesToSchemas(client: PoolClient): Promise<void> {
-  const done = await client.query(`SELECT 1 FROM platform_migrations WHERE id = 'schema_per_tenant'`);
-  if (done.rows[0]) return;
-
-  const legacy = await client.query(
-    `SELECT DISTINCT c.table_name FROM information_schema.columns c
-     JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
-     WHERE c.table_schema = 'public' AND c.column_name = 'tenant_id'
-       AND c.table_name NOT IN ('users', 'tenants', 'tenant_activity_logs', 'password_setup_tokens')
-       AND c.table_name NOT LIKE 'legacy\\_%'`,
-  );
-  const legacyTables: string[] = legacy.rows.map((r) => r.table_name);
-
-  if (legacyTables.length) {
-    // Bring the old shared tables up to the current shape first (same as before this change).
-    const exec: Exec = (text, params) => client.query(text, params);
-    await client.query(`SET LOCAL search_path TO public`);
-    const hasPlatformConfig = legacyTables.includes("platform_config");
-    if (hasPlatformConfig) {
-      const { migrateReferenceData } = await import("./reference-data");
-      await migrateReferenceData(exec);
-    }
-  }
-
-  const tenants = await client.query(`SELECT id FROM tenants ORDER BY id`);
-  for (const { id } of tenants.rows) {
-    await ensureTenantSchemaWith(client, String(id));
-    const schema = schemaForTenant(String(id));
-    for (const table of legacyTables) {
-      const target = await client.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2`,
-        [schema, table],
-      );
-      if (!target.rows.length) continue;
-      const source = await client.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
-        [table],
-      );
-      const srcCols = new Set(source.rows.map((r) => r.column_name));
-      const cols = target.rows.map((r) => r.column_name).filter((c) => srcCols.has(c)).map(quoteIdent).join(", ");
-      await client.query(
-        `INSERT INTO ${quoteIdent(schema)}.${quoteIdent(table)} (${cols})
-         SELECT ${cols} FROM public.${quoteIdent(table)} WHERE tenant_id = $1
-         ON CONFLICT DO NOTHING`,
-        [id],
-      );
-    }
-  }
-
-  for (const table of legacyTables) {
-    await client.query(`ALTER TABLE public.${quoteIdent(table)} RENAME TO ${quoteIdent(`legacy_${table}`.slice(0, 63))}`);
-  }
-  // Tables without tenant_id that only ever held tenant data.
-  for (const table of ["reference_backfills"]) {
-    await client.query(`ALTER TABLE IF EXISTS public.${quoteIdent(table)} RENAME TO ${quoteIdent(`legacy_${table}`)}`);
-  }
-  await client.query(`INSERT INTO platform_migrations (id) VALUES ('schema_per_tenant') ON CONFLICT DO NOTHING`);
-  console.log(`[db] moved ${legacyTables.length} shared tables into ${tenants.rows.length} tenant schemas`);
-}
-
-export async function initDatabase(): Promise<void> {
+export async function runSchemaMigration(): Promise<{ ran: boolean; report?: unknown }> {
+  await initPlatform();
   const client = await pool.connect();
   try {
-    const query = (text: string, params?: unknown[]) => client.query(text, params);
-    // One transaction for the whole boot migration: all-or-nothing, and the xact
-    // advisory lock serializes concurrent cold starts (works behind poolers too).
-    await client.query("BEGIN; SET LOCAL search_path TO public");
-    await client.query(`SELECT pg_advisory_xact_lock(hashtext('distillr-init'))`);
-    try {
-      // Session store table used by connect-pg-simple (express-session).
-      await query(`
-        CREATE TABLE IF NOT EXISTS "session" (
-          "sid" VARCHAR NOT NULL COLLATE "default" PRIMARY KEY,
-          "sess" JSON NOT NULL,
-          "expire" TIMESTAMP(6) NOT NULL
-        )
-      `);
-      await query(`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
-
-      await query(`
-        CREATE TABLE IF NOT EXISTS tenants (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          slug TEXT UNIQUE NOT NULL,
-          plan TEXT NOT NULL DEFAULT 'standard',
-          status TEXT NOT NULL DEFAULT 'active',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          user_limit INTEGER NOT NULL DEFAULT 5,
-          license_expires_at TIMESTAMPTZ,
-          billing_email TEXT,
-          billing_amount NUMERIC(10,2),
-          billing_cycle TEXT DEFAULT 'monthly',
-          license_notes TEXT
-        )
-      `);
-
-      // Add licensing columns to existing tenants tables (safe migration)
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS user_limit INTEGER NOT NULL DEFAULT 5`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_expires_at TIMESTAMPTZ`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_email TEXT`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_amount NUMERIC(10,2)`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_cycle TEXT DEFAULT 'monthly'`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_notes TEXT`);
-
-      await query(`
-        INSERT INTO tenants (id, name, slug, plan, status)
-        VALUES ('default', 'Default', 'default', 'standard', 'active')
-        ON CONFLICT (id) DO NOTHING
-      `);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS schema_name TEXT`);
-      await query(`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 0`);
-      await query(`CREATE TABLE IF NOT EXISTS platform_migrations (id TEXT PRIMARY KEY, done_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
-      await query(PLATFORM_DDL);
-      await migrateSharedTablesToSchemas(client);
-      // Create/upgrade every tenant's schema (a no-op when already current).
-      const tenants = await query(`SELECT id FROM tenants WHERE schema_version < $1`, [TENANT_SCHEMA_VERSION]);
-      for (const { id } of tenants.rows) await ensureTenantSchemaWith(client, String(id));
+    await client.query(
+      "BEGIN; SET LOCAL search_path TO public; SET LOCAL lock_timeout = '60s'; SET LOCAL statement_timeout = '10min'; SET LOCAL idle_in_transaction_session_timeout = '2min'",
+    );
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('distillr-schema-migration'))`);
+    const done = await client.query(`SELECT 1 FROM platform_migrations WHERE id = 'schema_per_tenant'`);
+    if (done.rows[0]) {
       await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw err;
+      return { ran: false };
     }
+    const started = Date.now();
+    const legacyTables = await legacySharedTables(client);
+    const report: Record<string, any> = { tables: legacyTables.length, tenants: {}, orphans: {}, columnsNotCopied: {} };
+
+    if (legacyTables.length) {
+      await client.query(`LOCK TABLE ${legacyTables.map((t) => `public.${quoteIdent(t)}`).join(", ")} IN EXCLUSIVE MODE`);
+      // Bring the old shared tables up to the current shape first (same as the previous boot did).
+      if (legacyTables.includes("platform_config")) {
+        const { migrateReferenceData } = await import("./reference-data");
+        await migrateReferenceData((text, params) => client.query(text, params));
+      }
+    }
+
+    const colsOf = async (schema: string) => {
+      const r = await client.query(
+        `SELECT c.relname AS t, a.attname AS col FROM pg_attribute a
+         JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped`,
+        [schema],
+      );
+      const m = new Map<string, Set<string>>();
+      for (const { t, col } of r.rows) (m.get(t) ?? m.set(t, new Set()).get(t)!).add(col);
+      return m;
+    };
+    const publicCols = await colsOf("public");
+
+    const tenants = await client.query(`SELECT id FROM tenants ORDER BY id`);
+    for (const { id } of tenants.rows) {
+      const tenantId = String(id);
+      const schema = await ensureTenantSchemaWith(client, tenantId);
+      const targetCols = await colsOf(schema);
+      const counts: Record<string, number> = {};
+      for (const table of legacyTables) {
+        const target = targetCols.get(table);
+        const source = publicCols.get(table)!;
+        if (!target) throw new Error(`Table ${table} has tenant data but no place in the tenant schema`);
+        const missing = Array.from(source).filter((c) => !target.has(c));
+        if (missing.length) report.columnsNotCopied[table] = missing;
+        const cols = Array.from(target).filter((c) => source.has(c)).map(quoteIdent).join(", ");
+        const expected = Number((await client.query(`SELECT count(*)::int AS n FROM public.${quoteIdent(table)} WHERE tenant_id = $1`, [tenantId])).rows[0].n);
+        if (!expected) continue;
+        const ins = await client.query(
+          `INSERT INTO ${quoteIdent(schema)}.${quoteIdent(table)} (${cols})
+           SELECT ${cols} FROM public.${quoteIdent(table)} WHERE tenant_id = $1`,
+          [tenantId],
+        );
+        if (ins.rowCount !== expected) throw new Error(`Copy check failed for ${table} / ${tenantId}: ${ins.rowCount} of ${expected}`);
+        counts[table] = expected;
+      }
+      report.tenants[tenantId] = counts;
+    }
+
+    for (const table of legacyTables) {
+      const orphans = Number((await client.query(
+        `SELECT count(*)::int AS n FROM public.${quoteIdent(table)} WHERE tenant_id NOT IN (SELECT id FROM tenants)`,
+      )).rows[0].n);
+      if (orphans) report.orphans[table] = orphans;
+      await client.query(`ALTER TABLE public.${quoteIdent(table)} RENAME TO ${quoteIdent(`legacy_${table}`.slice(0, 63))}`);
+    }
+    report.seconds = Math.round((Date.now() - started) / 100) / 10;
+    await client.query(`INSERT INTO platform_migrations (id, details) VALUES ('schema_per_tenant', $1)`, [JSON.stringify(report)]);
+    await client.query(`DELETE FROM platform_migrations WHERE id = 'schema_per_tenant_error'`);
+    await client.query("COMMIT");
+    tenantSchemas.clear();
+    console.log(`[db] schema-per-tenant migration done: ${JSON.stringify(report)}`);
+    return { ran: true, report };
+  } catch (err: any) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    // Record the failure (outside the rolled-back transaction) so the admin can see it.
+    await platformQuery(
+      `INSERT INTO platform_migrations (id, details) VALUES ('schema_per_tenant_error', $1)
+       ON CONFLICT (id) DO UPDATE SET details = EXCLUDED.details, done_at = NOW()`,
+      [JSON.stringify({ error: String(err?.message ?? err) })],
+    ).catch(() => undefined);
+    console.error("[db] schema-per-tenant migration FAILED (nothing changed):", err);
+    throw err;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Boot: platform tables (version-gated), then tenant schemas.
+ * - Fresh database (no old shared tables): marks the migration done and creates schemas.
+ * - Old shared tables present: returns "pending" unless `runMigration` is set; on
+ *   Netlify the background function performs the move (see netlify/functions).
+ */
+export async function initDatabase(opts: { runMigration?: boolean } = {}): Promise<SchemaMigrationState> {
+  await initPlatform();
+  if ((await schemaMigrationState()) === "pending") {
+    const legacy = await legacySharedTables({ query: (t, p) => platformQuery(t, p).then((rows) => ({ rows })) });
+    if (legacy.length && !opts.runMigration) return "pending";
+    await runSchemaMigration();
+  }
+  const stale = await platformQuery<{ id: string }>(
+    `SELECT id FROM tenants WHERE schema_name IS NULL OR schema_version < $1`, [TENANT_SCHEMA_VERSION],
+  );
+  for (const { id } of stale) await ensureTenantSchema(String(id));
+  return "done";
 }

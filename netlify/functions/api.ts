@@ -92,13 +92,31 @@ app.use((_err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 let initialized = false;
+let routesRegistered = false;
+let lastMigrationKick = 0;
 
-async function ensureInit() {
-  if (initialized) return;
-  await initDatabase();
+/** Returns false while the one-time tenant-schema migration is still pending. */
+async function ensureInit(origin: string): Promise<boolean> {
+  if (initialized) return true;
+  const state = await initDatabase();
+  if (state === "pending") {
+    // Hand the one-time move to the background function (15-minute limit) instead of
+    // running it inside a web request. Idempotent and locked, so repeat kicks are harmless.
+    if (Date.now() - lastMigrationKick > 60_000) {
+      lastMigrationKick = Date.now();
+      fetch(`${origin}/.netlify/functions/migrate-tenants`, { method: "POST" }).catch((err) =>
+        console.error("[init] could not start tenant migration:", err),
+      );
+    }
+    return false;
+  }
   await seedAdminUser();
-  await registerRoutes(httpServer, app);
+  if (!routesRegistered) {
+    await registerRoutes(httpServer, app);
+    routesRegistered = true;
+  }
   initialized = true;
+  return true;
 }
 
 const netlifyHandler = serverless(app, {
@@ -129,7 +147,12 @@ export default async (
   context: { ip?: string; deploy?: { context?: string } },
 ) => {
   setDeployContext(context?.deploy?.context);
-  await ensureInit();
+  if (!(await ensureInit(new URL(req.url).origin))) {
+    return new Response(
+      JSON.stringify({ error: "Distillr is being upgraded. This takes about a minute — please refresh shortly.", upgrading: true }),
+      { status: 503, headers: { "Content-Type": "application/json", "Retry-After": "30", "Cache-Control": "no-store" } },
+    );
+  }
 
   const url = new URL(req.url);
   const headers: Record<string, string> = {};
