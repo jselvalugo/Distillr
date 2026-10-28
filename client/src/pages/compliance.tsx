@@ -1,83 +1,71 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 import { Layout, PageHeader } from "../components/layout";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { Select } from "../components/ui/select";
 import { Table, Thead, Tbody, Tr, Th, Td } from "../components/ui/table";
-import { Dialog } from "../components/ui/dialog";
 import { statusBadge } from "../components/ui/badge";
 import { fmt } from "../lib/utils";
-import type { Compliance, Client } from "@shared/schema";
+import { daysUntil, displaySeverity, severityTone } from "../lib/compliance";
+import type { Compliance } from "@shared/schema";
 
-const emptyForm = {
-  clientId: "",
-  type: "DSP Permit",
-  status: "Pending Review",
-  expires: "",
-  jurisdiction: "",
-  severity: "Medium",
-  owner: "",
-  notes: "",
-};
+function ExpiryCell({ date }: { date: string | null | undefined }) {
+  const days = daysUntil(date);
+  if (days === null) return <span className="text-[#a3a3a3]">—</span>;
+  const tone = days < 0 ? "text-red-600" : days <= 30 ? "text-amber-700" : "text-[#0a0a0a]";
+  return (
+    <span className={tone}>
+      {fmt(date)}
+      {days < 0 && <span className="ml-1.5 text-[10px] font-semibold">overdue</span>}
+      {days >= 0 && days <= 30 && <span className="ml-1.5 text-[10px] font-semibold">{days === 0 ? "today" : `${days}d`}</span>}
+    </span>
+  );
+}
 
 export default function CompliancePage() {
   const [, navigate] = useLocation();
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState(emptyForm);
 
   const { data: records = [] } = useQuery<Compliance[]>({
     queryKey: ["/api/compliance"],
     queryFn: () => apiRequest("/api/compliance"),
   });
-  const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
-    queryFn: () => apiRequest("/api/clients"),
-  });
 
-  const createMut = useMutation({
-    mutationFn: (d: typeof form) =>
-      apiRequest("/api/compliance", { method: "POST", body: JSON.stringify(d) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/compliance"] });
-      setOpen(false);
-      setForm(emptyForm);
-      toast.success("Record added");
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const filtered = records.filter(
-    (r) =>
-      r.type.toLowerCase().includes(search.toLowerCase()) ||
-      (r.jurisdiction ?? "").toLowerCase().includes(search.toLowerCase())
+  const q = search.trim().toLowerCase();
+  const filtered = records.filter((r) =>
+    !q || [r.type, r.jurisdiction, r.owner, r.controlReference, r.status].some((v) => (v ?? "").toLowerCase().includes(q)),
   );
+
+  function open(e: React.MouseEvent, id: string) {
+    const href = `/compliance/${id}`;
+    // Cmd/Ctrl-click or middle-click opens the record in a new tab.
+    if (e.metaKey || e.ctrlKey || e.button === 1) window.open(href, "_blank", "noopener");
+    else navigate(href);
+  }
 
   return (
     <Layout>
       <PageHeader
         title="Compliance"
-        subtitle={`${records.length} compliance records`}
+        subtitle={`${records.length} compliance record${records.length === 1 ? "" : "s"} · open a record to work on it`}
         actions={
           <>
             <Input
-              placeholder="Search type or jurisdiction…"
+              placeholder="Search type, owner, reference…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-52"
+              className="w-56"
             />
             <Button onClick={() => navigate("/compliance/new")}>+ Add Record</Button>
           </>
         }
       />
 
-      <div className="p-6">
-        <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-hidden">
+      <div className="p-4 sm:p-6">
+        <div className="bg-white border border-[#e5e5e5] rounded-lg overflow-x-auto">
           <Table>
             <Thead>
               <Tr>
@@ -88,84 +76,57 @@ export default function CompliancePage() {
                 <Th>Expires</Th>
                 <Th>Owner</Th>
                 <Th>Last Reviewed</Th>
+                <Th className="w-8" />
               </Tr>
             </Thead>
             <Tbody>
               {filtered.length === 0 ? (
                 <Tr>
-                  <Td colSpan={7} className="text-center text-[#737373] py-10">
+                  <Td colSpan={8} className="text-center text-[#737373] py-10">
                     {search ? "No records match your search" : "No compliance records yet"}
                   </Td>
                 </Tr>
               ) : (
-                filtered.map((r) => (
-                  <Tr key={r.id}>
-                    <Td className="font-medium">{r.type}</Td>
-                    <Td>{statusBadge(r.status)}</Td>
-                    <Td>{r.severity ?? "—"}</Td>
-                    <Td>{r.jurisdiction ?? "—"}</Td>
-                    <Td>{fmt(r.expires)}</Td>
-                    <Td>{r.owner ?? "—"}</Td>
-                    <Td>{fmt(r.lastReviewedOn)}</Td>
-                  </Tr>
-                ))
+                filtered.map((r) => {
+                  const sev = severityTone(r.severity);
+                  return (
+                    <Tr
+                      key={r.id}
+                      role="link"
+                      tabIndex={0}
+                      onClick={(e) => open(e, r.id)}
+                      onAuxClick={(e) => open(e, r.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter") navigate(`/compliance/${r.id}`); }}
+                      className="group cursor-pointer focus:outline-none focus-visible:bg-[#f7f7f7]"
+                    >
+                      <Td className="font-medium">
+                        {r.type}
+                        {r.controlReference && <span className="ml-2 font-mono text-[11px] font-normal text-[#a3a3a3]">{r.controlReference}</span>}
+                      </Td>
+                      <Td>{statusBadge(r.status)}</Td>
+                      <Td>
+                        {r.severity ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: sev.fg }}>
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: sev.dot }} />
+                            {displaySeverity(r.severity)}
+                          </span>
+                        ) : "—"}
+                      </Td>
+                      <Td>{r.jurisdiction ?? "—"}</Td>
+                      <Td><ExpiryCell date={r.expires} /></Td>
+                      <Td>{r.owner ?? "—"}</Td>
+                      <Td>{fmt(r.lastReviewedOn)}</Td>
+                      <Td className="text-right">
+                        <ChevronRight size={15} className="text-[#d4d4d4] transition-colors group-hover:text-[var(--brand)]" />
+                      </Td>
+                    </Tr>
+                  );
+                })
               )}
             </Tbody>
           </Table>
         </div>
       </div>
-
-      <Dialog open={open} onClose={() => { setOpen(false); setForm(emptyForm); }} title="Add Compliance Record">
-        <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(form); }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Client</label>
-              <Select value={form.clientId} onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}>
-                <option value="">— None —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Type *</label>
-              <Input value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Status</label>
-              <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-                {["Approved", "Expiring Soon", "Missing", "Expired", "Pending Review"].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Severity</label>
-              <Select value={form.severity} onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}>
-                {["Low", "Medium", "High", "Critical"].map((s) => <option key={s}>{s}</option>)}
-              </Select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Expires</label>
-              <Input type="date" value={form.expires} onChange={(e) => setForm((f) => ({ ...f, expires: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Jurisdiction</label>
-              <Input value={form.jurisdiction} onChange={(e) => setForm((f) => ({ ...f, jurisdiction: e.target.value }))} placeholder="e.g. Federal TTB" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Owner</label>
-              <Input value={form.owner} onChange={(e) => setForm((f) => ({ ...f, owner: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => { setOpen(false); setForm(emptyForm); }}>Cancel</Button>
-            <Button type="submit" disabled={createMut.isPending}>{createMut.isPending ? "Saving…" : "Add Record"}</Button>
-          </div>
-        </form>
-      </Dialog>
     </Layout>
   );
 }

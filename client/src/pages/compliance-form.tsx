@@ -6,6 +6,7 @@ import { apiRequest } from "../lib/queryClient";
 import { FormLayout, FormSection, FormGrid, Field, InfoCard } from "../components/form-layout";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import { COMPLIANCE_SEVERITIES, COMPLIANCE_STATUSES } from "../lib/compliance";
 
 interface Client { id: string; name: string }
 
@@ -15,11 +16,12 @@ export default function ComplianceForm() {
   const [form, setForm] = useState({
     clientId: "",
     type: "",
-    status: "Open",
-    severity: "medium",
+    status: "Pending Review",
+    severity: "Medium",
     expires: "",
     jurisdiction: "",
     owner: "",
+    controlReference: "",
     notes: "",
   });
 
@@ -36,20 +38,21 @@ export default function ComplianceForm() {
       apiRequest("/api/compliance", {
         method: "POST",
         body: JSON.stringify({
-          clientId: form.clientId || null,
+          clientId: form.clientId || "",
           type: form.type.trim(),
           status: form.status,
           severity: form.severity,
           expires: form.expires || null,
           jurisdiction: form.jurisdiction.trim() || null,
           owner: form.owner.trim() || null,
+          controlReference: form.controlReference.trim() || null,
           notes: form.notes.trim() || null,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (doc: any) => {
       qc.invalidateQueries({ queryKey: ["/api/compliance"] });
       toast.success("Compliance record created");
-      navigate("/compliance");
+      navigate(doc?.id ? `/compliance/${doc.id}` : "/compliance");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -86,18 +89,12 @@ export default function ComplianceForm() {
           </Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>
-              <option>Open</option>
-              <option>In Progress</option>
-              <option>Resolved</option>
-              <option>Waived</option>
+              {COMPLIANCE_STATUSES.map((st) => <option key={st}>{st}</option>)}
             </Select>
           </Field>
           <Field label="Severity">
             <Select value={form.severity} onChange={set("severity")}>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              {[...COMPLIANCE_SEVERITIES].reverse().map((sv) => <option key={sv}>{sv}</option>)}
             </Select>
           </Field>
           <Field label="Expiration / Due Date">
@@ -105,6 +102,9 @@ export default function ComplianceForm() {
           </Field>
           <Field label="Jurisdiction">
             <Input value={form.jurisdiction} onChange={set("jurisdiction")} placeholder="e.g. Federal, Florida, TTB" />
+          </Field>
+          <Field label="Reference / Permit #">
+            <Input value={form.controlReference} onChange={set("controlReference")} placeholder="e.g. DSP-FL-12345" />
           </Field>
           <Field label="Owner / Responsible Party">
             <Input value={form.owner} onChange={set("owner")} placeholder="Name or department" />

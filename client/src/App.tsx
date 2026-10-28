@@ -25,6 +25,7 @@ const InventoryItemForm = lazy(() => import("./pages/inventory-item-form"));
 const InventoryLotForm = lazy(() => import("./pages/inventory-lot-form"));
 const CompliancePage = lazy(() => import("./pages/compliance"));
 const ComplianceForm = lazy(() => import("./pages/compliance-form"));
+const ComplianceDetail = lazy(() => import("./pages/compliance-detail"));
 const ComplianceRegulatory = lazy(() => import("./pages/compliance-regulatory"));
 const PermitForm = lazy(() => import("./pages/permit-form"));
 const ColaForm = lazy(() => import("./pages/cola-form"));
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/inventory/lots/new" component={InventoryLotForm} />
             <Route path="/compliance" component={CompliancePage} />
             <Route path="/compliance/new" component={ComplianceForm} />
+            <Route path="/compliance/:id" component={ComplianceDetail} />
             <Route path="/compliance-regulatory" component={ComplianceRegulatory} />
             <Route path="/permits/new" component={PermitForm} />
             <Route path="/permits/:id/edit" component={PermitForm} />

@@ -181,6 +181,7 @@ export const complianceSchema = z.object({
   lastReviewedOn: z.string().nullable().optional(),
   retentionYears: z.number().int().positive().nullable().optional(),
   retentionUntil: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional(),
 });
