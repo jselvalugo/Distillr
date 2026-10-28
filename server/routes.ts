@@ -1572,6 +1572,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (error && typeof error === "object" && "name" in error && error.name === "ZodError") {
         return res.status(400).json({ error: "Invalid login data" });
       }
+      if (error && typeof error === "object" && "name" in error && error.name === "AmbiguousAccountError") {
+        return res.status(409).json({ error: (error as Error).message });
+      }
       res.status(500).json({ error: "Failed to establish authenticated session" });
     }
   });
@@ -4087,8 +4090,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let ok = false;
       if (superEmail && superPassword && normalized === superEmail && safeEqual(password, superPassword)) ok = true;
       if (!ok && ownerEmail && normalized === ownerEmail) {
-        const user = await authStorage.validateCredentials(normalized, password);
-        ok = !!user && user.role === "admin";
+        // Platform owner must be the admin of the platform's own ("default") tenant.
+        const user = await authStorage.validateCredentials(normalized, password).catch(() => null);
+        ok = !!user && user.role === "admin" && user.tenantId === "default";
       }
       if (!ok) return res.status(401).json({ error: "Invalid credentials" });
       // Rotate the session id but keep the app login + CSRF token that live in it,

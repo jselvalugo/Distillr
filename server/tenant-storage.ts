@@ -1,4 +1,4 @@
-import { query } from "./db";
+import { pool, query } from "./db";
 
 export interface Tenant {
   id: string;
@@ -99,6 +99,45 @@ export async function updateTenant(
   return mapTenant(rows[0]);
 }
 
-export async function deleteTenant(id: string): Promise<void> {
-  await query("DELETE FROM tenants WHERE id = $1", [id]);
+/**
+ * Permanently deletes a tenant and everything that belongs to it, in one transaction:
+ * every row in every table with a tenant_id column (users, records, files, logs…),
+ * plus any signed-in sessions for that tenant. Leaving users behind used to let the
+ * startup "repair" step resurrect deleted tenants.
+ */
+export async function deleteTenant(id: string): Promise<{ deletedRows: number }> {
+  if (!id || id === "default") throw new Error("The default tenant can't be deleted");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const exists = await client.query("SELECT 1 FROM tenants WHERE id = $1", [id]);
+    if (!exists.rowCount) throw new Error("Tenant not found");
+
+    const tables = await client.query<{ table_name: string }>(
+      `SELECT DISTINCT c.table_name
+       FROM information_schema.columns c
+       JOIN information_schema.tables t
+         ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+       WHERE c.table_schema = current_schema() AND c.column_name = 'tenant_id' AND c.table_name <> 'tenants'`,
+    );
+    let deletedRows = 0;
+    for (const { table_name } of tables.rows) {
+      const ident = '"' + table_name.replace(/"/g, '""') + '"';
+      const r = await client.query(`DELETE FROM ${ident} WHERE tenant_id = $1`, [id]);
+      deletedRows += r.rowCount ?? 0;
+    }
+    // Sign out anyone currently signed in to this tenant.
+    await client.query(
+      `DELETE FROM "session" WHERE (sess::jsonb -> 'user' ->> 'tenantId') = $1`,
+      [id],
+    ).catch(() => undefined);
+    await client.query("DELETE FROM tenants WHERE id = $1", [id]);
+    await client.query("COMMIT");
+    return { deletedRows };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }

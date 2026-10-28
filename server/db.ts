@@ -857,17 +857,7 @@ export async function initDatabase(): Promise<void> {
   const { migrateReferenceData } = await import("./reference-data");
   await migrateReferenceData();
 
-  // Repair: ensure every tenant_id in users has a matching tenants row
-  await query(`
-    INSERT INTO tenants (id, name, slug, plan, status)
-    SELECT DISTINCT ON (tenant_id)
-      tenant_id,
-      tenant_id,
-      tenant_id,
-      'standard',
-      'active'
-    FROM users
-    WHERE tenant_id NOT IN (SELECT id FROM tenants)
-    ON CONFLICT (id) DO NOTHING
-  `);
+  // (Removed) A "repair" step used to re-create a tenants row for any users.tenant_id
+  // without one — which resurrected deleted tenants on every cold start. Tenant
+  // deletion now removes the tenant's users and data too, so no repair is needed.
 }
