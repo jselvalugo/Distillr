@@ -9,7 +9,7 @@ const FEATURES: Array<{ num: string; title: string; desc: string; bullets: strin
     icon: ShieldCheck,
     title: "TTB Compliance Engine",
     desc: "Auto-generate Forms 5110.40 and 5000.24 from live batch data. Every number is sourced directly from your production records — no manual entry required.",
-    bullets: ["Form 5110.40 Monthly Report of Production Operations", "Form 5000.24 Excise Tax Return with CBMA tier calculation", "One-click export to PDF, Excel or Word for submission"],
+    bullets: ["Form 5110.40 Monthly Report of Production Operations", "Form 5000.24 Excise Tax Return with CBMA tier calculation", "Export to PDF, Excel or Word for your review and filing"],
     stat: ["$2.70", "per proof gallon · Craft Tier 1"],
   },
   {
@@ -24,7 +24,7 @@ const FEATURES: Array<{ num: string; title: string; desc: string; bullets: strin
     num: "03",
     icon: Layers,
     title: "Barrel Intelligence",
-    desc: "Track every barrel from fill to dump. Distillr records gauging data, evaporation over time, and proof retention so your bonded warehouse inventory is always accurate and TTB-ready.",
+    desc: "Track every barrel from fill to dump. Distillr records gauging data, evaporation over time, and proof retention so your bonded warehouse records stay current and ready for TTB reporting.",
     bullets: ["Angel's share evaporation tracking and gauging", "Proof retention and aging milestones", "Bonded warehouse zone assignment"],
     stat: ["318.0", "proof gallons in bond"],
   },
@@ -39,10 +39,10 @@ const FEATURES: Array<{ num: string; title: string; desc: string; bullets: strin
   {
     num: "05",
     icon: Landmark,
-    title: "Regulatory Automation",
-    desc: "Stay ahead of every filing deadline. Distillr tracks COLA registrations, 50-state excise return schedules, and permit renewal dates with automated alerts before anything comes due.",
-    bullets: ["All 50-state excise return calculations", "COLA and label registration tracking", "Permit expiration alerts"],
-    stat: ["50 + DC", "state excise rates maintained"],
+    title: "Regulatory Tracking",
+    desc: "Stay ahead of every filing deadline. Distillr tracks COLA registrations, state excise return schedules, and permit renewal dates with alerts before anything comes due.",
+    bullets: ["State excise return preparation and tracking", "COLA and label registration tracking", "Permit expiration alerts"],
+    stat: ["50 states", "excise return tracking"],
   },
   {
     num: "06",

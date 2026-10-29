@@ -1,6 +1,6 @@
 import { LegalPage } from "../components/public/legal-page";
 
-const LAST_UPDATED = "July 31, 2026";
+const LAST_UPDATED = "October 28, 2026";
 
 const SECTIONS = [
   {
@@ -16,7 +16,7 @@ These Terms apply to all users, including administrators, staff members, and any
 • Production batch tracking and management.
 • Barrel aging, warehousing, and inventory.
 • TTB federal reporting (Forms 5110.40, 5110.11, 5000.24, etc.).
-• State excise tax return calculation and record-keeping.
+• State excise tax return preparation, tracking and record-keeping.
 • Sales order and client management.
 • AI-powered operational assistance.
 
@@ -39,6 +39,8 @@ Each tenant account is associated with a single licensed DSP. You may not share 
 • **Starter Plan** — limited to 1 user and 50 barrels. Includes core TTB reporting and batch tracking.
 • **Professional Plan** — up to 15 users, unlimited barrels, all 50-state excise returns, and AI assistant access.
 • **Enterprise Plan** — custom pricing for multi-facility operations.
+
+Free trials last 14 days and do not convert to a paid plan unless you choose one. Paid subscriptions renew automatically at the end of each billing period (monthly or annual) until you cancel; you can cancel at any time and your plan stays active until the end of the period you have paid for.
 
 We reserve the right to change pricing with 30 days' notice. Continued use after a price change constitutes acceptance. All fees are non-refundable except as required by law or as expressly stated in a written agreement.`,
   },
@@ -63,15 +65,20 @@ We will not access your Customer Data except to provide support, ensure security
 You are responsible for the accuracy of data you enter, including proof gallons, tax calculations, and production records. Distillr does not independently verify the accuracy of your entries.`,
   },
   {
-    title: "7. TTB Compliance Disclaimer",
-    body: `Distillr is designed to assist DSPs in organizing and preparing TTB-required records and reports. However:
+    title: "7. TTB and Tax Compliance Disclaimer",
+    body: `Distillr is designed to assist DSPs in organizing and preparing TTB-required records, federal excise tax returns and state excise tax returns. However:
 
 • Distillr is not a licensed TTB consultant, attorney, or compliance officer.
 • The platform does not provide binding legal or regulatory advice.
 • You are solely responsible for ensuring all filings, records, and operations comply with applicable federal regulations (27 CFR Part 19) and state laws.
-• We recommend consulting a licensed TTB consultant or attorney for specific compliance determinations.
+• Tax rates, rate tiers, credits and filing schedules suggested by the platform (federal or state) are provided for convenience, may be out of date, and may not reflect the tax basis your state uses. You must confirm them with the applicable authority.
+• We recommend consulting a licensed TTB consultant, accountant or attorney for specific compliance determinations.
 
-Any TTB forms generated or populated by the platform are provided as a convenience only. Final review and submission remain your responsibility.`,
+Any TTB forms, tax returns or tax figures generated or populated by the platform are provided as a convenience only. You are solely responsible for reviewing them for accuracy and completeness before you sign, file or pay. Distillr is not responsible for penalties, interest, assessments or other consequences arising from filings you make.`,
+  },
+  {
+    title: "7A. AI Assistant",
+    body: `The Service includes an optional AI assistant that answers questions using your Customer Data. AI-generated responses may be incomplete or inaccurate and are provided for informational purposes only. Do not rely on them as the sole basis for compliance, tax, or production decisions. To provide this feature, the relevant portions of your Customer Data are processed by our AI model provider as a service provider under confidentiality obligations; it is not used to train their models.`,
   },
   {
     title: "8. Intellectual Property",
@@ -90,10 +97,18 @@ Any TTB forms generated or populated by the platform are provided as a convenien
 Your continued use of the Service after changes to these Terms constitutes your acceptance of the revised Terms.`,
   },
   {
+    title: "9A. Disclaimer of Warranties",
+    body: `THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE." TO THE MAXIMUM EXTENT PERMITTED BY LAW, LOOGO LABS DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE, OR ANY REPORT, CALCULATION OR TAX FIGURE IT PRODUCES, WILL BE ERROR-FREE, COMPLETE, OR SUFFICIENT TO MEET YOUR REGULATORY OBLIGATIONS.`,
+  },
+  {
     title: "10. Limitation of Liability",
     body: `To the maximum extent permitted by applicable law, Distillr and Loogo Labs shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including lost profits, data loss, or regulatory fines, arising from your use of or inability to use the Service.
 
 Our total liability to you for any claims arising under these Terms shall not exceed the total fees paid by you in the twelve (12) months preceding the claim. Some jurisdictions do not allow limitations on liability, so these limitations may not apply to you.`,
+  },
+  {
+    title: "10A. Indemnification",
+    body: `You agree to indemnify and hold harmless Loogo Labs and its officers, employees and agents from any claims, penalties, assessments, losses and expenses (including reasonable attorneys' fees) arising from your use of the Service, the data you enter, the reports and returns you file, or your violation of these Terms or applicable law.`,
   },
   {
     title: "11. Termination",

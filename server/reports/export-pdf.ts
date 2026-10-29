@@ -2,6 +2,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB }
 import type { ReportColumn, ReportDocument, ReportRow, ReportSection } from "../../shared/report-types";
 import { formatCell, formatDate, isNumericFormat } from "./format";
 import { DISTILLR_MARK_PNG_BASE64 } from "./brand-mark";
+import { COMPLIANCE_DISCLAIMER } from "../../shared/compliance-disclaimer";
 
 // ── Page geometry (US Letter, landscape) ───────────────────────────────────
 const PAGE_W = 792;
@@ -421,6 +422,12 @@ function drawMethodology(L: Layout, doc: ReportDocument) {
   for (const m of doc.methodology) L.paragraph(`•  ${m}`, { size: 7.8, color: INK_SOFT, x: MARGIN_X + 4, width: CONTENT_W - 4 });
 }
 
+function drawDisclaimer(L: Layout) {
+  L.ensure(30);
+  L.y -= 8;
+  L.paragraph(COMPLIANCE_DISCLAIMER, { size: 7.5, color: INK_MUTED, x: MARGIN_X, width: CONTENT_W });
+}
+
 function drawFooters(L: Layout, doc: ReportDocument) {
   const total = L.pages.length;
   const left = [doc.organization.name, doc.title, doc.period?.label].filter(Boolean).join("  ·  ");
@@ -478,6 +485,7 @@ export async function renderReportPdf(doc: ReportDocument, options: { brandColor
   drawKpis(L, doc);
   for (const section of doc.sections) drawSection(L, section);
   drawMethodology(L, doc);
+  drawDisclaimer(L);
   drawFooters(L, doc);
 
   return Buffer.from(await pdf.save());

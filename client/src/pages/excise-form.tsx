@@ -10,7 +10,7 @@ import { useHomeState } from "../lib/reference";
 
 const STATE_RATES: Record<string, { name: string; rate: number }> = {
   CA: { name: "California", rate: 3.30 }, NY: { name: "New York", rate: 6.44 },
-  TX: { name: "Texas", rate: 2.40 }, FL: { name: "Florida", rate: 9.53 },
+  TX: { name: "Texas", rate: 2.40 }, FL: { name: "Florida", rate: 6.50 },
   WA: { name: "Washington", rate: 14.27 }, IL: { name: "Illinois", rate: 8.55 },
   PA: { name: "Pennsylvania", rate: 7.24 }, OH: { name: "Ohio", rate: 9.34 },
   GA: { name: "Georgia", rate: 3.79 }, NC: { name: "North Carolina", rate: 12.06 },
@@ -119,14 +119,14 @@ export default function ExciseForm() {
   function save() {
     if (!form.periodStart) { toast.error("Period start is required"); return; }
     if (!form.periodEnd) { toast.error("Period end is required"); return; }
-    if (!form.totalProofGallons) { toast.error("Proof gallons is required"); return; }
+    if (!form.totalProofGallons) { toast.error("Gallons is required"); return; }
     if (isEdit) editMut.mutate(); else createMut.mutate();
   }
 
   return (
     <FormLayout
       title={isEdit ? "Edit Excise Return" : "New Excise Return"}
-      subtitle="File a state excise tax return for distilled spirits"
+      subtitle="Prepare and track a state excise tax return for distilled spirits"
       breadcrumbs={[{ label: "Regulatory", href: "/compliance-regulatory" }, { label: isEdit ? "Edit Return" : "New Return" }]}
       onSave={save}
       saving={createMut.isPending || editMut.isPending}
@@ -136,16 +136,22 @@ export default function ExciseForm() {
           <div className="bg-[#f0f9ff] border border-[#bae6fd] rounded-xl p-4 text-xs space-y-2">
             <p className="font-medium text-[#0369a1]">Estimated Total Tax</p>
             <p className="text-2xl font-bold text-[#0a0a0a]">${liveTotal.toFixed(2)}</p>
-            {form.state === "FL" && (
-              <p className="text-[10px] text-[#737373]">
-                FL craft credit (§ 565.108): eligible distillers (&lt;75k gal/yr) deduct 7% → net ${(liveTotal * 0.93).toFixed(2)}
-              </p>
-            )}
+            <p className="text-[10px] text-[#737373]">Estimate only — verify before filing.</p>
           </div>
           <InfoCard>
             <p className="font-medium text-[#0a0a0a]">Filing deadlines</p>
             <p>Most states require monthly returns due on the 15th of the following month. Rates change — confirm the current rate with your state's alcohol tax authority before filing.</p>
           </InfoCard>
+          <InfoCard>
+            <p className="font-medium text-[#0a0a0a]">Check the tax basis</p>
+            <p>Suggested rates are a starting point, not tax advice. Many states tax per gallon of product rather than per proof gallon, use tiers by alcohol content, or (in control states) collect through markups instead of an excise return. You are responsible for the figures you file.</p>
+          </InfoCard>
+          {form.state === "FL" && (
+            <InfoCard>
+              <p className="font-medium text-[#0a0a0a]">Florida</p>
+              <p>Florida taxes spirits per gallon of product, tiered by alcohol content (F.S. § 565.12): $6.50/gal for 17.259%–55.780% ABV and $9.53/gal above 55.780%. For Florida, enter gallons of product (not proof gallons) in the quantity field and the rate for your product's tier. Confirm current rates with the Division of Alcoholic Beverages and Tobacco.</p>
+            </InfoCard>
+          )}
         </>
       }
     >
@@ -178,10 +184,10 @@ export default function ExciseForm() {
 
       <FormSection title="Tax Calculation">
         <FormGrid>
-          <Field label="Total Proof Gallons" required>
+          <Field label={form.state === "FL" ? "Total Gallons (product volume)" : "Total Proof Gallons"} required>
             <Input type="number" step="0.001" min="0" value={form.totalProofGallons} onChange={set("totalProofGallons")} placeholder="0.000" />
           </Field>
-          <Field label="Rate per Proof Gallon ($)" hint="Auto-filled from state; adjust if needed">
+          <Field label={form.state === "FL" ? "Rate per Gallon ($)" : "Rate per Proof Gallon ($)"} hint="Suggested from state — verify the current rate and basis before filing">
             <Input type="number" step="0.01" min="0" value={form.ratePerProofGallon} onChange={set("ratePerProofGallon")} placeholder="0.00" />
           </Field>
         </FormGrid>

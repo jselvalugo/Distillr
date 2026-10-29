@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { AI_DISCLAIMER } from "@shared/compliance-disclaimer";
 import { X, Send, Loader2, AlertCircle, Sparkles, Zap } from "lucide-react";
 import { apiRequest } from "../lib/queryClient";
 
@@ -191,7 +192,7 @@ export function AiChatPanel() {
                 <Zap size={11} color="#4f8ef7" />
               </div>
               <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                Live data access · Powered by Loogo Labs
+                Live data access · {AI_DISCLAIMER}
               </p>
             </div>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>

@@ -110,6 +110,9 @@ export function PublicFooter() {
           </span>
           <span>Built for Distilled Spirits Plants in the United States.</span>
         </div>
+        <p className="pub-footer__disclaimer" style={{ fontSize: 11, lineHeight: 1.6, opacity: 0.55, marginTop: 14, maxWidth: 820 }}>
+          Distillr is record-keeping and reporting software. It does not provide legal or tax advice and does not file reports, returns or payments with TTB or any state agency on your behalf. You are responsible for reviewing all figures before filing. Distillr is not affiliated with or endorsed by the Alcohol and Tobacco Tax and Trade Bureau (TTB).
+        </p>
       </div>
     </footer>
   );

@@ -7,10 +7,10 @@ import { FaqItem, LANDING_PLANS, PlanCard } from "./landing";
 const PRICING_FAQS = [
   { q: "What's included in the free trial?", a: "Full access to all Professional features for 14 days, no credit card required. You can import data, create batches, and generate TTB reports during the trial." },
   { q: "Can I switch plans later?", a: "Yes, upgrade or downgrade anytime from your account settings. Changes take effect at the start of the next billing cycle." },
-  { q: "How does billing work?", a: "Monthly by default. Annual billing saves 20% — just choose the annual option at checkout or contact us to switch." },
+  { q: "How does billing work?", a: "Monthly by default, and subscriptions renew automatically until you cancel. Annual billing saves 20% — contact us to switch. Your trial never converts to a paid plan unless you choose one." },
   { q: "What counts as a user?", a: "Anyone who logs into the platform. Operators, distillers, and admins each count as one user toward your plan's limit." },
   { q: "Is there a setup fee?", a: "No setup fees. No contracts. Just the monthly subscription. Most distilleries are fully set up within a day." },
-  { q: "What payment methods do you accept?", a: "All major credit cards and ACH bank transfer via Stripe. Enterprise customers may also pay by invoice." },
+  { q: "What payment methods do you accept?", a: "We set up payment with you when you move to a paid plan. Enterprise customers may pay by invoice." },
 ];
 
 export default function PricingPage() {

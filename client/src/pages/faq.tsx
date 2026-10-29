@@ -5,10 +5,10 @@ import { PublicShell } from "../components/public/shell";
 import { FaqItem } from "./landing";
 
 const ALL_FAQS = [
-  { q: "How does Distillr handle TTB compliance?", a: "Every production action is automatically tagged with TTB operation codes. Forms 5110.40 and 5000.24 pre-populate from your actual batch data — ready to export to the TTB PONL system in one click." },
-  { q: "Can I import my existing records?", a: "Yes. We support CSV import for batches, barrels, and inventory. Most distilleries are fully migrated within a single day." },
+  { q: "How does Distillr handle TTB reporting?", a: "Every production action is tagged with its TTB operation. Forms 5110.40 and 5000.24 are prepared from your batch data and export to PDF, Excel or Word for you to review, sign and file with TTB. Distillr does not file on your behalf, and you remain responsible for the accuracy of what you submit." },
+  { q: "Can I import my existing records?", a: "Yes. We support CSV import for batches, barrels, and inventory, and we help you map your existing spreadsheets during onboarding." },
   { q: "Is there a long-term contract?", a: "No. Month-to-month with no lock-in. Annual billing is available at 20% off. Cancel anytime." },
-  { q: "Which states are covered for excise returns?", a: "All 50 states plus DC. Rates are maintained by our team and updated whenever states revise them." },
+  { q: "Which states are covered for excise returns?", a: "You can prepare and track excise returns for any state. Distillr suggests a starting rate, but states change rates and tax bases (some tax per gallon of product, some per proof gallon, and control states use markups), so always confirm the current rate with your state before filing." },
   { q: "What is a Distilled Spirits Plant (DSP)?", a: "A DSP is a TTB-registered facility that produces, processes, stores, or uses distilled spirits. Distillr is purpose-built for DSP operations and TTB reporting requirements." },
   { q: "Does Distillr support multi-site operations?", a: "Yes, on our Enterprise plan. You can manage multiple DSP registrations, each with their own batch records, barrels, and TTB reports, from a single account." },
   { q: "How does the AI assistant work?", a: "The AI assistant connects to your live distillery data and uses it to answer questions in plain English. It can tell you batch status, barrel inventory, compliance deadlines, and answer TTB questions with citations." },

@@ -19,7 +19,7 @@ const PLANS = [
     per: "/mo",
     desc: "The complete platform for growing distilleries.",
     featured: true,
-    features: ["2–15 users", "Unlimited batches & barrels", "Full TTB compliance engine", "All 50-state excise returns", "COLA & permit management", "AI operations assistant", "Priority support"],
+    features: ["Up to 15 users", "Unlimited batches & barrels", "Full TTB reporting suite", "State excise return tracking", "COLA & permit management", "AI operations assistant", "Priority support"],
   },
   {
     name: "Enterprise",
@@ -32,19 +32,19 @@ const PLANS = [
 ];
 
 const FAQS = [
-  { q: "How does Distillr handle TTB compliance?", a: "Every production action is automatically tagged with TTB operation codes. Forms 5110.40 and 5000.24 pre-populate from your actual batch data — ready to export to the TTB PONL system in one click." },
-  { q: "Can I import my existing records?", a: "Yes. We support CSV import for batches, barrels, and inventory. Most distilleries are fully migrated within a single day." },
+  { q: "How does Distillr handle TTB reporting?", a: "Every production action is tagged with its TTB operation. Forms 5110.40 and 5000.24 are prepared from your batch data and export to PDF, Excel or Word for you to review, sign and file with TTB. Distillr does not file on your behalf, and you remain responsible for the accuracy of what you submit." },
+  { q: "Can I import my existing records?", a: "Yes. We support CSV import for batches, barrels, and inventory, and we help you map your existing spreadsheets during onboarding." },
   { q: "Is there a long-term contract?", a: "No. Month-to-month with no lock-in. Annual billing is available at 20% off. Cancel anytime." },
-  { q: "Which states are covered for excise returns?", a: "All 50 states plus DC. Rates are maintained by our team and updated whenever states revise them." },
+  { q: "Which states are covered for excise returns?", a: "You can prepare and track excise returns for any state. Distillr suggests a starting rate, but states change rates and tax bases (some tax per gallon of product, some per proof gallon, and control states use markups), so always confirm the current rate with your state before filing." },
 ];
 
 const FEATURES = [
-  { n: "01", icon: ShieldCheck, t: "TTB Compliance Engine", d: "Forms 5110.40 and 5000.24 built from live batch data, with CBMA rate tiers applied. Export to PDF, Excel or Word in one click." },
+  { n: "01", icon: ShieldCheck, t: "TTB Reporting", d: "Forms 5110.40 and 5000.24 prepared from live batch data, with CBMA rate tiers applied. Export to PDF, Excel or Word for review and filing." },
   { n: "02", icon: FlaskConical, t: "Batch Production", d: "A 7-stage workflow from mash to bottle, with proof gallons calculated and TTB operations tagged at every step." },
   { n: "03", icon: Layers, t: "Barrel Intelligence", d: "Every barrel from fill to dump: gauge readings, angel's share, aging milestones and your bonded warehouse balance." },
   { n: "04", icon: Package, t: "Inventory & Lots", d: "Lot tracking with TTB movement categories, warehouse locations and a full chain of custody." },
-  { n: "05", icon: Landmark, t: "Regulatory Automation", d: "COLA registrations, 50-state excise returns and permit renewals, tracked with deadline alerts." },
-  { n: "06", icon: Bot, t: "AI Assistant", d: "Ask about deadlines, batch status or barrel inventory in plain English and get answers backed by your data." },
+  { n: "05", icon: Landmark, t: "Regulatory Tracking", d: "COLA registrations, state excise returns and permit renewals, tracked with deadline alerts." },
+  { n: "06", icon: Bot, t: "AI Assistant", d: "Ask about deadlines, batch status or barrel inventory in plain English and get answers drawn from your data." },
 ];
 
 export function CheckDot({ dark = false }: { dark?: boolean }) {
@@ -118,7 +118,7 @@ export default function Landing() {
               <em>Distillr</em> handles the paperwork.
             </h1>
             <p className="pub-lead">
-              Batch production, barrels, inventory and sales in one place — with TTB forms, excise returns and state filings generated from the records you already keep.
+              Batch production, barrels, inventory and sales in one place — with TTB forms and excise returns prepared from the records you already keep, ready for your review.
             </p>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 32 }}>
               <button className="pub-btn pub-btn--primary pub-btn--lg" onClick={() => navigate("/signup")}>
@@ -160,9 +160,9 @@ export default function Landing() {
         <div className="pub-wrap pub-trust__inner" style={{ padding: 0 }}>
           {[
             ["5110.40 · 5000.24", "TTB forms, filled from your data"],
-            ["50 + DC", "State excise rates maintained"],
+            ["50 states", "Excise return tracking"],
             ["7 stages", "Mash to bottle, proof gallons at each"],
-            ["< 1 day", "Typical migration from spreadsheets"],
+            ["PDF · Excel · Word", "Exports ready for review"],
           ].map(([v, l]) => (
             <div key={l} className="pub-trust__item">
               <p className="pub-trust__value">{v}</p>
@@ -205,7 +205,7 @@ export default function Landing() {
               Distillr is an end-to-end distillery management platform — batch production, barrel tracking, inventory, sales, and the TTB and state compliance that comes with them.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "26px 0" }}>
-              {["7-stage batch production tracking", "TTB Forms 5110.40 and 5000.24, generated for you", "Real-time proof gallon and excise calculation", "Clean PDF, Excel and Word exports"].map((item) => (
+              {["7-stage batch production tracking", "TTB Forms 5110.40 and 5000.24, prepared from your records", "Real-time proof gallon and excise calculation", "Clean PDF, Excel and Word exports"].map((item) => (
                 <div key={item} className="pub-check">
                   <CheckDot />
                   <span>{item}</span>
@@ -225,7 +225,7 @@ export default function Landing() {
           <div className="pub-center" style={{ marginBottom: 44 }}>
             <p className="pub-eyebrow">Platform</p>
             <h2 className="pub-h2">Built for every part of your operation.</h2>
-            <p className="pub-lead">Every workflow, every compliance deadline, every TTB report — in one system.</p>
+            <p className="pub-lead">Every workflow, every compliance deadline, every TTB report — tracked in one system.</p>
           </div>
           <div className="pub-grid-3">
             {FEATURES.map((f) => (
@@ -287,7 +287,7 @@ export default function Landing() {
               Your distillery deserves better than spreadsheets.
             </h2>
             <p className="pub-lead" style={{ margin: "0 auto 32px" }}>
-              Join craft distilleries that replaced manual TTB filings, lost barrel records and disconnected tools with one platform.
+              Replace spreadsheets, lost barrel records and disconnected tools with one platform built for distilled spirits plants.
             </p>
             <button className="pub-btn pub-btn--on-dark pub-btn--lg" onClick={() => navigate("/signup")}>
               Request access <ArrowRight size={16} />
