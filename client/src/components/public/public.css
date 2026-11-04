@@ -114,6 +114,44 @@
 .pub-hero__note { font-size: 13px; color: var(--ink-muted); margin: 18px 0 0; }
 .pub-hero__note strong { color: var(--ink-soft); font-weight: 600; }
 
+/* ── Hero waitlist ───────────────────────────────────────── */
+.pub-waitlist {
+  margin-top: 30px; max-width: 540px; padding: 20px; border-radius: 20px;
+  background: #fff; border: 1px solid var(--paper-edge);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 24px 48px -32px rgba(79, 70, 229, 0.45);
+}
+.pub-waitlist__title { font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 4px; }
+.pub-waitlist__sub { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin: 0 0 14px; }
+.pub-waitlist__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pub-waitlist__input {
+  width: 100%; height: 46px; padding: 0 14px; border-radius: 12px;
+  border: 1.5px solid var(--paper-edge); background: var(--paper);
+  font: inherit; font-size: 15px; color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.pub-waitlist__input::placeholder { color: var(--ink-muted); }
+.pub-waitlist__input:focus { outline: none; border-color: var(--indigo); background: #fff; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12); }
+.pub-waitlist__input--wide { grid-column: 1 / -1; }
+.pub-waitlist__error { font-size: 13px; color: #b91c1c; margin: 10px 0 0; }
+.pub-waitlist__actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; }
+.pub-waitlist__actions .pub-btn[disabled] { opacity: 0.7; cursor: default; transform: none; }
+.pub-waitlist__signin { font-size: 13.5px; color: var(--ink-soft); margin: 0; }
+.pub-waitlist__signin button {
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 600;
+  color: var(--indigo); cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+}
+.pub-waitlist--done { display: flex; gap: 14px; align-items: flex-start; }
+.pub-waitlist--done .pub-waitlist__sub { margin: 0; }
+.pub-waitlist__ok {
+  flex: none; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  background: rgba(79, 70, 229, 0.12); color: var(--indigo);
+}
+@media (max-width: 520px) {
+  .pub-waitlist { padding: 16px; }
+  .pub-waitlist__fields { grid-template-columns: 1fr; }
+  .pub-waitlist__actions .pub-btn { width: 100%; }
+}
+
 /* Product frame */
 .pub-frame {
   position: relative; background: #fff; border-radius: 18px; border: 1px solid var(--paper-edge);

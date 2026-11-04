@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { ArrowRight, Bot, Check, FlaskConical, Landmark, Layers, Package, ShieldCheck } from "lucide-react";
 import { PublicShell } from "../components/public/shell";
 import { DistillrMark } from "../components/brand/logo";
+import { HeroWaitlistForm } from "../components/public/waitlist-form";
 
 const PLANS = [
   {
@@ -120,16 +121,9 @@ export default function Landing() {
             <p className="pub-lead">
               Batch production, barrels, inventory and sales in one place — with TTB forms and excise returns prepared from the records you already keep, ready for your review.
             </p>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 32 }}>
-              <button className="pub-btn pub-btn--primary pub-btn--lg" onClick={() => navigate("/signup")}>
-                Request access <ArrowRight size={16} />
-              </button>
-              <button className="pub-btn pub-btn--ghost pub-btn--lg" onClick={() => navigate("/login")}>
-                Sign in
-              </button>
-            </div>
+            <HeroWaitlistForm onSignIn={() => navigate("/login")} />
             <p className="pub-hero__note">
-              <strong>No credit card required</strong> · 14-day free trial · Month-to-month
+              <strong>Licensed access only</strong> · Every account is set up by our team
             </p>
           </div>
 
