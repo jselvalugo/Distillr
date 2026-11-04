@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 // /api/auth/password-setup is authorized by the one-time token in its body, not the session.
-const CSRF_EXEMPT_PATHS = new Set(["/api/auth/login", "/api/admin/login", "/api/auth/signup", "/api/auth/password-setup"]);
+const CSRF_EXEMPT_PATHS = new Set(["/api/auth/login", "/api/admin/login", "/api/auth/password-setup"]);
 
 export const CSRF_HEADER_NAME = "x-csrf-token";
 

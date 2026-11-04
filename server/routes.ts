@@ -1694,64 +1694,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Public self-service registration — creates a new tenant + admin user + auto-login
-  app.post("/api/auth/signup", async (req, res) => {
-    const clientKey = getLoginClientKey(req);
-    const retryAfterSeconds = loginRateLimiter.getRetryAfterSeconds(clientKey);
-    if (retryAfterSeconds > 0) {
-      return res.status(429).json({ error: "Too many attempts. Please wait.", retryAfterSeconds });
-    }
-
-    try {
-      const schema = z.object({
-        distilleryName: z.string().trim().min(2, "Distillery name must be at least 2 characters"),
-        adminName: z.string().trim().min(1, "Name is required"),
-        email: z.string().email("Enter a valid email address"),
-        password: z.string().min(8, "Password must be at least 8 characters"),
-      });
-
-      const data = schema.parse(req.body);
-
-      // Auto-generate a unique slug from the distillery name
-      const baseSlug = data.distilleryName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 40);
-      const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
-
-      if (await authStorage.emailInUseGlobally(data.email)) return res.status(409).json({ error: "A Distillr account with this email already exists. Use a different email." });
-      const tenant = await createTenant({ name: data.distilleryName, slug });
-
-      const user = await runWithTenant(tenant.id, async () => {
-        // Start the org's settings with the name they signed up with.
-        await storage.updatePlatformConfig({ organizationName: data.distilleryName });
-        return authStorage.createUser({
-          email: data.email,
-          password: data.password,
-          name: data.adminName,
-          role: "admin",
-          status: "active",
-        });
-      });
-
-      await regenerateSession(req);
-      req.session.user = user;
-      req.session.csrfToken = createCsrfToken();
-      res.setHeader("X-CSRF-Token", req.session.csrfToken);
-      loginRateLimiter.registerSuccess(clientKey);
-      res.status(201).json({ user, csrfToken: req.session.csrfToken });
-    } catch (error: any) {
-      if (error?.name === "ZodError") {
-        const msg = error.errors?.[0]?.message || "Invalid signup data";
-        return res.status(400).json({ error: msg });
-      }
-      if (String(error?.message).includes("already exists")) {
-        return res.status(409).json({ error: "An account with this email already exists" });
-      }
-      loginRateLimiter.registerFailure(clientKey);
-      res.status(500).json({ error: "Failed to create account. Please try again." });
-    }
+  // Distillr is licensed: there is no public self-service registration. Tenants and
+  // their admin users are provisioned only by a platform admin; prospects join the waitlist.
+  app.post("/api/auth/signup", (_req, res) => {
+    res.status(403).json({ error: "Distillr accounts are issued by license only. Please join the waitlist and we'll reach out." });
   });
 
   app.post("/api/auth/logout", (req, res) => {
@@ -2355,23 +2301,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Waitlist ──────────────────────────────────────────────────────────────
+  const waitlistLimiter = new LoginRateLimiter({ maxAttempts: 5, windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000 });
   app.post("/api/waitlist", async (req, res) => {
-    const { name, email, distilleryName, state, message } = req.body ?? {};
-    if (!name?.trim() || !email?.trim()) {
-      return res.status(400).json({ error: "Name and email are required." });
+    const clientKey = getLoginClientKey(req);
+    const retryAfterSeconds = waitlistLimiter.getRetryAfterSeconds(clientKey);
+    if (retryAfterSeconds > 0) {
+      return res.status(429).json({ error: "Too many submissions. Please try again later.", retryAfterSeconds });
     }
-    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRe.test(email.trim())) {
-      return res.status(400).json({ error: "Please enter a valid email address." });
+    const schema = z.object({
+      name: z.string().trim().min(1, "Name and email are required.").max(120),
+      email: z.string().trim().toLowerCase().max(254).email("Please enter a valid email address."),
+      distilleryName: z.string().trim().max(160).optional().nullable(),
+      state: z.string().trim().max(40).optional().nullable(),
+      message: z.string().trim().max(2000).optional().nullable(),
+      source: z.string().trim().max(40).optional().nullable(),
+    });
+    const parsed = schema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors?.[0]?.message ?? "Name and email are required." });
     }
+    const { name, email, distilleryName, state, message, source } = parsed.data;
+    waitlistLimiter.registerFailure(clientKey); // counts every submission toward the hourly cap
     try {
-      const id = `WL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      await query(
-        `INSERT INTO waitlist (id, name, email, distillery_name, state, message)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT DO NOTHING`,
-        [id, name.trim(), email.trim().toLowerCase(), distilleryName?.trim() || null, state?.trim() || null, message?.trim() || null]
-      );
+      // One row per email: a repeat submission refreshes the details instead of duplicating.
+      const existing = await query<{ id: string }>(`SELECT id FROM waitlist WHERE email = $1 LIMIT 1`, [email]);
+      if (existing.length > 0) {
+        await query(
+          `UPDATE waitlist SET name = $2, distillery_name = COALESCE($3, distillery_name), state = COALESCE($4, state),
+             message = COALESCE($5, message), source = COALESCE($6, source) WHERE id = $1`,
+          [existing[0].id, name, distilleryName || null, state || null, message || null, source || null],
+        );
+      } else {
+        const id = `WL-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await query(
+          `INSERT INTO waitlist (id, name, email, distillery_name, state, message, source)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [id, name, email, distilleryName || null, state || null, message || null, source || null],
+        );
+      }
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to save. Please try again." });

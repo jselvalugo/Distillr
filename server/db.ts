@@ -262,6 +262,8 @@ const PLATFORM_DDL = `
       message TEXT,
       submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS source TEXT;
+    CREATE INDEX IF NOT EXISTS waitlist_email_idx ON waitlist (email);
 `;
 
 /** Every data table a tenant owns. Run with search_path set to that tenant's schema only. */

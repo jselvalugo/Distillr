@@ -41,7 +41,7 @@ export function PublicNav() {
               Log in
             </Link>
             <button className="pub-btn pub-btn--primary pub-btn--sm" onClick={() => navigate("/signup")}>
-              Get started free
+              Join the waitlist
             </button>
           </div>
           <button className="pub-nav__burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
@@ -62,7 +62,7 @@ export function PublicNav() {
             Log in
           </Link>
           <button className="pub-btn pub-btn--primary" style={{ marginTop: 8 }} onClick={() => navigate("/signup")}>
-            Get started free
+            Join the waitlist
           </button>
         </div>
       )}

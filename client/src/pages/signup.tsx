@@ -32,7 +32,7 @@ export default function Signup() {
     setLoading(true);
     setError("");
     try {
-      await apiRequest("/api/waitlist", { method: "POST", body: JSON.stringify(form) });
+      await apiRequest("/api/waitlist", { method: "POST", body: JSON.stringify({ ...form, source: "signup-page" }) });
       setDone(true);
     } catch (err: any) {
       setError(err?.message || "Something went wrong. Please try again.");
@@ -44,7 +44,7 @@ export default function Signup() {
   return (
     <AuthShell
       panelTitle="Set up in an afternoon. File with confidence."
-      panelText="Tell us about your distillery and we'll get you started with a 14-day trial — no credit card, no contract."
+      panelText="Distillr is licensed per distillery. Join the waitlist and our team will set up your account personally."
       quote="Most distilleries import their batches, barrels and inventory and generate their first TTB report the same day."
     >
       {done ? (
